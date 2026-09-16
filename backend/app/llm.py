@@ -5,6 +5,7 @@ open-source model such as Llama/Mistral, both operating over the identical
 RAG pipeline, prompts and evaluation dataset.
 """
 import re
+import time
 from typing import Dict, List
 
 import requests
@@ -61,39 +62,65 @@ class DeterministicExtractiveLLM(BaseLLM):
     deterministically composes an answer strictly extracted from the
     retrieved context chunks, guaranteeing zero-hallucination behaviour when
     no live LLM API/inference endpoint is reachable. Two independent
-    configurations (`primary` / `alternate`) apply slightly different
-    extraction/summarization strategies so a meaningful side-by-side
-    comparison can still be produced offline."""
+    configurations (`primary` / `alternate`) apply different selection
+    breadth, so a meaningful side-by-side comparison can still be produced
+    offline."""
 
     def __init__(self, variant: str, name: str):
         self.variant = variant
         self.name = name
 
     def generate(self, system_prompt: str, user_prompt: str) -> str:
-        context_match = re.search(r"CONTEXT:\n(.*?)\nQUESTION:", user_prompt, re.S)
-        question_match = re.search(r"QUESTION:\n(.*)", user_prompt, re.S)
-        context = context_match.group(1).strip() if context_match else ""
-        question = question_match.group(1).strip() if question_match else user_prompt
+        from app import composer
 
-        if not context:
-            return ("I could not find that information in the official KQ policy "
-                    "documents, so I cannot answer with confidence. Could you "
-                    "rephrase your question or provide more detail?")
+        question = _extract_section(user_prompt, "QUESTION") or user_prompt
+        context = _extract_section(user_prompt, "CONTEXT")
+        observations = _extract_section(user_prompt, "TOOL OBSERVATIONS")
 
-        sentences = re.split(r"(?<=[.!?])\s+", context)
-        keywords = [w.lower() for w in re.findall(r"[a-zA-Z]{4,}", question)]
+        chunks = _parse_context_chunks(context)
+        if not chunks:
+            if observations:
+                return observations
+            return ("I could not find that in the official policy documents I have "
+                    "access to. I can help with baggage allowances and fees, flight "
+                    "delays and compensation, refunds and ticket changes, and check-in "
+                    "or boarding rules.")
 
-        def relevance(sentence: str) -> int:
-            s = sentence.lower()
-            return sum(1 for kw in keywords if kw in s)
+        # The primary configuration answers more completely; the alternate
+        # open-source configuration is deliberately terser.
+        verbose = self.variant == "primary"
+        answer = composer.compose_answer(question, chunks,
+                                          max_sentences=3 if verbose else 2,
+                                          verbose=verbose)
+        return answer
 
-        ranked = sorted(sentences, key=relevance, reverse=True)
-        top_n = 4 if self.variant == "primary" else 2
-        top = [s for s in ranked[:top_n] if s.strip()]
-        if self.variant != "primary":
-            top = top[::-1]  # alternate model composes in a different order
-        answer = " ".join(top).strip()
-        return answer or context[:400]
+
+def _extract_section(prompt: str, header: str) -> str:
+    pattern = rf"{re.escape(header)}:\n(.*?)(?=\n[A-Z][A-Z ]+:\n|\Z)"
+    match = re.search(pattern, prompt, re.S)
+    return match.group(1).strip() if match else ""
+
+
+def _parse_context_chunks(context: str) -> List[Dict]:
+    """Rebuilds chunk dicts from the serialized prompt context."""
+    chunks = []
+    if not context:
+        return chunks
+    for block in context.split("\n---\n"):
+        block = block.strip()
+        if not block:
+            continue
+        section = ""
+        text = block
+        header_match = re.match(r"\[(.*?)\]\n(.*)", block, re.S)
+        if header_match:
+            section = header_match.group(1).strip()
+            text = header_match.group(2).strip()
+        source = ""
+        if "|" in section:
+            source, section = [p.strip() for p in section.split("|", 1)]
+        chunks.append({"text": text, "section": section, "source": source})
+    return chunks
 
 
 def get_primary_llm() -> BaseLLM:
@@ -117,9 +144,20 @@ def compare_models(system_prompt: str, user_prompt: str) -> List[Dict]:
     the dual-model comparative evaluation (corrections requirement)."""
     results = []
     for llm in (get_primary_llm(), get_alternate_llm()):
+        started = time.perf_counter()
         try:
             text = llm.generate(system_prompt, user_prompt)
-            results.append({"model": llm.name, "response": text, "error": None})
+            results.append({
+                "model": llm.name,
+                "response": text,
+                "response_time_seconds": round(time.perf_counter() - started, 4),
+                "error": None,
+            })
         except Exception as exc:  # pragma: no cover - network failure path
-            results.append({"model": llm.name, "response": "", "error": str(exc)})
+            results.append({
+                "model": llm.name,
+                "response": "",
+                "response_time_seconds": round(time.perf_counter() - started, 4),
+                "error": str(exc),
+            })
     return results

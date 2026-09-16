@@ -1,0 +1,153 @@
+"""
+Hybrid retrieval scoring.
+
+Dense vector similarity alone performs poorly on short, fact-dense policy
+text (e.g. distinguishing "1kg to 10kg over" from "11kg to 20kg over"), so
+retrieval combines:
+
+  * BM25 lexical scoring - strong on exact policy terminology and numbers.
+  * Dense cosine similarity - captures paraphrasing and semantic variance.
+
+The two normalised scores are blended, which materially improves Context
+Relevance in the RAG-Triad evaluation compared to either signal alone.
+"""
+import math
+import re
+from collections import Counter
+from typing import Dict, Iterable, List
+
+_WORD_RE = re.compile(r"[a-z0-9]+")
+
+_STOPWORDS = {
+    "the", "and", "for", "are", "was", "with", "that", "this", "from", "have",
+    "has", "not", "but", "you", "your", "our", "can", "will", "how", "what",
+    "when", "who", "why", "does", "did", "a", "an", "of", "to", "in", "on",
+    "is", "it", "i", "my", "me", "be", "at", "as", "or", "if", "do", "am",
+}
+
+# Domain synonyms let a passenger's everyday phrasing match formal policy
+# wording (e.g. "suitcase" -> "baggage", "cash back" -> "refund").
+_SYNONYMS = {
+    "bag": ["baggage", "luggage"],
+    "bags": ["baggage", "luggage"],
+    "suitcase": ["baggage", "luggage"],
+    "luggage": ["baggage"],
+    "overweight": ["overweight", "exceeding", "over"],
+    "heavy": ["overweight", "exceeding"],
+    "fee": ["fee", "charge", "cost"],
+    "cost": ["fee", "charge"],
+    "charge": ["fee"],
+    "price": ["fee", "charge"],
+    "money": ["refund", "fee", "payment"],
+    "cancel": ["cancellation", "cancelled"],
+    "cancelled": ["cancellation"],
+    "delay": ["delayed", "delay"],
+    "delayed": ["delay"],
+    "late": ["delay", "delayed"],
+    "compensation": ["compensation", "entitled", "voucher"],
+    "pay": ["payment", "pay", "mpesa"],
+    "mpesa": ["m-pesa", "mpesa", "payment", "stk"],
+    "refund": ["refund", "refundable"],
+    "checkin": ["check-in", "checkin"],
+    "check": ["check-in", "checkin"],
+    "lost": ["lost", "delayed", "missing", "traced"],
+    "missing": ["lost", "traced", "irregularity"],
+    "document": ["passport", "visa", "documentation"],
+    "documents": ["passport", "visa", "documentation"],
+    "passport": ["passport", "documentation"],
+    "golf": ["sporting", "golf"],
+    "sport": ["sporting"],
+    "sports": ["sporting"],
+    "wheelchair": ["assistance", "wheelchair"],
+    "child": ["minor", "infant"],
+    "baby": ["infant"],
+    "pet": ["special"],
+    "change": ["change", "rebooking", "changes"],
+    "reschedule": ["rebooking", "change"],
+    # Duration phrasing ("how long does X take?") must reach the policy
+    # sections that state processing timelines.
+    "long": ["processing", "processed", "timelines", "within", "business", "days"],
+    "take": ["processed", "processing", "within", "timelines"],
+    "takes": ["processed", "processing", "within", "timelines"],
+    "duration": ["processing", "timelines", "within"],
+    "timeline": ["timelines", "processing", "within"],
+    "timelines": ["processing", "within"],
+    "soon": ["processing", "within", "days"],
+}
+
+
+def tokenize(text: str) -> List[str]:
+    tokens = [t for t in _WORD_RE.findall(text.lower()) if t not in _STOPWORDS]
+    return tokens
+
+
+def expand_query(tokens: Iterable[str]) -> List[str]:
+    expanded = list(tokens)
+    for tok in list(tokens):
+        for syn in _SYNONYMS.get(tok, []):
+            expanded.extend(_WORD_RE.findall(syn))
+    return expanded
+
+
+class BM25:
+    """Standard BM25 Okapi ranking over the chunk corpus."""
+
+    def __init__(self, corpus_tokens: List[List[str]], k1: float = 1.5, b: float = 0.75):
+        self.k1 = k1
+        self.b = b
+        self.corpus_tokens = corpus_tokens
+        self.doc_count = len(corpus_tokens)
+        self.doc_lengths = [len(d) for d in corpus_tokens]
+        self.avg_doc_length = (sum(self.doc_lengths) / self.doc_count) if self.doc_count else 0.0
+        self.term_freqs = [Counter(d) for d in corpus_tokens]
+        self.doc_freq: Counter = Counter()
+        for tokens in corpus_tokens:
+            for term in set(tokens):
+                self.doc_freq[term] += 1
+
+    def _idf(self, term: str) -> float:
+        n_q = self.doc_freq.get(term, 0)
+        if n_q == 0:
+            return 0.0
+        return math.log((self.doc_count - n_q + 0.5) / (n_q + 0.5) + 1.0)
+
+    def score(self, query_tokens: List[str], index: int) -> float:
+        if not self.doc_count or self.avg_doc_length == 0:
+            return 0.0
+        freqs = self.term_freqs[index]
+        doc_len = self.doc_lengths[index]
+        total = 0.0
+        for term in query_tokens:
+            tf = freqs.get(term, 0)
+            if tf == 0:
+                continue
+            idf = self._idf(term)
+            denom = tf + self.k1 * (1 - self.b + self.b * doc_len / self.avg_doc_length)
+            total += idf * (tf * (self.k1 + 1)) / denom
+        return total
+
+    def scores(self, query_tokens: List[str]) -> List[float]:
+        return [self.score(query_tokens, i) for i in range(self.doc_count)]
+
+
+def normalize(values: List[float]) -> List[float]:
+    if not values:
+        return []
+    lo, hi = min(values), max(values)
+    if hi - lo < 1e-9:
+        return [0.0 for _ in values]
+    return [(v - lo) / (hi - lo) for v in values]
+
+
+def blend(lexical: List[float], dense: List[float], lexical_weight: float = 0.6) -> List[float]:
+    """Blends normalised lexical and dense scores into a single ranking score."""
+    lex_n = normalize(lexical)
+    dense_n = normalize(dense)
+    if not lex_n:
+        return dense_n
+    if not dense_n:
+        return lex_n
+    return [
+        lexical_weight * l + (1 - lexical_weight) * d
+        for l, d in zip(lex_n, dense_n)
+    ]

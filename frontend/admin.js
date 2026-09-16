@@ -1,73 +1,233 @@
-function metricBox(value, label) {
-  return `<div class="metric-box"><div class="value">${value}</div><div class="label">${label}</div></div>`;
-}
+/* KQ-Propel administrative dashboard client.
+   Separate from the chat assistant: consumes only /api/admin/* endpoints. */
+(function () {
+  "use strict";
 
-function barRow(label, value) {
-  const pct = Math.round(value * 100);
-  return `<div class="bar-row"><div style="width:160px;">${label}</div>
-    <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
-    <div style="width:50px;text-align:right;">${pct}%</div></div>`;
-}
+  var kpis = document.getElementById("kpis");
+  var triad = document.getElementById("triad");
+  var sentimentDist = document.getElementById("sentiment-dist");
+  var sentimentMetrics = document.getElementById("sentiment-metrics");
+  var vectorstore = document.getElementById("vectorstore");
+  var txBody = document.querySelector("#tx-table tbody");
+  var cmpBody = document.querySelector("#cmp-table tbody");
+  var cmpSummary = document.getElementById("comparison-summary");
+  var cmpStatus = document.getElementById("comparison-status");
+  var refreshBtn = document.getElementById("refresh");
+  var runCmpBtn = document.getElementById("run-comparison");
 
-async function loadOverview() {
-  const res = await fetch("/api/admin/overview");
-  const data = await res.json();
-
-  document.getElementById("metrics-grid").innerHTML = [
-    metricBox(data.vector_store.documents, "Policy Documents Indexed"),
-    metricBox(data.vector_store.chunks, "Vector Chunks (RAG Index)"),
-    metricBox(data.transactions.count, "M-Pesa Transactions"),
-    metricBox("Ksh " + Number(data.transactions.total_amount_ksh).toLocaleString(), "Total Value Processed"),
-  ].join("");
-
-  document.getElementById("rag-bars").innerHTML = [
-    barRow("Context Relevance", data.rag_triad.context_relevance),
-    barRow("Groundedness", data.rag_triad.groundedness),
-    barRow("Answer Relevance", data.rag_triad.answer_relevance),
-    barRow("Hallucination Rate", data.rag_triad.hallucination_rate),
-  ].join("") + `<p style="font-size:12px;color:#777;">Based on ${data.rag_triad.sample_size} logged conversation turns.</p>`;
-
-  const sm = data.sentiment_model_metrics;
-  document.getElementById("sentiment-metrics").innerHTML = [
-    metricBox((sm.accuracy * 100).toFixed(1) + "%", "Accuracy"),
-    metricBox((sm.precision * 100).toFixed(1) + "%", "Precision"),
-    metricBox((sm.recall * 100).toFixed(1) + "%", "Recall"),
-    metricBox((sm.f1_score * 100).toFixed(1) + "%", "F1-Score"),
-  ].join("");
-
-  const dist = data.sentiment_distribution;
-  const total = Object.values(dist).reduce((a, b) => a + b, 0) || 1;
-  let distHtml = "<h4 style='color:var(--kq-red-dark);'>Live Passenger Sentiment Distribution</h4>";
-  for (const [label, count] of Object.entries(dist)) {
-    distHtml += barRow(label, count / total);
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) { n.className = cls; }
+    if (text !== undefined) { n.textContent = text; }
+    return n;
   }
-  document.getElementById("sentiment-dist").innerHTML = distHtml || "<p>No conversations logged yet.</p>";
 
-  const tbody = document.querySelector("#transactions-table tbody");
-  tbody.innerHTML = data.transactions.recent.map(t => `
-    <tr>
-      <td>${t.created_at.replace("T", " ").slice(0, 19)}</td>
-      <td>${t.reference || "-"}</td>
-      <td>${t.phone_number || "-"}</td>
-      <td>${Number(t.amount || 0).toLocaleString()}</td>
-      <td>${t.status}</td>
-    </tr>`).join("") || "<tr><td colspan='5'>No transactions yet.</td></tr>";
-}
+  function card(label, value, foot) {
+    var c = el("div", "card");
+    c.appendChild(el("div", "label", label));
+    c.appendChild(el("div", "value", value));
+    if (foot) { c.appendChild(el("div", "foot", foot)); }
+    return c;
+  }
 
-async function runComparison() {
-  const container = document.getElementById("model-comparison-results");
-  container.innerHTML = "<p>Running both models across the evaluation dataset...</p>";
-  const res = await fetch("/api/admin/model-comparison");
-  const data = await res.json();
-  container.innerHTML = data.results.map(row => `
-    <div class="model-compare-card">
-      <h4>${row.query}</h4>
-      ${row.models.map(m => `
-        <div class="model-answer">
-          <strong>${m.model}</strong> — Context Relevance: ${m.context_relevance}, Groundedness: ${m.groundedness}, Answer Relevance: ${m.answer_relevance}
-          <p>${m.response || m.error || ""}</p>
-        </div>`).join("")}
-    </div>`).join("");
-}
+  function meterRow(label, value, display) {
+    var v = Math.max(0, Math.min(1, Number(value) || 0));
+    var row = el("div", "meter-row");
+    row.appendChild(el("span", "m-label", label));
+    var track = el("span", "meter-track");
+    var fill = el("span", "meter-fill");
+    fill.style.width = (v * 100).toFixed(0) + "%";
+    track.appendChild(fill);
+    row.appendChild(track);
+    row.appendChild(el("span", "m-val", display !== undefined ? display : v.toFixed(3)));
+    return row;
+  }
 
-loadOverview();
+  function kvRow(key, value) {
+    var row = el("div", "kv-row");
+    row.appendChild(el("span", null, key));
+    row.appendChild(el("span", null, String(value)));
+    return row;
+  }
+
+  function emptyRow(table, cols, text) {
+    var tr = el("tr");
+    var td = el("td", "empty", text);
+    td.colSpan = cols;
+    tr.appendChild(td);
+    table.appendChild(tr);
+  }
+
+  /* ------------------------------ overview ------------------------------ */
+
+  function loadOverview() {
+    refreshBtn.disabled = true;
+    fetch("/api/admin/overview")
+      .then(function (r) {
+        if (!r.ok) { throw new Error("HTTP " + r.status); }
+        return r.json();
+      })
+      .then(renderOverview)
+      .catch(function (err) {
+        kpis.innerHTML = "";
+        kpis.appendChild(card("Connection", "Offline", err.message));
+      })
+      .then(function () { refreshBtn.disabled = false; });
+  }
+
+  function renderOverview(d) {
+    var t = d.rag_triad || {};
+    var tx = d.transactions || {};
+    var vs = d.vector_store || {};
+    var sm = d.sentiment_model_metrics || {};
+
+    kpis.innerHTML = "";
+    kpis.appendChild(card("Groundedness", (t.groundedness || 0).toFixed(3),
+      "Sample size " + (t.sample_size || 0)));
+    kpis.appendChild(card("Hallucination rate", (t.hallucination_rate || 0).toFixed(3),
+      "1 - groundedness"));
+    kpis.appendChild(card("Indexed chunks", vs.chunks !== undefined ? vs.chunks : "-",
+      (vs.documents !== undefined ? vs.documents : 0) + " policy documents"));
+    kpis.appendChild(card("M-Pesa value", "Ksh " + (tx.total_amount_ksh || 0).toLocaleString(),
+      (tx.count || 0) + " transactions"));
+
+    triad.innerHTML = "";
+    triad.appendChild(meterRow("Context relevance", t.context_relevance));
+    triad.appendChild(meterRow("Groundedness", t.groundedness));
+    triad.appendChild(meterRow("Answer relevance", t.answer_relevance));
+    triad.appendChild(meterRow("Hallucination rate", t.hallucination_rate));
+
+    var dist = d.sentiment_distribution || {};
+    var labels = Object.keys(dist);
+    var total = 0;
+    labels.forEach(function (k) { total += dist[k]; });
+
+    sentimentDist.innerHTML = "";
+    if (!labels.length) {
+      sentimentDist.appendChild(el("p", "hint", "No conversations logged yet."));
+    } else {
+      labels.forEach(function (k) {
+        sentimentDist.appendChild(meterRow(k, total ? dist[k] / total : 0,
+          dist[k] + (total ? " (" + Math.round(dist[k] / total * 100) + "%)" : "")));
+      });
+    }
+
+    sentimentMetrics.innerHTML = "";
+    [["accuracy", "Accuracy"], ["precision", "Precision"],
+     ["recall", "Recall"], ["f1_score", "F1 score"]].forEach(function (pair) {
+      if (sm[pair[0]] !== undefined) {
+        sentimentMetrics.appendChild(meterRow(pair[1], sm[pair[0]]));
+      }
+    });
+    if (!sentimentMetrics.childNodes.length) {
+      sentimentMetrics.appendChild(el("p", "hint", "Classifier metrics unavailable."));
+    } else if (sm.train_size !== undefined) {
+      sentimentMetrics.appendChild(el("p", "hint",
+        "Trained on " + sm.train_size + " labelled samples, evaluated on a held-out " +
+        (sm.test_size !== undefined ? sm.test_size : "?") + "-sample test split."));
+    }
+
+    vectorstore.innerHTML = "";
+    vectorstore.appendChild(kvRow("Backend", vs.backend || "local"));
+    vectorstore.appendChild(kvRow("Documents", vs.documents !== undefined ? vs.documents : 0));
+    vectorstore.appendChild(kvRow("Chunks", vs.chunks !== undefined ? vs.chunks : 0));
+    if (vs.embedding_dimension !== undefined) {
+      vectorstore.appendChild(kvRow("Embedding dimension", vs.embedding_dimension));
+    }
+    if (vs.embedding_provider) {
+      vectorstore.appendChild(kvRow("Embedding provider", vs.embedding_provider));
+    }
+
+    txBody.innerHTML = "";
+    var recent = tx.recent || [];
+    if (!recent.length) {
+      emptyRow(txBody, 6, "No M-Pesa transactions recorded yet.");
+    } else {
+      recent.forEach(function (r) {
+        var tr = el("tr");
+        tr.appendChild(el("td", null, r.created_at || "-"));
+        tr.appendChild(el("td", null, r.session_id || "-"));
+        tr.appendChild(el("td", null, r.phone_number || "-"));
+        tr.appendChild(el("td", null, r.amount !== undefined && r.amount !== null
+          ? Number(r.amount).toLocaleString() : "-"));
+        var st = el("td");
+        var ok = String(r.status || "").toLowerCase().indexOf("success") !== -1 ||
+                 String(r.status || "").toLowerCase().indexOf("accept") !== -1;
+        st.appendChild(el("span", "pill " + (ok ? "ok" : ""), r.status || "unknown"));
+        tr.appendChild(st);
+        tr.appendChild(el("td", null, r.checkout_request_id || r.reference || "-"));
+        txBody.appendChild(tr);
+      });
+    }
+  }
+
+  /* -------------------------- model comparison -------------------------- */
+
+  function runComparison() {
+    runCmpBtn.disabled = true;
+    cmpStatus.textContent = "Running both models across the full evaluation dataset...";
+    cmpBody.innerHTML = "";
+    cmpSummary.innerHTML = "";
+
+    fetch("/api/admin/model-comparison")
+      .then(function (r) {
+        if (!r.ok) { throw new Error("HTTP " + r.status); }
+        return r.json();
+      })
+      .then(renderComparison)
+      .catch(function (err) {
+        cmpStatus.textContent = "Comparison failed: " + err.message;
+      })
+      .then(function () { runCmpBtn.disabled = false; });
+  }
+
+  function renderComparison(data) {
+    var results = data.results || [];
+    cmpStatus.textContent = "Completed " + results.length + " queries from the evaluation dataset (" +
+      (data.evaluation_dataset_size || results.length) + " total).";
+
+    var agg = {};
+    cmpBody.innerHTML = "";
+
+    results.forEach(function (row) {
+      (row.models || []).forEach(function (m, i) {
+        var tr = el("tr");
+        tr.appendChild(el("td", null, i === 0 ? row.query : ""));
+        tr.appendChild(el("td", null, m.model || m.name || "-"));
+        tr.appendChild(el("td", null, fmt(m.context_relevance)));
+        tr.appendChild(el("td", null, fmt(m.groundedness)));
+        tr.appendChild(el("td", null, fmt(m.answer_relevance)));
+        tr.appendChild(el("td", null, m.response_time_seconds !== undefined
+          ? Number(m.response_time_seconds).toFixed(3)
+          : (m.latency_seconds !== undefined ? Number(m.latency_seconds).toFixed(3) : "-")));
+        cmpBody.appendChild(tr);
+
+        var key = m.model || m.name || "model";
+        if (!agg[key]) { agg[key] = { n: 0, cr: 0, g: 0, ar: 0 }; }
+        agg[key].n += 1;
+        agg[key].cr += Number(m.context_relevance) || 0;
+        agg[key].g += Number(m.groundedness) || 0;
+        agg[key].ar += Number(m.answer_relevance) || 0;
+      });
+    });
+
+    if (!cmpBody.childNodes.length) {
+      emptyRow(cmpBody, 6, "No comparison results returned.");
+    }
+
+    Object.keys(agg).forEach(function (k) {
+      var a = agg[k];
+      var mean = (a.cr / a.n + a.g / a.n + a.ar / a.n) / 3;
+      cmpSummary.appendChild(meterRow(k, mean, mean.toFixed(3)));
+    });
+  }
+
+  function fmt(v) {
+    return v === undefined || v === null ? "-" : Number(v).toFixed(3);
+  }
+
+  refreshBtn.addEventListener("click", loadOverview);
+  runCmpBtn.addEventListener("click", runComparison);
+
+  loadOverview();
+})();

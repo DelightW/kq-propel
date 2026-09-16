@@ -1,0 +1,264 @@
+/* ==========================================================================
+   KQ-Propel administrative dashboard - red & white theme
+   Separate stylesheet from the chat assistant. Mobile-first and responsive:
+   cards stack on phones, tables scroll horizontally, grid expands on laptops.
+   ========================================================================== */
+
+:root {
+  --red: #c8102e;
+  --red-dark: #8f0c20;
+  --red-darker: #6d0818;
+  --red-light: #ff4d5e;
+  --red-tint: #fdeff1;
+  --white: #ffffff;
+  --paper: #f7f2f3;
+  --ink: #2b0d12;
+  --ink-soft: #6b5457;
+  --border: #eccfd4;
+  --radius: 14px;
+  --shadow: 0 3px 14px rgba(140, 20, 40, 0.09);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ------------------------------- header -------------------------------- */
+.admin-header {
+  background: linear-gradient(100deg, var(--red-darker), var(--red));
+  color: var(--white);
+  padding: 14px 16px;
+  padding-top: calc(14px + env(safe-area-inset-top));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  box-shadow: 0 2px 12px rgba(200, 16, 46, 0.28);
+}
+
+.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+
+.logo {
+  width: 40px; height: 40px; flex: 0 0 40px;
+  border-radius: 50%;
+  background: var(--white);
+  color: var(--red);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 15px;
+}
+
+.admin-header h1 { margin: 0; font-size: 17px; font-weight: 700; line-height: 1.25; }
+.sub { margin: 3px 0 0; font-size: 12px; opacity: 0.9; }
+
+.btn {
+  border: 1px solid var(--white);
+  background: var(--white);
+  color: var(--red-dark);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 11px 18px;
+  min-height: 44px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.btn:hover { background: var(--red-tint); }
+.btn:disabled { opacity: 0.6; cursor: progress; }
+
+.panel .btn, .panel-head .btn {
+  background: var(--red);
+  color: var(--white);
+  border-color: var(--red);
+}
+.panel .btn:hover { background: var(--red-dark); }
+
+/* -------------------------------- layout -------------------------------- */
+.wrap {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 16px 14px calc(28px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* --------------------------------- KPIs --------------------------------- */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--red);
+  border-radius: var(--radius);
+  padding: 14px;
+  box-shadow: var(--shadow);
+}
+.card .label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  font-weight: 800;
+  color: var(--ink-soft);
+}
+.card .value {
+  font-size: 25px;
+  font-weight: 800;
+  color: var(--red);
+  margin-top: 5px;
+  line-height: 1.1;
+  word-break: break-word;
+}
+.card .foot { font-size: 11.5px; color: var(--ink-soft); margin-top: 4px; }
+
+/* -------------------------------- panels -------------------------------- */
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
+.panel {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: var(--shadow);
+  min-width: 0;
+}
+.panel h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--red-dark);
+}
+.hint { margin: 4px 0 12px; font-size: 12px; color: var(--ink-soft); line-height: 1.5; }
+
+.panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.status-line { font-size: 12.5px; color: var(--ink-soft); margin-bottom: 10px; min-height: 18px; }
+
+/* -------------------------------- meters -------------------------------- */
+.meters { display: flex; flex-direction: column; gap: 9px; }
+
+.meter-row { display: flex; align-items: center; gap: 9px; font-size: 12.5px; }
+.meter-row .m-label { flex: 0 0 116px; color: var(--ink-soft); }
+.meter-track {
+  flex: 1 1 auto;
+  height: 10px;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.meter-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--red), var(--red-light));
+  transition: width 0.45s ease;
+}
+.meter-row .m-val { flex: 0 0 44px; text-align: right; font-weight: 800; color: var(--red-dark); }
+
+/* ------------------------------ key/value ------------------------------- */
+.kv { display: flex; flex-direction: column; gap: 8px; }
+.kv-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  padding-bottom: 7px;
+  border-bottom: 1px dashed var(--border);
+}
+.kv-row:last-child { border-bottom: none; padding-bottom: 0; }
+.kv-row span:first-child { color: var(--ink-soft); }
+.kv-row span:last-child { font-weight: 700; color: var(--red-dark); text-align: right; word-break: break-word; }
+
+/* -------------------------------- tables -------------------------------- */
+/* Horizontal scroll keeps wide tables usable on a phone without breaking
+   the page layout. */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 620px; }
+
+thead th {
+  background: var(--red);
+  color: var(--white);
+  text-align: left;
+  padding: 10px 12px;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+tbody td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+tbody tr:nth-child(even) { background: var(--red-tint); }
+tbody tr:last-child td { border-bottom: none; }
+
+td.empty {
+  text-align: center;
+  color: var(--ink-soft);
+  font-style: italic;
+  padding: 18px 12px;
+}
+
+.pill {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 11px;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--red-tint);
+  color: var(--red-dark);
+  white-space: nowrap;
+}
+.pill.ok { background: #e2f7e8; color: #1c6b34; }
+.pill.fail { background: var(--red); color: var(--white); }
+
+/* ============================ tablet / laptop ============================ */
+@media (min-width: 600px) {
+  .cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .admin-header h1 { font-size: 19px; }
+  .wrap { padding: 20px 20px calc(32px + env(safe-area-inset-bottom)); }
+}
+
+@media (min-width: 900px) {
+  .cards { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .panel { padding: 20px; }
+  .wrap { padding: 24px 28px 40px; gap: 20px; }
+}
+
+@media (min-width: 1200px) {
+  .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: 0.001ms !important; }
+}

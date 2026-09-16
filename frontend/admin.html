@@ -2,56 +2,90 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>KQ-Propel | Admin Dashboard</title>
-<link rel="stylesheet" href="/static/style.css" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#c8102e" />
+<title>KQ-Propel | Administrative Dashboard</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23c8102e'/><text x='16' y='23' font-size='15' font-family='Arial' font-weight='bold' fill='white' text-anchor='middle'>KQ</text></svg>" />
+<link rel="stylesheet" href="/static/admin.css" />
 </head>
 <body>
-<header class="kq-header">
+
+<header class="admin-header">
   <div class="brand">
-    <div class="logo">KQ</div>
+    <div class="logo" aria-hidden="true">KQ</div>
     <div>
-      <h1>KQ-Propel Admin Dashboard</h1>
-      <div class="tagline">Sentiment Telemetry · RAG-Triad Evaluation · Transaction Audit Trail</div>
+      <h1>KQ-Propel Administrative Dashboard</h1>
+      <p class="sub">Agentic RAG monitoring, hallucination telemetry &amp; M-Pesa audit</p>
     </div>
   </div>
-  <nav class="kq-nav">
-    <a href="/">Chat Assistant</a>
-    <a href="/admin" class="active">Admin Dashboard</a>
-  </nav>
+  <button id="refresh" class="btn">Refresh</button>
 </header>
 
-<main>
-  <div class="card">
-    <h3 style="margin-top:0;color:var(--kq-red-dark);">System Overview</h3>
-    <div class="metrics-grid" id="metrics-grid"></div>
-  </div>
+<main class="wrap">
 
-  <div class="card">
-    <h3 style="margin-top:0;color:var(--kq-red-dark);">RAG-Triad Evaluation (Hallucination Guardrails)</h3>
-    <div id="rag-bars"></div>
-  </div>
+  <section class="cards" id="kpis" aria-label="Key metrics"></section>
 
-  <div class="card">
-    <h3 style="margin-top:0;color:var(--kq-red-dark);">Passenger Sentiment / Frustration Classifier</h3>
-    <p style="font-size:13px;color:#555;">Custom TF-IDF + Logistic Regression model, trained and evaluated on a labelled dataset (per corrections document).</p>
-    <div class="metrics-grid" id="sentiment-metrics"></div>
-    <div id="sentiment-dist" style="margin-top:14px;"></div>
-  </div>
+  <section class="grid">
 
-  <div class="card">
-    <h3 style="margin-top:0;color:var(--kq-red-dark);">M-Pesa Daraja Transaction Audit Trail</h3>
-    <table class="kq-table" id="transactions-table">
-      <thead><tr><th>Time (UTC)</th><th>Reference</th><th>Phone</th><th>Amount (Ksh)</th><th>Status</th></tr></thead>
-      <tbody></tbody>
-    </table>
-  </div>
+    <article class="panel">
+      <h2>RAG-Triad Evaluation</h2>
+      <p class="hint">Rolling averages across logged conversations.</p>
+      <div id="triad" class="meters"></div>
+    </article>
 
-  <div class="card">
-    <h3 style="margin-top:0;color:var(--kq-red-dark);">Dual-LLM Comparative Evaluation</h3>
-    <p style="font-size:13px;color:#555;">Runs GPT-4o-mini vs. an open-source model (Llama/Mistral) over the identical RAG pipeline and evaluation dataset, per the corrections document.</p>
-    <button class="kq-btn" onclick="runComparison()">Run Model Comparison</button>
-    <div id="model-comparison-results" style="margin-top:16px;"></div>
-  </div>
+    <article class="panel">
+      <h2>Passenger Sentiment Distribution</h2>
+      <p class="hint">Output of the self-developed frustration classifier.</p>
+      <div id="sentiment-dist" class="meters"></div>
+    </article>
+
+    <article class="panel">
+      <h2>Sentiment Classifier Performance</h2>
+      <p class="hint">Held-out test-set metrics for the trained ML component.</p>
+      <div id="sentiment-metrics" class="meters"></div>
+    </article>
+
+    <article class="panel">
+      <h2>Knowledge Base</h2>
+      <p class="hint">Vector store indexing status.</p>
+      <div id="vectorstore" class="kv"></div>
+    </article>
+
+  </section>
+
+  <section class="panel">
+    <h2>M-Pesa Transaction Audit Trail</h2>
+    <p class="hint">Every payment the agent initiated, with its policy-grounded amount.</p>
+    <div class="table-scroll">
+      <table id="tx-table">
+        <thead>
+          <tr><th>Time</th><th>Session</th><th>Phone</th><th>Amount (Ksh)</th><th>Status</th><th>Reference</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <div>
+        <h2>Controlled Dual-Model Comparison</h2>
+        <p class="hint">Identical documents, chunking, embeddings, retrieval and prompts &mdash; only the model varies.</p>
+      </div>
+      <button id="run-comparison" class="btn">Run comparison</button>
+    </div>
+    <div id="comparison-status" class="status-line"></div>
+    <div id="comparison-summary" class="meters"></div>
+    <div class="table-scroll">
+      <table id="cmp-table">
+        <thead>
+          <tr><th>Query</th><th>Model</th><th>Context rel.</th><th>Groundedness</th><th>Answer rel.</th><th>Latency (s)</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
 </main>
 
 <script src="/static/admin.js"></script>

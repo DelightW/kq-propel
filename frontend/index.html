@@ -2,46 +2,70 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#c8102e" />
+<meta name="description" content="KQ-Propel aviation support assistant" />
 <title>KQ-Propel | Aviation Support Assistant</title>
-<link rel="stylesheet" href="/static/style.css" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23c8102e'/><text x='16' y='23' font-size='15' font-family='Arial' font-weight='bold' fill='white' text-anchor='middle'>KQ</text></svg>" />
+<link rel="stylesheet" href="/static/chat.css" />
 </head>
 <body>
-<header class="kq-header">
-  <div class="brand">
-    <div class="logo">KQ</div>
-    <div>
-      <h1>KQ-Propel</h1>
-      <div class="tagline">Agentic RAG Framework for Aviation Support &amp; Localized Transaction Execution</div>
-    </div>
-  </div>
-  <nav class="kq-nav">
-    <a href="/" class="active">Chat Assistant</a>
-    <a href="/admin">Admin Dashboard</a>
-  </nav>
-</header>
 
-<main>
-  <div class="card chat-layout">
-    <div>
-      <div class="suggestions">
-        <button onclick="fillMessage('My flight KQ100 is delayed by 3 hours, my bag is 5kg over the limit, what is the exact fee and how do I pay?')">Compound question demo</button>
-        <button onclick="fillMessage('What is the status of flight KQ310?')">Flight status</button>
-        <button onclick="fillMessage('My baggage has been missing for two days, what allowance can I claim?')">Lost baggage</button>
-        <button onclick="fillMessage('This is the third time my flight has been delayed and nobody is telling me anything, I am furious!')">Frustrated passenger demo</button>
-      </div>
-      <div id="chat-window"></div>
-      <div class="chat-input-row">
-        <input id="chat-input" type="text" placeholder="Ask about baggage, refunds, delays, flight status or payments..." />
-        <button onclick="sendMessage()">Send</button>
+<div class="app">
+
+  <header class="chat-header">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">KQ</div>
+      <div class="brand-text">
+        <h1>KQ-Propel</h1>
+        <p class="status"><span class="dot" id="status-dot"></span><span id="status-text">Aviation Support Assistant</span></p>
       </div>
     </div>
-    <div class="side-panel">
-      <h3>Agent Reasoning Trace</h3>
-      <div id="trace-panel"><p style="font-size:13px;color:#777;">Send a message to see the agent's Thought &rarr; Action &rarr; Observation trace, retrieved sources, RAG-Triad scores, and sentiment classification.</p></div>
-    </div>
-  </div>
-</main>
+    <button id="trace-toggle" class="icon-btn" aria-label="Show agent reasoning" title="Agent reasoning">
+      <span class="icon-bars" aria-hidden="true"><i></i><i></i><i></i></span>
+    </button>
+  </header>
 
-<script src="/static/app.js"></script>
+  <main class="chat-main">
+
+    <section class="chat-column">
+      <div id="chat-window" class="chat-window" role="log" aria-live="polite" aria-label="Conversation"></div>
+
+      <div class="composer">
+        <div class="chips" id="chips">
+          <button type="button" data-q="What is the baggage allowance for economy class?">Baggage allowance</button>
+          <button type="button" data-q="My bag is 5kg over the limit, what is the fee?">Overweight fee</button>
+          <button type="button" data-q="What is the status of flight KQ100?">Flight status</button>
+          <button type="button" data-q="My flight was delayed 4 hours, what am I entitled to?">Delay compensation</button>
+          <button type="button" data-q="How long does a refund take?">Refunds</button>
+          <button type="button" data-q="What time does check-in close for international flights?">Check-in times</button>
+        </div>
+
+        <form class="input-row" id="chat-form" autocomplete="off">
+          <input id="chat-input" type="text" placeholder="Ask about baggage, delays, refunds or check-in..."
+                 aria-label="Type your question" autocomplete="off" />
+          <button type="submit" id="send-btn" class="send-btn" aria-label="Send message">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M3.4 20.4 21 12 3.4 3.6 3.4 10.2 15.6 12 3.4 13.8z"/></svg>
+          </button>
+        </form>
+      </div>
+    </section>
+
+    <aside class="trace-panel" id="trace-panel" aria-label="Agent reasoning">
+      <div class="trace-head">
+        <h2>Agent Reasoning</h2>
+        <button id="trace-close" class="icon-btn close" aria-label="Close reasoning panel">&times;</button>
+      </div>
+      <div id="trace-body" class="trace-body">
+        <p class="trace-empty">Ask a question to see how the agent reasons: the policy sections it retrieves, the tools it calls, and how well-grounded its answer is.</p>
+      </div>
+    </aside>
+
+  </main>
+
+  <div class="scrim" id="scrim" hidden></div>
+</div>
+
+<script src="/static/chat.js"></script>
 </body>
 </html>

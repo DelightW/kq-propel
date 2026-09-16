@@ -59,6 +59,13 @@ def embed_text(text: str) -> List[float]:
     return _local_embedding(text)
 
 
+def provider_name() -> str:
+    """Human-readable embedding backend, surfaced on the admin dashboard."""
+    if config.OPENAI_API_KEY:
+        return config.OPENAI_EMBEDDING_MODEL
+    return "deterministic local embedding (offline)"
+
+
 def cosine_similarity(a: List[float], b: List[float]) -> float:
     if not a or not b or len(a) != len(b):
         return 0.0
