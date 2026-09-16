@@ -1,0 +1,62 @@
+[
+  {
+    "id": "q1",
+    "query": "My flight is delayed by 3 hours, my bag is 5kg over the limit, what is the exact fee and how do I pay?",
+    "expected_topics": ["delay_compensation_policy", "baggage_policy"],
+    "expected_keywords": ["1,500", "5,000", "M-Pesa", "STK"]
+  },
+  {
+    "id": "q2",
+    "query": "How much is the overweight baggage fee for a bag that is 15kg over the limit?",
+    "expected_topics": ["baggage_policy"],
+    "expected_keywords": ["9,000"]
+  },
+  {
+    "id": "q3",
+    "query": "What compensation am I entitled to if my flight is delayed overnight?",
+    "expected_topics": ["delay_compensation_policy"],
+    "expected_keywords": ["hotel", "meal"]
+  },
+  {
+    "id": "q4",
+    "query": "Can I get a refund if my non-refundable ticket flight was cancelled by the airline?",
+    "expected_topics": ["refund_policy"],
+    "expected_keywords": ["full refund", "no service fee"]
+  },
+  {
+    "id": "q5",
+    "query": "What time does online check-in close for an international flight?",
+    "expected_topics": ["checkin_policy"],
+    "expected_keywords": ["90 minutes"]
+  },
+  {
+    "id": "q6",
+    "query": "My baggage has been missing for two days, what allowance can I claim?",
+    "expected_topics": ["baggage_policy"],
+    "expected_keywords": ["2,000", "Property Irregularity Report"]
+  },
+  {
+    "id": "q7",
+    "query": "How long does it take to get a refund back to my M-Pesa account?",
+    "expected_topics": ["refund_policy"],
+    "expected_keywords": ["3 to 5 business days"]
+  },
+  {
+    "id": "q8",
+    "query": "I need to travel with my golf clubs, is there an extra fee?",
+    "expected_topics": ["baggage_policy"],
+    "expected_keywords": ["3,500"]
+  },
+  {
+    "id": "q9",
+    "query": "What documents do I need to bring to the airport for an international flight?",
+    "expected_topics": ["checkin_policy"],
+    "expected_keywords": ["passport", "visa"]
+  },
+  {
+    "id": "q10",
+    "query": "Is compensation offered if my flight is delayed due to bad weather?",
+    "expected_topics": ["delay_compensation_policy"],
+    "expected_keywords": ["force majeure"]
+  }
+]

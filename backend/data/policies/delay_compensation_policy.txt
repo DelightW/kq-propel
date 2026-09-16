@@ -1,0 +1,29 @@
+KQ-Propel Flight Delay and Cancellation Compensation Policy
+
+Section 1: Delay Notification
+Passengers will be notified of any delay exceeding 30 minutes via SMS, email, and the KQ-Propel
+digital assistant. Real-time flight status, including gate changes and estimated departure time, is
+sourced live from the AviationStack flight telemetry service.
+
+Section 2: Compensation for Short Delays (1-3 hours)
+Passengers delayed between 1 and 3 hours are entitled to a meal voucher of Ksh 1,500 and complimentary
+access to the airport lounge where available.
+
+Section 3: Compensation for Extended Delays (3-6 hours)
+Passengers delayed between 3 and 6 hours are entitled to a meal voucher of Ksh 1,500, complimentary
+lounge access, and a rebooking option onto the next available flight at no additional cost.
+
+Section 4: Compensation for Overnight Delays (over 6 hours)
+Passengers delayed more than 6 hours, or whose flight is rescheduled to the following day, are entitled
+to a hotel accommodation voucher, ground transport to and from the hotel, and meal vouchers for each
+affected meal period.
+
+Section 5: Flight Cancellation
+In the event of a flight cancellation, passengers may choose between a full refund processed to the
+original payment method within 14 business days, or free rebooking on the next available flight. Refund
+requests can be initiated directly through the KQ-Propel digital assistant.
+
+Section 6: Force Majeure Exclusions
+Compensation under this policy does not apply to delays or cancellations caused by extreme weather,
+air traffic control restrictions, security threats, or airport authority directives, in line with
+force majeure provisions.

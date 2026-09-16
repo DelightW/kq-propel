@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>KQ-Propel | Aviation Support Assistant</title>
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+<header class="kq-header">
+  <div class="brand">
+    <div class="logo">KQ</div>
+    <div>
+      <h1>KQ-Propel</h1>
+      <div class="tagline">Agentic RAG Framework for Aviation Support &amp; Localized Transaction Execution</div>
+    </div>
+  </div>
+  <nav class="kq-nav">
+    <a href="/" class="active">Chat Assistant</a>
+    <a href="/admin">Admin Dashboard</a>
+  </nav>
+</header>
+
+<main>
+  <div class="card chat-layout">
+    <div>
+      <div class="suggestions">
+        <button onclick="fillMessage('My flight KQ100 is delayed by 3 hours, my bag is 5kg over the limit, what is the exact fee and how do I pay?')">Compound question demo</button>
+        <button onclick="fillMessage('What is the status of flight KQ310?')">Flight status</button>
+        <button onclick="fillMessage('My baggage has been missing for two days, what allowance can I claim?')">Lost baggage</button>
+        <button onclick="fillMessage('This is the third time my flight has been delayed and nobody is telling me anything, I am furious!')">Frustrated passenger demo</button>
+      </div>
+      <div id="chat-window"></div>
+      <div class="chat-input-row">
+        <input id="chat-input" type="text" placeholder="Ask about baggage, refunds, delays, flight status or payments..." />
+        <button onclick="sendMessage()">Send</button>
+      </div>
+    </div>
+    <div class="side-panel">
+      <h3>Agent Reasoning Trace</h3>
+      <div id="trace-panel"><p style="font-size:13px;color:#777;">Send a message to see the agent's Thought &rarr; Action &rarr; Observation trace, retrieved sources, RAG-Triad scores, and sentiment classification.</p></div>
+    </div>
+  </div>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

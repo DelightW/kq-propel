@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>KQ-Propel | Admin Dashboard</title>
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+<header class="kq-header">
+  <div class="brand">
+    <div class="logo">KQ</div>
+    <div>
+      <h1>KQ-Propel Admin Dashboard</h1>
+      <div class="tagline">Sentiment Telemetry · RAG-Triad Evaluation · Transaction Audit Trail</div>
+    </div>
+  </div>
+  <nav class="kq-nav">
+    <a href="/">Chat Assistant</a>
+    <a href="/admin" class="active">Admin Dashboard</a>
+  </nav>
+</header>
+
+<main>
+  <div class="card">
+    <h3 style="margin-top:0;color:var(--kq-red-dark);">System Overview</h3>
+    <div class="metrics-grid" id="metrics-grid"></div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;color:var(--kq-red-dark);">RAG-Triad Evaluation (Hallucination Guardrails)</h3>
+    <div id="rag-bars"></div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;color:var(--kq-red-dark);">Passenger Sentiment / Frustration Classifier</h3>
+    <p style="font-size:13px;color:#555;">Custom TF-IDF + Logistic Regression model, trained and evaluated on a labelled dataset (per corrections document).</p>
+    <div class="metrics-grid" id="sentiment-metrics"></div>
+    <div id="sentiment-dist" style="margin-top:14px;"></div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;color:var(--kq-red-dark);">M-Pesa Daraja Transaction Audit Trail</h3>
+    <table class="kq-table" id="transactions-table">
+      <thead><tr><th>Time (UTC)</th><th>Reference</th><th>Phone</th><th>Amount (Ksh)</th><th>Status</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0;color:var(--kq-red-dark);">Dual-LLM Comparative Evaluation</h3>
+    <p style="font-size:13px;color:#555;">Runs GPT-4o-mini vs. an open-source model (Llama/Mistral) over the identical RAG pipeline and evaluation dataset, per the corrections document.</p>
+    <button class="kq-btn" onclick="runComparison()">Run Model Comparison</button>
+    <div id="model-comparison-results" style="margin-top:16px;"></div>
+  </div>
+</main>
+
+<script src="/static/admin.js"></script>
+</body>
+</html>

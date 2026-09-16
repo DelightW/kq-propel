@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Generated runtime artifacts (rebuilt automatically on startup)
+backend/data/vector_store.json
+backend/data/kq_propel.db
+backend/data/sentiment_dataset/*.joblib
+backend/data/sentiment_dataset/*.metrics.json
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
