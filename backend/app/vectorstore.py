@@ -92,6 +92,26 @@ def chunk_document(text: str, doc_id: str,
     return chunks
 
 
+def _heading_boost(query_tokens: List[str], record: Dict) -> float:
+    """Rewards a chunk whose section heading covers the query.
+
+    BM25 scores a heading term once against a whole section body, so a section
+    literally titled "Checked Baggage Allowance" can rank below one that merely
+    mentions an "incidental allowance" several times. Headings are the author's
+    own statement of what a section is about, so full coverage is treated as a
+    decisive signal rather than one more term occurrence.
+    """
+    heading = f"{record.get('section', '')} {record.get('doc_title', '')}"
+    heading_tokens = set(retrieval.expand_query(retrieval.tokenize(heading)))
+    if not heading_tokens:
+        return 1.0
+    unique = set(query_tokens)
+    if not unique:
+        return 1.0
+    coverage = len(unique & heading_tokens) / len(unique)
+    return 1.0 + 0.9 * (coverage ** 2)
+
+
 class _HybridSearchMixin:
     """Shared hybrid (BM25 + dense cosine) ranking logic."""
 
@@ -112,7 +132,7 @@ class _HybridSearchMixin:
         scored = []
         for rec, lex, dense, score in zip(records, lexical_scores, dense_scores, blended):
             item = {key: value for key, value in rec.items() if key != "embedding"}
-            item["score"] = round(score, 4)
+            item["score"] = round(score * _heading_boost(query_tokens, rec), 4)
             item["lexical_score"] = round(lex, 4)
             item["dense_score"] = round(dense, 4)
             scored.append(item)

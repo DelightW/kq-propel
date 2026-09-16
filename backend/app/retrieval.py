@@ -30,8 +30,12 @@ _STOPWORDS = {
 _SYNONYMS = {
     "bag": ["baggage", "luggage"],
     "bags": ["baggage", "luggage"],
+    "baggage": ["bag", "bags", "luggage"],
     "suitcase": ["baggage", "luggage"],
     "luggage": ["baggage"],
+    "allowance": ["allowed", "permitted", "limit"],
+    "allowed": ["allowance", "permitted", "limit"],
+    "permitted": ["allowance", "allowed", "limit"],
     "overweight": ["overweight", "exceeding", "over"],
     "heavy": ["overweight", "exceeding"],
     "fee": ["fee", "charge", "cost"],
@@ -94,6 +98,34 @@ def normalize_phrases(text: str) -> str:
     for pattern, replacement in _PHRASE_REWRITES:
         text = pattern.sub(replacement, text)
     return text
+
+
+_INTERROGATIVE_RE = re.compile(
+    r"\b(what|where|when|why|which|who|whose|how|can|could|may|might|will|would|"
+    r"shall|should|do|does|did|is|are|was|were|am|have|has|had|please|tell\s+me|"
+    r"i\s+need|i\s+want|help\s+me)\b", re.IGNORECASE)
+
+
+def focus_query(text: str) -> str:
+    """Narrows a message to the clause that actually carries the request.
+
+    Passengers frequently prefix a question with an emotional statement - "I
+    HAVE WAITED FOR 2 HOURS?! What is the baggage allowance?" - and those
+    words are real tokens that pull retrieval toward delay and compensation
+    sections. The emotional prefix is what the frustration classifier is for;
+    retrieval should see only the request itself.
+    """
+    text = (text or "").strip()
+    clauses = [c.strip() for c in re.split(r"(?<=[.!?])\s+|\n+", text) if c.strip()]
+    if len(clauses) < 2:
+        return text
+
+    questions = [c for c in clauses if _INTERROGATIVE_RE.search(c)]
+    if not questions:
+        return text
+    # The request is nearly always the last thing asked.
+    focused = questions[-1]
+    return focused if len(tokenize(focused)) >= 2 else text
 
 
 def tokenize(text: str) -> List[str]:

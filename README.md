@@ -28,7 +28,11 @@ extended with the enhancements required by `Corrections.docx`. UI theme: **red &
   only initiated on explicit transactional intent *and* a policy-grounded amount, so
   asking "how do I pay?" never charges anyone.
 - **Localized transaction execution (M-Pesa)**: when an answer quotes a specific,
-  policy-grounded fee, the agent offers to settle it there and then. The conversation is
+  policy-grounded fee, the agent offers to settle it there and then. The offer is driven
+  by what the *answer* says, not by how the question was worded — "I have an overweight
+  baggage by 10kg" contains no fee vocabulary yet still gets an offer. Money owed *to*
+  the passenger (refunds, meal vouchers, delayed-baggage allowances) is never offered for
+  payment. The conversation is
   stateful — the passenger can reply "yes", then send their number on a later turn, and
   the agent still knows what it was charging for. The STK push is rendered in the chat as
   an M-Pesa receipt card (amount, destination number, reference, checkout ID) and written
@@ -122,12 +126,12 @@ marked **Private** in Windows.
 Ask about a fee, then settle it without leaving the chat:
 
 ```
-You:  My bag is 15kg over, how much is the fee?
+You:  I have an overweight baggage by 15kg
 Bot:  Bags between 11kg and 20kg over the limit incur a flat fee of Ksh 9,000.
       Source: Baggage Policy - Section 2: Overweight Baggage Fees
       Would you like me to send an M-Pesa payment prompt for Ksh 9,000?
 
-You:  yes please
+You:  can i pay it
 Bot:  The amount due is Ksh 9,000. What's the M-Pesa number?
 
 You:  0722334455

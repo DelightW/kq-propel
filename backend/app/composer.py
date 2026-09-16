@@ -110,15 +110,22 @@ def compose_answer(question: str, chunks: List[Dict], max_sentences: int = 3,
                 "refunds and ticket changes, and check-in or boarding rules.")
 
     quantities = _query_quantities(question)
+    base_q_tokens = set(retrieval.tokenize(question))
     q_tokens = set(retrieval.expand_query(retrieval.tokenize(question)))
 
     candidates = []
     for rank, chunk in enumerate(chunks):
         # A matching section heading ("Refund Processing Timelines") is strong
         # evidence that the whole section answers the question, independent of
-        # how many query words happen to appear in any single sentence.
+        # how many query words happen to appear in any single sentence. The
+        # sentence that actually answers "what is the baggage allowance?" is
+        # "...one checked bag not exceeding 23kg", which shares no words with
+        # the question at all - only its heading does.
         section_tokens = set(retrieval.tokenize(chunk.get("section") or ""))
-        heading_bonus = len(q_tokens & section_tokens) * 1.5
+        section_expanded = set(retrieval.expand_query(section_tokens))
+        heading_hits = len(q_tokens & section_tokens)
+        heading_coverage = len(base_q_tokens & section_expanded) / max(len(base_q_tokens), 1)
+        heading_bonus = heading_hits * 1.5 + heading_coverage * 3.0
         body = chunk["text"]
         for sentence in _SENTENCE_SPLIT_RE.split(body):
             sentence = _clean_sentence(sentence)

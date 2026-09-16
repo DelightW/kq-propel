@@ -43,10 +43,11 @@ _HELP_RE = re.compile(
 # phrasing ("how do I pay?") is answered from policy instead, so the agent
 # never charges a passenger who only asked a question.
 _TRANSACTIONAL_RE = re.compile(
-    r"\b(pay\s+now|pay\s+it|pay\s+the\s+fee|pay\s+for\s+it|make\s+the\s+payment|"
+    r"\b(pay\s+now|pay\s+it|pay\s+the\s+fee|pay\s+for\s+it|pay\s+this|make\s+the\s+payment|"
     r"send\s+(?:me\s+)?(?:the\s+)?(?:stk|prompt|push|request)|initiate\s+(?:the\s+)?payment|"
-    r"charge\s+me|i\s+(?:want|would\s+like|wish)\s+to\s+pay|let'?s\s+pay|go\s+ahead\s+and\s+pay|"
-    r"process\s+(?:the\s+)?payment)\b", re.IGNORECASE)
+    r"charge\s+me|(?:can|could|may)\s+i\s+pay|i\s+(?:want|would\s+like|wish|need)\s+to\s+pay|"
+    r"i'?d\s+like\s+to\s+pay|let'?s\s+pay|go\s+ahead\s+and\s+pay|settle\s+(?:it|the\s+fee)|"
+    r"pay\s+(?:ksh|kes)\.?\s?[\d,]+|process\s+(?:the\s+)?payment)\b", re.IGNORECASE)
 _PAYMENT_TOPIC_RE = re.compile(r"\b(pay|payment|m-?pesa|mpesa|stk|till|settle)\b", re.IGNORECASE)
 
 # Short confirmations/declines only carry meaning while a payment offer is
@@ -60,6 +61,13 @@ _DECLINE_RE = re.compile(
     r"no\s+thanks?|no\s+thank\s+you)\b[\s!.,?]*$", re.IGNORECASE)
 _FEE_TOPIC_RE = re.compile(r"\b(fee|fees|charge|charges|cost|costs|price|how\s+much|"
                             r"pay|payment|owe|balance)\b", re.IGNORECASE)
+# Whether a quoted amount is money the passenger *owes* (payable) or money owed
+# *to* them (an entitlement). Only the former may be offered for settlement.
+_PAYABLE_RE = re.compile(r"\b(fee|fees|charge|charged|charges|surcharge|payable|"
+                          r"excess|supplementary|incur|incurs|settle|settled)\b", re.IGNORECASE)
+_ENTITLEMENT_RE = re.compile(r"\b(entitled|entitlement|voucher|compensation|compensated|"
+                              r"refund|refunds|refunded|reimburse|reimbursed|claim|"
+                              r"allowance\s+of|credit|deducted|less\s+any)\b", re.IGNORECASE)
 _KSH_RE = re.compile(r"Ksh\s?([\d,]+)")
 
 # Departure/arrival *times* are live operational data, not policy. The agent
@@ -271,6 +279,28 @@ def _handle_pending_payment(session_id: str, message: str, pending: Dict,
     return None
 
 
+def _payable_fee(answer: str, chunks: List[Dict]) -> Optional[float]:
+    """Returns the single fee the passenger owes, if the answer quotes exactly
+    one and it is genuinely a charge rather than money owed to them.
+
+    Whether a payment can be offered depends on what the *answer* says, not on
+    how the question happened to be phrased - "I have an overweight baggage by
+    10kg" contains no fee words yet clearly warrants an offer to settle.
+    """
+    amounts = _distinct_amounts(answer)
+    if len(amounts) != 1:
+        return None
+
+    sentence = next((s for s in re.split(r"(?<=[.!?])\s+", answer) if _KSH_RE.search(s)), "")
+    if _ENTITLEMENT_RE.search(sentence):
+        return None
+
+    heading = chunks[0].get("section", "") if chunks else ""
+    if _PAYABLE_RE.search(sentence) or _PAYABLE_RE.search(heading):
+        return amounts[0]
+    return None
+
+
 def _apply_empathy(answer: str, sentiment_result: Dict) -> str:
     """Sentiment-aware framing (corrections requirement): a frustrated
     passenger gets acknowledgement and an explicit escalation path."""
@@ -383,12 +413,18 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
                                  trace, sentiment_result)
 
     # --- Action: hybrid semantic + lexical retrieval over policy documents ---
+    # The emotional framing a passenger wraps around a question is signal for
+    # the frustration classifier, not for retrieval, so search on the request.
+    query = retrieval.focus_query(message)
+    if query != message:
+        trace.append({"step": "thought",
+                       "content": f"Isolated the actual request from the message: \"{query}\""})
     store = get_vector_store()
-    retrieved = store.similarity_search(message, k=4)
+    retrieved = store.similarity_search(query, k=4)
     trace.append({
         "step": "action",
         "tool": "retrieve_policy_documents",
-        "input": message,
+        "input": query,
         "observation": [
             {"source": r.get("source"), "section": r.get("section"),
              "score": r.get("score"), "excerpt": r["text"][:160]}
@@ -397,7 +433,7 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
     })
 
     # --- Observation: is the retrieved policy text actually on topic? ---
-    if not _is_grounded_in_context(message, retrieved) and not flight_number \
+    if not _is_grounded_in_context(query, retrieved) and not flight_number \
             and not _PAYMENT_TOPIC_RE.search(message):
         trace.append({
             "step": "thought",
@@ -430,7 +466,7 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
         if amount_match:
             amount = float(amount_match.group(1).replace(",", ""))
         else:
-            amount = _extract_fee_from_context(retrieved, message)
+            amount = _extract_fee_from_context(retrieved, query)
 
         if amount is None:
             tool_observations.append(
@@ -463,7 +499,7 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
     # --- Compose the final grounded answer ---
     context_text = _serialize_context(retrieved)
     tool_context = "\n".join(tool_observations)
-    user_prompt = f"CONTEXT:\n{context_text}\n\nTOOL OBSERVATIONS:\n{tool_context}\n\nQUESTION:\n{message}"
+    user_prompt = f"CONTEXT:\n{context_text}\n\nTOOL OBSERVATIONS:\n{tool_context}\n\nQUESTION:\n{query}"
 
     if sentiment_result["label"] == "frustrated" and sentiment_result["frustration_score"] >= 0.55:
         user_prompt += (
@@ -482,16 +518,16 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
     elif payment_result and payment_result.get("message"):
         answer += "\n\n" + payment_result["message"]
     else:
-        # A fee question that produced exactly one grounded amount is an
-        # opportunity to settle it there and then, which is the localized
-        # transaction-execution capability the proposal is built around.
-        amounts = _distinct_amounts(answer)
-        if len(amounts) == 1 and _FEE_TOPIC_RE.search(message):
-            database.set_pending_payment(session_id, amounts[0],
+        # A grounded, payable fee is an opportunity to settle it there and
+        # then, which is the localized transaction-execution capability the
+        # proposal is built around.
+        fee = _payable_fee(answer, retrieved)
+        if fee is not None:
+            database.set_pending_payment(session_id, fee,
                                           "KQ-Propel ancillary fee settlement", "offered")
-            answer += _offer_payment_message(amounts[0])
+            answer += _offer_payment_message(fee)
             trace.append({"step": "thought",
-                           "content": (f"Grounded fee of Ksh {amounts[0]:,.0f} identified - "
+                           "content": (f"Grounded payable fee of Ksh {fee:,.0f} identified - "
                                        f"offering to settle it by M-Pesa.")})
 
     # Empathy framing wraps the completed answer so the acknowledgement always
