@@ -27,6 +27,12 @@ extended with the enhancements required by `Corrections.docx`. UI theme: **red &
   STK Push). Falls back to sandbox/simulated responses without API keys. A payment is
   only initiated on explicit transactional intent *and* a policy-grounded amount, so
   asking "how do I pay?" never charges anyone.
+- **Scope and capability guards**: retrieval always returns *something*, so the agent
+  additionally checks that the retrieved sections share subject matter with the question.
+  If they don't, it says so instead of answering from the closest-ranked policy. Likewise,
+  departure and arrival *times* are live operational data rather than policy — if no
+  flight number is supplied, the agent asks for one instead of quoting an unrelated
+  section.
 - **RAG-Triad evaluation** (`evaluation.py`): context relevance, groundedness, answer
   relevance, logged per turn and surfaced on the admin dashboard as a hallucination rate.
 - **Two separate front-ends**: a standalone passenger chatbot and an independent admin
@@ -56,10 +62,17 @@ safe-area insets are respected on notched devices.
    same context-relevance / groundedness / answer-relevance criteria, plus per-model
    response time. Run it from the dashboard's "Run comparison" button.
 2. **Custom-trained ML sentiment/frustration classifier** (`sentiment.py`): a
-   TF-IDF + Logistic Regression model trained on a labelled dataset
-   (`data/sentiment_dataset/frustration_dataset.csv`), evaluated with accuracy,
-   precision, recall and F1-score (shown on the dashboard). Its output feeds the agent
-   so highly frustrated passengers get a more empathetic response and an escalation path.
+   TF-IDF + Logistic Regression model trained on a labelled dataset of 100 passenger
+   messages (`data/sentiment_dataset/frustration_dataset.csv`), evaluated on a held-out
+   25-message test split with accuracy, precision, recall and F1-score (shown on the
+   dashboard). Because TF-IDF lower-cases its input and would discard the strongest
+   real-world cues, the feature space unions the lexical vectors with hand-engineered
+   **stylistic features** — capitalisation ratio, shouted words, exclamation and question
+   bursts, "?!" combinations, elongated characters and intensifier counts — so
+   "I HAVE WAITED FOR 2 HOURS?!" is correctly scored as frustrated. The model is
+   fingerprinted against the dataset and feature version, and retrains automatically when
+   either changes. Its output feeds the agent so frustrated passengers get an empathetic
+   acknowledgement first and an explicit escalation path last.
 
 ## Running it
 

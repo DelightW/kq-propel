@@ -75,8 +75,29 @@ _SYNONYMS = {
     "soon": ["processing", "within", "days"],
 }
 
+# Multi-word phrases are collapsed *before* tokenisation, so a phrasal verb is
+# never mistaken for its component words. Critically, "take off" means depart -
+# it must not be expanded through the "take" -> processing-time synonyms used
+# for questions like "how long does a refund take?".
+_PHRASE_REWRITES = [
+    (re.compile(r"\btak(?:e|es|ing)[\s-]?off\b", re.IGNORECASE), "departure"),
+    (re.compile(r"\btake[\s-]?off\b", re.IGNORECASE), "departure"),
+    (re.compile(r"\bcheck[\s-]?in\b", re.IGNORECASE), "checkin"),
+    (re.compile(r"\bm[\s-]?pesa\b", re.IGNORECASE), "mpesa"),
+    (re.compile(r"\bcash\s+back\b", re.IGNORECASE), "refund"),
+    (re.compile(r"\bcarry[\s-]?on\b", re.IGNORECASE), "cabin"),
+    (re.compile(r"\bno[\s-]?show\b", re.IGNORECASE), "noshow"),
+]
+
+
+def normalize_phrases(text: str) -> str:
+    for pattern, replacement in _PHRASE_REWRITES:
+        text = pattern.sub(replacement, text)
+    return text
+
 
 def tokenize(text: str) -> List[str]:
+    text = normalize_phrases(text or "")
     tokens = [t for t in _WORD_RE.findall(text.lower()) if t not in _STOPWORDS]
     return tokens
 

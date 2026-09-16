@@ -13,7 +13,7 @@ import re
 import uuid
 from typing import Dict, List, Optional
 
-from app import aviationstack, composer, daraja, database, evaluation, sentiment
+from app import aviationstack, composer, daraja, database, evaluation, retrieval, sentiment
 from app.llm import get_primary_llm
 from app.vectorstore import get_vector_store
 
@@ -41,6 +41,29 @@ _TRANSACTIONAL_RE = re.compile(
     r"charge\s+me|i\s+(?:want|would\s+like|wish)\s+to\s+pay|let'?s\s+pay|go\s+ahead\s+and\s+pay|"
     r"process\s+(?:the\s+)?payment)\b", re.IGNORECASE)
 _PAYMENT_TOPIC_RE = re.compile(r"\b(pay|payment|m-?pesa|mpesa|stk|till|settle)\b", re.IGNORECASE)
+
+# Departure/arrival *times* are live operational data, not policy. The agent
+# has a telemetry tool for this, but it is keyed on a flight number - without
+# one it must ask, rather than answering from an unrelated policy section.
+_SCHEDULE_RE = re.compile(
+    r"\b(?:what\s+time|when|which\s+time)\b[^?]{0,60}?\b(?:depart|departs|departing|departure|"
+    r"leave|leaves|leaving|take[\s-]?off|takes[\s-]?off|taking[\s-]?off|takeoff|board|boards|"
+    r"boarding|arrive|arrives|arriving|arrival|land|lands|landing|fly|flies)\b"
+    r"|\b(?:departure|arrival|boarding)\s+time\b"
+    r"|\bflight\s+(?:time|times|schedule|timetable)\b"
+    r"|\bis\s+(?:my|the)\s+flight\s+(?:on\s+time|delayed|leaving|departing)\b",
+    re.IGNORECASE)
+_ROUTE_RE = re.compile(r"\bfrom\s+([A-Za-z][A-Za-z\s]{2,20}?)\s+to\s+([A-Za-z][A-Za-z\s]{2,20}?)"
+                        r"(?=[\s,.?!]|$)", re.IGNORECASE)
+
+OUT_OF_SCOPE_REPLY = (
+    "I don't have anything on that in the airline's policy documents, so I'd rather "
+    "not guess.\n\n"
+    "I can help with baggage allowances and overweight fees, flight delays and "
+    "compensation, refunds and ticket changes, check-in and boarding rules, live "
+    "flight status, and paying fees by M-Pesa. Could you rephrase your question "
+    "around one of those?"
+)
 
 GREETING_REPLY = (
     "Hello, and welcome to KQ-Propel. I'm your aviation support assistant.\n\n"
@@ -80,6 +103,64 @@ def _detect_flight_number(message: str) -> Optional[str]:
     return f"KQ{match.group(1)}" if match else None
 
 
+def _detect_route(message: str) -> Optional[str]:
+    match = _ROUTE_RE.search(message)
+    if not match:
+        return None
+    origin = " ".join(match.group(1).split()).title()
+    destination = " ".join(match.group(2).split()).title()
+    return f"{origin} to {destination}"
+
+
+def _schedule_request_reply(message: str) -> str:
+    """Asked for a departure/arrival time without a flight number. The honest
+    answer is to request the flight number rather than quote a policy."""
+    route = _detect_route(message)
+    opening = (
+        f"I can check that for you. I look up departure and arrival times from the live "
+        f"flight telemetry feed rather than a printed timetable, so I need your flight "
+        f"number"
+    )
+    if route:
+        opening += f" for the {route} service"
+    return (
+        opening + ".\n\n"
+        "Send it through in the form KQ100 and I'll pull up the current status, the gate "
+        "and the latest estimated departure time straight away. You'll find it on your "
+        "booking confirmation or boarding pass."
+    )
+
+
+def _is_grounded_in_context(message: str, chunks: List[Dict]) -> bool:
+    """True when the retrieved policy text actually shares subject matter with
+    the question. Retrieval always returns its best candidates, so without this
+    check an off-topic question is answered from whichever section ranked
+    highest - which is how a departure-time question ended up being answered
+    with refund processing timelines."""
+    query_tokens = set(retrieval.tokenize(message))
+    if not query_tokens:
+        return False
+    for chunk in chunks[:2]:
+        chunk_tokens = set(retrieval.tokenize(
+            chunk.get("search_text") or chunk.get("text") or ""))
+        if len(query_tokens & chunk_tokens) / len(query_tokens) >= 0.3:
+            return True
+    return False
+
+
+def _apply_empathy(answer: str, sentiment_result: Dict) -> str:
+    """Sentiment-aware framing (corrections requirement): a frustrated
+    passenger gets acknowledgement and an explicit escalation path."""
+    if sentiment_result["label"] != "frustrated" or sentiment_result["frustration_score"] < 0.55:
+        return answer
+    return (
+        "I'm really sorry for the trouble - I understand how frustrating this is, "
+        "and I'll help you sort it out right away.\n\n" + answer +
+        "\n\nIf this doesn't fully resolve things, I can escalate you to a human "
+        "support agent straight away - just say \"escalate\"."
+    )
+
+
 def _small_talk_reply(message: str) -> Optional[str]:
     if _GREETING_RE.match(message):
         return GREETING_REPLY
@@ -111,6 +192,22 @@ def _extract_fee_from_context(chunks: List[Dict], message: str) -> Optional[floa
     return None
 
 
+def _finalize_direct(session_id: str, message: str, answer: str, trace: List[Dict],
+                      sentiment_result: Dict, model_name: str = "rule-based") -> Dict:
+    """Logs and returns a turn that was answered without document grounding
+    (small talk, a schedule request, or an out-of-scope question)."""
+    trace.append({"step": "final_answer", "model": model_name, "content": answer})
+    database.log_message(session_id, "user", message,
+                          sentiment_label=sentiment_result["label"],
+                          frustration_score=sentiment_result["frustration_score"])
+    database.log_message(session_id, "assistant", answer)
+    return {
+        "answer": answer, "model_used": model_name,
+        "sentiment": sentiment_result, "sources": [], "trace": trace,
+        "rag_metrics": {}, "payment": None,
+    }
+
+
 def run_agent_turn(session_id: str, message: str) -> Dict:
     message = (message or "").strip()
     trace: List[Dict] = []
@@ -136,16 +233,22 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
     if small_talk:
         trace.append({"step": "thought",
                        "content": "Conversational intent detected - no document retrieval needed."})
-        trace.append({"step": "final_answer", "model": "rule-based", "content": small_talk})
-        database.log_message(session_id, "user", message,
-                              sentiment_label=sentiment_result["label"],
-                              frustration_score=sentiment_result["frustration_score"])
-        database.log_message(session_id, "assistant", small_talk)
-        return {
-            "answer": small_talk, "model_used": "rule-based",
-            "sentiment": sentiment_result, "sources": [], "trace": trace,
-            "rag_metrics": {}, "payment": None,
-        }
+        return _finalize_direct(session_id, message, small_talk, trace, sentiment_result)
+
+    # --- Thought 3: a departure/arrival time needs live telemetry, and that
+    # tool is keyed on a flight number. Ask for it instead of falling back to
+    # an unrelated policy section. ---
+    flight_number = _detect_flight_number(message)
+    if _SCHEDULE_RE.search(message) and not flight_number:
+        trace.append({
+            "step": "thought",
+            "content": ("Flight schedule intent detected, but no flight number was supplied. "
+                        "The telemetry tool requires one, so request it rather than answering "
+                        "from policy documents."),
+        })
+        return _finalize_direct(session_id, message,
+                                 _apply_empathy(_schedule_request_reply(message), sentiment_result),
+                                 trace, sentiment_result)
 
     # --- Action: hybrid semantic + lexical retrieval over policy documents ---
     store = get_vector_store()
@@ -161,10 +264,21 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
         ],
     })
 
+    # --- Observation: is the retrieved policy text actually on topic? ---
+    if not _is_grounded_in_context(message, retrieved) and not flight_number \
+            and not _PAYMENT_TOPIC_RE.search(message):
+        trace.append({
+            "step": "thought",
+            "content": ("Retrieved sections do not overlap the question's subject matter. "
+                        "Declining to answer rather than risk an ungrounded response."),
+        })
+        return _finalize_direct(session_id, message,
+                                 _apply_empathy(OUT_OF_SCOPE_REPLY, sentiment_result),
+                                 trace, sentiment_result)
+
     tool_observations = []
 
     # --- Action: live flight telemetry tool (AviationStack) ---
-    flight_number = _detect_flight_number(message)
     if flight_number:
         flight_status = aviationstack.get_flight_status(flight_number)
         trace.append({"step": "action", "tool": "get_flight_status",
@@ -237,21 +351,15 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
     llm = get_primary_llm()
     answer = llm.generate(SYSTEM_PROMPT, user_prompt)
 
-    # Sentiment-aware framing (corrections requirement): a frustrated
-    # passenger gets acknowledgement and an explicit escalation path.
-    if sentiment_result["label"] == "frustrated" and sentiment_result["frustration_score"] >= 0.55:
-        answer = (
-            "I'm really sorry for the trouble - I understand how frustrating this is, "
-            "and I'll help you sort it out right away.\n\n" + answer +
-            "\n\nIf this doesn't fully resolve things, I can escalate you to a human "
-            "support agent straight away - just say \"escalate\"."
-        )
-
     if flight_number and tool_observations:
         answer = tool_observations[0] + "\n\n" + answer
 
     if payment_result and payment_result.get("message"):
         answer += "\n\n" + payment_result["message"]
+
+    # Empathy framing wraps the completed answer so the acknowledgement always
+    # comes first and the escalation offer always comes last.
+    answer = _apply_empathy(answer, sentiment_result)
 
     trace.append({"step": "final_answer", "model": llm.name, "content": answer})
 
