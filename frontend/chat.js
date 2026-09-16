@@ -42,6 +42,22 @@
 
   /* ----------------------------- rendering ----------------------------- */
 
+  function appendRichText(parent, text) {
+    // Minimal inline formatting: **bold** only. Built with text nodes so no
+    // message content is ever injected as HTML.
+    var parts = String(text).split(/(\*\*[^*]+\*\*)/g);
+    parts.forEach(function (part) {
+      if (!part) { return; }
+      if (part.length > 4 && part.slice(0, 2) === "**" && part.slice(-2) === "**") {
+        var b = document.createElement("strong");
+        b.textContent = part.slice(2, -2);
+        parent.appendChild(b);
+      } else {
+        parent.appendChild(document.createTextNode(part));
+      }
+    });
+  }
+
   function addBubble(role, text, meta) {
     var bubble = document.createElement("div");
     bubble.className = "bubble " + role;
@@ -54,7 +70,7 @@
       body = body.slice(0, idx);
     }
 
-    bubble.appendChild(document.createTextNode(body));
+    appendRichText(bubble, body);
 
     if (source) {
       var s = document.createElement("span");
@@ -73,6 +89,64 @@
     chatWindow.appendChild(bubble);
     scrollToBottom();
     return bubble;
+  }
+
+  function addPaymentCard(p) {
+    var card = document.createElement("div");
+    card.className = "pay-card" + (p.success ? "" : " failed");
+
+    var head = document.createElement("div");
+    head.className = "pay-head";
+    var logo = document.createElement("span");
+    logo.className = "pay-logo";
+    logo.textContent = "M-PESA";
+    var title = document.createElement("span");
+    title.className = "pay-title";
+    title.textContent = p.success ? "Payment request sent" : "Payment request failed";
+    head.appendChild(logo);
+    head.appendChild(title);
+    card.appendChild(head);
+
+    if (p.success) {
+      var amt = document.createElement("div");
+      amt.className = "pay-amount";
+      amt.textContent = "Ksh " + Number(p.amount || 0).toLocaleString();
+      card.appendChild(amt);
+
+      var rows = [
+        ["To", p.phone_number || "-"],
+        ["Reference", p.reference || "-"],
+        ["Checkout ID", p.checkout_request_id || "-"],
+        ["Channel", p.source === "daraja_sandbox" ? "Safaricom Daraja" : "Daraja (simulated)"]
+      ];
+      var list = document.createElement("div");
+      list.className = "pay-rows";
+      rows.forEach(function (r) {
+        var row = document.createElement("div");
+        row.className = "pay-row";
+        var k = document.createElement("span");
+        k.textContent = r[0];
+        var v = document.createElement("span");
+        v.textContent = r[1];
+        row.appendChild(k);
+        row.appendChild(v);
+        list.appendChild(row);
+      });
+      card.appendChild(list);
+
+      var note = document.createElement("div");
+      note.className = "pay-note";
+      note.textContent = "Enter your M-Pesa PIN on your phone to authorise this payment.";
+      card.appendChild(note);
+    } else {
+      var err = document.createElement("div");
+      err.className = "pay-note";
+      err.textContent = p.error || "The payment prompt could not be delivered.";
+      card.appendChild(err);
+    }
+
+    chatWindow.appendChild(card);
+    scrollToBottom();
   }
 
   function addTyping() {
@@ -263,11 +337,7 @@
         addBubble("bot", data.answer || "I could not produce an answer for that.", data);
 
         if (data.payment) {
-          var p = data.payment;
-          addBubble("bot",
-            "Payment request: " + (p.status || "submitted") +
-            (p.amount ? " - Ksh " + p.amount : "") +
-            (p.checkout_request_id ? "\nReference: " + p.checkout_request_id : ""));
+          addPaymentCard(data.payment);
         }
 
         renderTrace(data);

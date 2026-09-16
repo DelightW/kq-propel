@@ -27,6 +27,14 @@ extended with the enhancements required by `Corrections.docx`. UI theme: **red &
   STK Push). Falls back to sandbox/simulated responses without API keys. A payment is
   only initiated on explicit transactional intent *and* a policy-grounded amount, so
   asking "how do I pay?" never charges anyone.
+- **Localized transaction execution (M-Pesa)**: when an answer quotes a specific,
+  policy-grounded fee, the agent offers to settle it there and then. The conversation is
+  stateful — the passenger can reply "yes", then send their number on a later turn, and
+  the agent still knows what it was charging for. The STK push is rendered in the chat as
+  an M-Pesa receipt card (amount, destination number, reference, checkout ID) and written
+  to the dashboard's audit trail. A payment is **only** initiated for an amount that came
+  from a policy section, so nothing is ever invented — and asking "how do I pay?" never
+  charges anyone.
 - **Scope and capability guards**: retrieval always returns *something*, so the agent
   additionally checks that the retrieved sections share subject matter with the question.
   If they don't, it says so instead of answering from the closest-ranked policy. Likewise,
@@ -108,6 +116,28 @@ same Wi-Fi network.
 
 Both the laptop and the phone must be on the same network, and the network must be
 marked **Private** in Windows.
+
+### Paying a fee by M-Pesa
+
+Ask about a fee, then settle it without leaving the chat:
+
+```
+You:  My bag is 15kg over, how much is the fee?
+Bot:  Bags between 11kg and 20kg over the limit incur a flat fee of Ksh 9,000.
+      Source: Baggage Policy - Section 2: Overweight Baggage Fees
+      Would you like me to send an M-Pesa payment prompt for Ksh 9,000?
+
+You:  yes please
+Bot:  The amount due is Ksh 9,000. What's the M-Pesa number?
+
+You:  0722334455
+Bot:  [M-PESA receipt card: Ksh 9,000 -> 254722334455, reference, checkout ID]
+```
+
+Everything can also go in one message — *"I want to pay now, my bag is 5kg over, number
+0733445566"*. Without Daraja credentials the STK push is simulated end-to-end (clearly
+labelled "Daraja (simulated)" on the card); set `DARAJA_*` in `.env` to hit the real
+Safaricom sandbox. Either way the transaction appears in the dashboard's audit trail.
 
 ## Configuration (all optional — sensible offline fallbacks are built in)
 

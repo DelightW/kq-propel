@@ -46,6 +46,17 @@ CREATE TABLE IF NOT EXISTS rag_evaluations (
     model TEXT,
     created_at TEXT NOT NULL
 );
+
+-- Tracks a payment the agent has offered but not yet completed, so the
+-- passenger can confirm and supply their M-Pesa number across several turns
+-- instead of having to state everything in one message.
+CREATE TABLE IF NOT EXISTS payment_state (
+    session_id TEXT PRIMARY KEY,
+    amount REAL,
+    description TEXT,
+    stage TEXT,
+    updated_at TEXT NOT NULL
+);
 """
 
 
@@ -132,3 +143,35 @@ def fetch_rag_evaluations(limit: int = 100) -> List[Dict]:
             "SELECT * FROM rag_evaluations ORDER BY id DESC LIMIT ?", (limit,)
         ).fetchall()
         return [dict(r) for r in rows]
+
+
+def set_pending_payment(session_id: str, amount: float, description: str, stage: str):
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO payment_state (session_id, amount, description, stage, updated_at) "
+            "VALUES (?, ?, ?, ?, ?) ON CONFLICT(session_id) DO UPDATE SET "
+            "amount=excluded.amount, description=excluded.description, "
+            "stage=excluded.stage, updated_at=excluded.updated_at",
+            (session_id, amount, description, stage, datetime.utcnow().isoformat()),
+        )
+
+
+def get_pending_payment(session_id: str) -> Optional[Dict]:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM payment_state WHERE session_id = ?", (session_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def clear_pending_payment(session_id: str):
+    with _connect() as conn:
+        conn.execute("DELETE FROM payment_state WHERE session_id = ?", (session_id,))
+
+
+def update_transaction_status(checkout_request_id: str, status: str):
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE transactions SET status = ? WHERE checkout_request_id = ?",
+            (status, checkout_request_id),
+        )

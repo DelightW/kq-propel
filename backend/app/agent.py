@@ -29,8 +29,15 @@ _THANKS_RE = re.compile(r"^\s*(thanks|thank\s*you|asante|much\s+appreciated|appr
                          r"for\s+(your|the|all)\s+\w+(\s+\w+)?|for\s+\w+))?[\s!.,?]*$", re.IGNORECASE)
 _BYE_RE = re.compile(r"^\s*(bye|goodbye|see\s+you|cheers|that'?s\s+all|no\s+thanks?)\b[\s!.,?]*$",
                       re.IGNORECASE)
-_HELP_RE = re.compile(r"\b(what can you do|who are you|what are you|help me|how do you work|"
-                       r"what do you do|capabilities)\b", re.IGNORECASE)
+# Anchored to the whole message: "help me" alone is a capability request, but
+# "help me with an overweight fee for 10kg" is a real question that must go
+# through retrieval.
+_HELP_RE = re.compile(
+    r"^\s*(?:hi|hello|hey)?[\s,]*"
+    r"(?:what\s+can\s+you\s+do|who\s+are\s+you|what\s+are\s+you|how\s+do\s+you\s+work|"
+    r"what\s+do\s+you\s+do|what\s+are\s+your\s+capabilities|capabilities|"
+    r"(?:can|could|would)\s+you\s+help\s+me|help\s+me|help)"
+    r"[\s!.,?]*$", re.IGNORECASE)
 
 # Transactional phrasing actually initiates an STK push; informational
 # phrasing ("how do I pay?") is answered from policy instead, so the agent
@@ -41,6 +48,19 @@ _TRANSACTIONAL_RE = re.compile(
     r"charge\s+me|i\s+(?:want|would\s+like|wish)\s+to\s+pay|let'?s\s+pay|go\s+ahead\s+and\s+pay|"
     r"process\s+(?:the\s+)?payment)\b", re.IGNORECASE)
 _PAYMENT_TOPIC_RE = re.compile(r"\b(pay|payment|m-?pesa|mpesa|stk|till|settle)\b", re.IGNORECASE)
+
+# Short confirmations/declines only carry meaning while a payment offer is
+# outstanding, so they are evaluated against the stored payment state.
+_AFFIRM_RE = re.compile(
+    r"^\s*(yes|yeah|yep|yup|sure|ok|okay|alright|please|please\s+do|yes\s+please|"
+    r"go\s+ahead|do\s+it|send\s+it|send\s+the\s+prompt|proceed|continue|sawa|ndio|"
+    r"pay|pay\s+now|let'?s\s+do\s+it)\b[\s!.,?]*$", re.IGNORECASE)
+_DECLINE_RE = re.compile(
+    r"^\s*(no|nope|not\s+now|not\s+yet|later|maybe\s+later|cancel|stop|"
+    r"no\s+thanks?|no\s+thank\s+you)\b[\s!.,?]*$", re.IGNORECASE)
+_FEE_TOPIC_RE = re.compile(r"\b(fee|fees|charge|charges|cost|costs|price|how\s+much|"
+                            r"pay|payment|owe|balance)\b", re.IGNORECASE)
+_KSH_RE = re.compile(r"Ksh\s?([\d,]+)")
 
 # Departure/arrival *times* are live operational data, not policy. The agent
 # has a telemetry tool for this, but it is keyed on a flight number - without
@@ -148,6 +168,109 @@ def _is_grounded_in_context(message: str, chunks: List[Dict]) -> bool:
     return False
 
 
+def _normalize_phone(raw_match) -> str:
+    return "254" + raw_match.group(1)
+
+
+def _distinct_amounts(text: str) -> List[float]:
+    seen = []
+    for raw in _KSH_RE.findall(text or ""):
+        value = float(raw.replace(",", ""))
+        if value not in seen:
+            seen.append(value)
+    return seen
+
+
+def _execute_payment(session_id: str, phone: str, amount: float, description: str,
+                      trace: List[Dict]) -> Dict:
+    """Runs the STK push, records it in the audit trail, and clears any
+    outstanding payment offer for the session."""
+    reference = f"KQPROPEL-{uuid.uuid4().hex[:8].upper()}"
+    result = daraja.initiate_stk_push(
+        phone_number=phone, amount=amount, reference=reference, description=description,
+    )
+    trace.append({"step": "action", "tool": "initiate_mpesa_stk_push",
+                   "input": {"phone": phone, "amount": amount, "reference": reference},
+                   "observation": result})
+    database.log_transaction(
+        session_id=session_id,
+        checkout_request_id=result.get("checkout_request_id", ""),
+        phone_number=phone, amount=amount, reference=reference,
+        description=description,
+        status="initiated" if result.get("success") else "failed",
+    )
+    database.clear_pending_payment(session_id)
+    result.setdefault("amount", amount)
+    result.setdefault("phone_number", phone)
+    result.setdefault("reference", reference)
+    return result
+
+
+def _payment_sent_message(amount: float, phone: str) -> str:
+    return (
+        f"Done - I've sent an M-Pesa payment prompt for **Ksh {amount:,.0f}** to {phone}.\n\n"
+        "Check your phone: a payment request should appear within a few seconds. Enter your "
+        "M-Pesa PIN to authorise it, and you'll get a confirmation SMS from Safaricom.\n\n"
+        "If the prompt doesn't arrive, tell me and I'll send it again."
+    )
+
+
+def _ask_for_phone_message(amount: float) -> str:
+    return (
+        f"Happy to help you settle that. The amount due is **Ksh {amount:,.0f}**.\n\n"
+        "What's the M-Pesa number I should send the payment prompt to? You can give it as "
+        "07XX XXX XXX or 2547XX XXX XXX."
+    )
+
+
+def _offer_payment_message(amount: float) -> str:
+    return (
+        f"\n\nWould you like me to send an M-Pesa payment prompt for Ksh {amount:,.0f}? "
+        "Just reply with your M-Pesa number (for example 0712345678) and I'll push it to "
+        "your phone straight away."
+    )
+
+
+def _handle_pending_payment(session_id: str, message: str, pending: Dict,
+                             trace: List[Dict], sentiment_result: Dict) -> Optional[Dict]:
+    """Continues a payment conversation that is already in progress. Returns a
+    finished turn, or None if the passenger has moved on to something else."""
+    amount = float(pending["amount"])
+    description = pending.get("description") or "KQ-Propel ancillary fee settlement"
+
+    if _DECLINE_RE.match(message):
+        database.clear_pending_payment(session_id)
+        trace.append({"step": "thought", "content": "Passenger declined the payment offer."})
+        return _finalize_direct(
+            session_id, message,
+            "No problem - I won't send the payment prompt. Let me know if you'd like to "
+            "pay later, or if there's anything else I can help you with.",
+            trace, sentiment_result)
+
+    phone_match = _PHONE_RE.search(message)
+    if phone_match:
+        phone = _normalize_phone(phone_match)
+        trace.append({"step": "thought",
+                       "content": (f"M-Pesa number supplied for the outstanding Ksh {amount:,.0f} "
+                                   f"payment. Initiating STK push.")})
+        result = _execute_payment(session_id, phone, amount, description, trace)
+        answer = _payment_sent_message(amount, phone) if result.get("success") else (
+            "I wasn't able to send the M-Pesa prompt just now. Please try again in a moment, "
+            "or pay at the airport counter.")
+        return _finalize_direct(session_id, message, _apply_empathy(answer, sentiment_result),
+                                 trace, sentiment_result, payment=result)
+
+    if _AFFIRM_RE.match(message) or _TRANSACTIONAL_RE.search(message):
+        database.set_pending_payment(session_id, amount, description, "awaiting_phone")
+        trace.append({"step": "thought",
+                       "content": "Payment confirmed; awaiting the passenger's M-Pesa number."})
+        return _finalize_direct(session_id, message,
+                                 _apply_empathy(_ask_for_phone_message(amount), sentiment_result),
+                                 trace, sentiment_result)
+
+    return None
+
+
 def _apply_empathy(answer: str, sentiment_result: Dict) -> str:
     """Sentiment-aware framing (corrections requirement): a frustrated
     passenger gets acknowledgement and an explicit escalation path."""
@@ -193,9 +316,11 @@ def _extract_fee_from_context(chunks: List[Dict], message: str) -> Optional[floa
 
 
 def _finalize_direct(session_id: str, message: str, answer: str, trace: List[Dict],
-                      sentiment_result: Dict, model_name: str = "rule-based") -> Dict:
+                      sentiment_result: Dict, model_name: str = "rule-based",
+                      payment: Optional[Dict] = None) -> Dict:
     """Logs and returns a turn that was answered without document grounding
-    (small talk, a schedule request, or an out-of-scope question)."""
+    (small talk, a schedule request, a payment step, or an out-of-scope
+    question)."""
     trace.append({"step": "final_answer", "model": model_name, "content": answer})
     database.log_message(session_id, "user", message,
                           sentiment_label=sentiment_result["label"],
@@ -204,7 +329,7 @@ def _finalize_direct(session_id: str, message: str, answer: str, trace: List[Dic
     return {
         "answer": answer, "model_used": model_name,
         "sentiment": sentiment_result, "sources": [], "trace": trace,
-        "rag_metrics": {}, "payment": None,
+        "rag_metrics": {}, "payment": payment,
     }
 
 
@@ -228,7 +353,14 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
                     f"{sentiment_result['label']} (score={sentiment_result['frustration_score']})"),
     })
 
-    # --- Thought 2: conversational intent shortcut ---
+    # --- Thought 2: continue an in-progress payment conversation ---
+    pending = database.get_pending_payment(session_id)
+    if pending:
+        resumed = _handle_pending_payment(session_id, message, pending, trace, sentiment_result)
+        if resumed:
+            return resumed
+
+    # --- Thought 3: conversational intent shortcut ---
     small_talk = _small_talk_reply(message)
     if small_talk:
         trace.append({"step": "thought",
@@ -291,6 +423,7 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
 
     # --- Action: payment tool (Safaricom Daraja STK push) ---
     payment_result = None
+    payment_prompt_text = None
     if _TRANSACTIONAL_RE.search(message):
         phone_match = _PHONE_RE.search(message)
         amount_match = _AMOUNT_RE.search(message)
@@ -307,30 +440,20 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
             trace.append({"step": "thought",
                            "content": "Payment intent detected but no grounded amount available."})
         elif not phone_match:
-            tool_observations.append(
-                f"Payment of Ksh {amount:,.0f} is ready to process. Ask the passenger for the "
-                f"M-Pesa phone number to send the STK push to."
-            )
+            database.set_pending_payment(session_id, amount,
+                                          "KQ-Propel ancillary fee settlement", "awaiting_phone")
             trace.append({"step": "thought",
                            "content": f"Payment intent detected for Ksh {amount:,.0f}; awaiting phone number."})
+            return _finalize_direct(session_id, message,
+                                     _apply_empathy(_ask_for_phone_message(amount), sentiment_result),
+                                     trace, sentiment_result)
         else:
-            phone = "254" + phone_match.group(1)
-            reference = f"KQPROPEL-{uuid.uuid4().hex[:8].upper()}"
-            payment_result = daraja.initiate_stk_push(
-                phone_number=phone, amount=amount, reference=reference,
-                description="KQ-Propel ancillary fee settlement",
-            )
-            trace.append({"step": "action", "tool": "initiate_mpesa_stk_push",
-                           "input": {"phone": phone, "amount": amount},
-                           "observation": payment_result})
+            phone = _normalize_phone(phone_match)
+            payment_result = _execute_payment(
+                session_id, phone, amount, "KQ-Propel ancillary fee settlement", trace)
+            if payment_result.get("success"):
+                payment_prompt_text = _payment_sent_message(amount, phone)
             tool_observations.append(f"Payment tool result: {payment_result.get('message')}")
-            database.log_transaction(
-                session_id=session_id,
-                checkout_request_id=payment_result.get("checkout_request_id", ""),
-                phone_number=phone, amount=amount, reference=reference,
-                description="Ancillary fee settlement",
-                status="initiated" if payment_result.get("success") else "failed",
-            )
     elif _PAYMENT_TOPIC_RE.search(message):
         tool_observations.append(
             "The passenger is asking about payment options. Explain them, and mention that "
@@ -354,8 +477,22 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
     if flight_number and tool_observations:
         answer = tool_observations[0] + "\n\n" + answer
 
-    if payment_result and payment_result.get("message"):
+    if payment_prompt_text:
+        answer += "\n\n" + payment_prompt_text
+    elif payment_result and payment_result.get("message"):
         answer += "\n\n" + payment_result["message"]
+    else:
+        # A fee question that produced exactly one grounded amount is an
+        # opportunity to settle it there and then, which is the localized
+        # transaction-execution capability the proposal is built around.
+        amounts = _distinct_amounts(answer)
+        if len(amounts) == 1 and _FEE_TOPIC_RE.search(message):
+            database.set_pending_payment(session_id, amounts[0],
+                                          "KQ-Propel ancillary fee settlement", "offered")
+            answer += _offer_payment_message(amounts[0])
+            trace.append({"step": "thought",
+                           "content": (f"Grounded fee of Ksh {amounts[0]:,.0f} identified - "
+                                       f"offering to settle it by M-Pesa.")})
 
     # Empathy framing wraps the completed answer so the acknowledgement always
     # comes first and the escalation offer always comes last.
