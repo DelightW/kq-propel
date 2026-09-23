@@ -189,6 +189,19 @@ sandboxes. Either way the transaction appears in the dashboard's audit trail, ta
 with its rail and currency — the dashboard totals per currency rather than summing
 dollars into shillings.
 
+To verify the M-Pesa rail against Safaricom for real, use the operator tool rather than
+the chat:
+
+```
+python tools/send_test_stk.py --phone 0712345678 --amount 1
+```
+
+It refuses to run without `DARAJA_*` credentials instead of printing a simulated
+success, since a simulated success proves nothing about Safaricom. A **sandbox** push
+reaches a real handset and moves no money. The one-shilling amount lives in a tool and
+not in the chat deliberately: the agent only ever charges a figure it found in a policy
+section, and a test amount comes from nowhere in the corpus.
+
 ## Configuration (all optional — sensible offline fallbacks are built in)
 
 | Variable | Purpose |
@@ -197,6 +210,7 @@ dollars into shillings.
 | `OPEN_SOURCE_MODEL_NAME`, `OLLAMA_BASE_URL` | Second model for comparison via Ollama |
 | `AVIATIONSTACK_API_KEY` | Live flight telemetry |
 | `DARAJA_CONSUMER_KEY/SECRET/PASSKEY/SHORTCODE` | Live Safaricom Daraja STK push |
+| `DARAJA_SANDBOX`, `DARAJA_CALLBACK_URL` | Sandbox vs production host, and where Safaricom posts the payment result |
 | `PAYPAL_CLIENT_ID/SECRET`, `PAYPAL_SANDBOX` | Live PayPal card checkout; without them the card rail returns a labelled simulated link |
 | `USD_TO_KES_RATE` | Indicative rate for settling dollar-published fees over M-Pesa (default 129.0; disclosed to the passenger, not a live FX feed). Not used on the card rail |
 | `LOCAL_EMBEDDING_MODEL`, `LOCAL_EMBEDDING_ENABLED` | Local sentence-transformer embeddings (default `all-MiniLM-L6-v2`); disable to force the hashed fallback |

@@ -26,7 +26,7 @@ from pathlib import Path
 BACKEND = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BACKEND))
 
-from app import agent, config, database, paypal, sentiment  # noqa: E402
+from app import agent, config, database, daraja, paypal, sentiment  # noqa: E402
 
 POLICY_DIR = BACKEND / "data" / "policies"
 
@@ -217,6 +217,38 @@ def test_no_kenyan_number_goes_to_the_card_rail_not_the_mpesa_prompt():
                                "I don't have a Kenyan number")
     assert "checkout" in answer.lower(), answer
     assert "07XX" not in answer, answer
+
+
+def test_daraja_uses_the_right_host_for_the_environment():
+    # DARAJA_SANDBOX was read from the environment but never used, so
+    # production credentials would have been sent to the sandbox host.
+    original = config.DARAJA_SANDBOX
+    try:
+        config.DARAJA_SANDBOX = True
+        assert "sandbox.safaricom.co.ke" in daraja._host()
+        config.DARAJA_SANDBOX = False
+        assert daraja._host() == "https://api.safaricom.co.ke"
+    finally:
+        config.DARAJA_SANDBOX = original
+
+
+def test_daraja_posture_is_reportable_without_exposing_secrets():
+    posture = daraja.describe()
+    for key in ("configured", "environment", "host", "shortcode",
+                "callback_is_placeholder"):
+        assert key in posture, posture
+    blob = repr(posture)
+    assert config.DARAJA_CONSUMER_SECRET not in blob or not config.DARAJA_CONSUMER_SECRET
+    assert config.DARAJA_PASSKEY not in blob or not config.DARAJA_PASSKEY
+
+
+def test_a_simulated_stk_push_is_labelled_as_simulated():
+    # A simulated success must never be mistaken for evidence that Safaricom
+    # accepted anything.
+    if daraja.is_configured():
+        return
+    result = daraja.initiate_stk_push("254712345678", 1, "TEST", "verification")
+    assert result["source"] == "simulated_sandbox", result
 
 
 def main() -> int:

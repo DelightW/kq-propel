@@ -96,6 +96,12 @@ DARAJA_CONSUMER_SECRET = os.getenv("DARAJA_CONSUMER_SECRET", "").strip()
 DARAJA_SHORTCODE = os.getenv("DARAJA_SHORTCODE", "174379")
 DARAJA_PASSKEY = os.getenv("DARAJA_PASSKEY", "").strip()
 DARAJA_SANDBOX = os.getenv("DARAJA_SANDBOX", "true").lower() != "false"
+# Safaricom requires a reachable https callback. The sandbox accepts a
+# placeholder and still delivers the prompt to the handset, but no result
+# callback can arrive at one - so a prompt that is never confirmed is expected
+# behaviour on a placeholder, not a failure.
+DARAJA_CALLBACK_URL = os.getenv(
+    "DARAJA_CALLBACK_URL", "https://example.com/daraja/callback").strip()
 
 # Kenya Airways publishes most ancillary fees in US dollars, but Daraja settles
 # in Kenyan shillings. To let the STK push demonstrate end-to-end settlement on
