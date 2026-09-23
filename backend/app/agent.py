@@ -49,6 +49,11 @@ _TRANSACTIONAL_RE = re.compile(
     r"charge\s+me|(?:can|could|may)\s+i\s+pay|i\s+(?:want|would\s+like|wish|need)\s+to\s+pay|"
     r"i'?d\s+like\s+to\s+pay|let'?s\s+pay|go\s+ahead\s+and\s+pay|settle\s+(?:it|the\s+fee)|"
     r"pay\s+(?:ksh|kes)\.?\s?[\d,]+|process\s+(?:the\s+)?payment)\b", re.IGNORECASE)
+# The empathy prefix fires above this score, not at the 0.5 decision
+# boundary, so a marginal call does not open with an apology to a passenger
+# who merely asked a question. Named because it is applied in two places.
+EMPATHY_THRESHOLD = 0.55
+
 _PAYMENT_TOPIC_RE = re.compile(r"\b(pay|payment|m-?pesa|mpesa|stk|till|settle|card|visa)\b",
                                 re.IGNORECASE)
 
@@ -562,7 +567,8 @@ def _payable_fee(answer: str, chunks: List[Dict],
 def _apply_empathy(answer: str, sentiment_result: Dict) -> str:
     """Sentiment-aware framing (corrections requirement): a frustrated
     passenger gets acknowledgement and an explicit escalation path."""
-    if sentiment_result["label"] != "frustrated" or sentiment_result["frustration_score"] < 0.55:
+    if (sentiment_result["label"] != "frustrated"
+            or sentiment_result["frustration_score"] < EMPATHY_THRESHOLD):
         return answer
     return (
         "I'm really sorry for the trouble - I understand how frustrating this is, "
@@ -772,7 +778,8 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
     tool_context = "\n".join(tool_observations)
     user_prompt = f"CONTEXT:\n{context_text}\n\nTOOL OBSERVATIONS:\n{tool_context}\n\nQUESTION:\n{query}"
 
-    if sentiment_result["label"] == "frustrated" and sentiment_result["frustration_score"] >= 0.55:
+    if (sentiment_result["label"] == "frustrated"
+            and sentiment_result["frustration_score"] >= EMPATHY_THRESHOLD):
         user_prompt += (
             "\n\nNOTE: The passenger appears frustrated. Prioritize empathy, acknowledge "
             "the inconvenience, and offer a clear escalation path to a human agent."

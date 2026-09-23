@@ -173,6 +173,18 @@ tr.identical td { opacity: 0.72; font-style: italic; }
 /* -------------------------------- meters -------------------------------- */
 .meters { display: flex; flex-direction: column; gap: 9px; }
 
+/* Separates the challenge-set block from the in-distribution figures above
+   it, so the two are never read as one set of numbers. */
+.sub-head {
+  margin: 12px 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+  border-top: 1px solid var(--line, rgba(0, 0, 0, 0.12));
+  padding-top: 10px;
+}
+
 .meter-row { display: flex; align-items: center; gap: 9px; font-size: 12.5px; }
 .meter-row .m-label { flex: 0 0 116px; color: var(--ink-soft); }
 .meter-track {

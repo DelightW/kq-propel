@@ -133,10 +133,31 @@
     });
     if (!sentimentMetrics.childNodes.length) {
       sentimentMetrics.appendChild(el("p", "hint", "Classifier metrics unavailable."));
-    } else if (sm.train_size !== undefined) {
-      sentimentMetrics.appendChild(el("p", "hint",
-        "Trained on " + sm.train_size + " labelled samples, evaluated on a held-out " +
-        (sm.test_size !== undefined ? sm.test_size : "?") + "-sample test split."));
+    } else {
+      if (sm.train_size !== undefined) {
+        sentimentMetrics.appendChild(el("p", "hint",
+          "In-distribution: trained on " + sm.train_size + " labelled samples, evaluated on a held-out " +
+          (sm.test_size !== undefined ? sm.test_size : "?") + "-sample split of the same file."));
+      }
+      // Reported alongside the figures above because a held-out split of one
+      // synthetic file cannot detect an artifact in that file - an earlier
+      // version of this classifier scored 0.96 while separating the classes
+      // on punctuation alone.
+      var ch = sm.challenge;
+      if (ch && ch.accuracy !== undefined) {
+        sentimentMetrics.appendChild(el("h4", "sub-head", "Challenge set (never trained on)"));
+        sentimentMetrics.appendChild(meterRow("Accuracy", ch.accuracy));
+        sentimentMetrics.appendChild(meterRow("F1 score", ch.f1_score));
+        var gap = sm.generalization_gap;
+        sentimentMetrics.appendChild(el("p", "hint",
+          ch.size + " independently worded samples. Generalisation gap "
+          + (gap === undefined ? "-" : (gap > 0 ? "+" : "") + gap.toFixed(3))
+          + " - the drop from the held-out split is the part of the headline "
+          + "score that was memorisation."));
+      } else {
+        sentimentMetrics.appendChild(el("p", "hint",
+          "No challenge-set result: only in-distribution accuracy is available."));
+      }
     }
 
     vectorstore.innerHTML = "";

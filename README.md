@@ -83,10 +83,9 @@ safe-area insets are respected on notched devices.
    same context-relevance / groundedness / answer-relevance criteria, plus per-model
    response time. Run it from the dashboard's "Run comparison" button.
 2. **Custom-trained ML sentiment/frustration classifier** (`sentiment.py`): a
-   TF-IDF + Logistic Regression model trained on a labelled dataset of 100 passenger
-   messages (`data/sentiment_dataset/frustration_dataset.csv`), evaluated on a held-out
-   25-message test split with accuracy, precision, recall and F1-score (shown on the
-   dashboard). Because TF-IDF lower-cases its input and would discard the strongest
+   TF-IDF + Logistic Regression model trained on a labelled dataset of passenger
+   messages (`data/sentiment_dataset/frustration_dataset.csv`, 499 rows). Because
+   TF-IDF lower-cases its input and would discard the strongest
    real-world cues, the feature space unions the lexical vectors with hand-engineered
    **stylistic features** — capitalisation ratio, shouted words, exclamation and question
    bursts, "?!" combinations, elongated characters and intensifier counts — so
@@ -94,6 +93,35 @@ safe-area insets are respected on notched devices.
    fingerprinted against the dataset and feature version, and retrains automatically when
    either changes. Its output feeds the agent so frustrated passengers get an empathetic
    acknowledgement first and an explicit escalation path last.
+
+   **Two accuracies are reported, and the reason matters.** An earlier version of
+   this classifier scored **0.96** on a held-out split while calling *"I am furious,
+   nobody has helped me at all"* calm. Diagnosis (`tools/diagnose_sentiment.py`)
+   found the cause: **no calm row in the 100-row dataset contained a `?` or `!` at
+   all**, while 14–16% of frustrated rows did, so the two classes were separable on
+   punctuation alone. A held-out split of that same file could not detect this,
+   because the artifact was present in the test half too — the 0.96 was real and
+   meaningless at the same time.
+
+   The fix was data, not hyperparameters: the dataset was rebuilt with punctuation
+   deliberately de-correlated from the label (calm 41% `?`, frustrated 36%), and a
+   separate **challenge set** (`frustration_challenge.csv`, 100 rows, independently
+   worded, never trained on) was added as the honest generalisation measure. Both
+   numbers are now shown on the dashboard:
+
+   | Measure | Accuracy | Precision | Recall | F1 |
+   |---|---|---|---|---|
+   | Held-out split of training file | 0.920 | 0.964 | 0.869 | 0.914 |
+   | Challenge set (never trained on) | 0.880 | 0.896 | 0.860 | 0.878 |
+
+   Generalisation gap **0.04**. The headline figure is *lower* than the original
+   0.96 and is reported anyway, because the new one measures frustration and the
+   old one measured punctuation. Changing only a question mark now moves the score
+   by **0.023** on average, down from **0.487** at one point during the repair —
+   an over-correction that inverted the artifact rather than removing it, and was
+   caught only because the diagnostic was changed to test both directions.
+   `tools/test_sentiment.py` locks all of this in, including a check that no
+   evaluation probe sentence has leaked into the training file (twelve had).
 
 ## Running it
 
@@ -238,7 +266,8 @@ kq-propel/
                     pages plus 2 marked synthetic; provenance.json records
                     the source URL and retrieval date for every one
     data/eval/      Evaluation dataset for RAG-Triad + model comparison
-    data/sentiment_dataset/  Labelled frustration dataset
+    data/sentiment_dataset/  Labelled frustration dataset, plus a separately
+                    worded challenge set that is never trained on
   frontend/
     index.html, chat.css,  chat.js    Standalone passenger chatbot (responsive)
     admin.html, admin.css, admin.js   Separate admin dashboard (responsive)

@@ -20,7 +20,6 @@ import json
 import re
 from pathlib import Path
 from typing import Dict, List
-
 import joblib
 import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -34,10 +33,11 @@ from sklearn.preprocessing import StandardScaler
 from app import config
 
 _METRICS_PATH = config.SENTIMENT_MODEL_PATH.with_suffix(".metrics.json")
+_CHALLENGE_PATH = config.SENTIMENT_DATASET_PATH.with_name("frustration_challenge.csv")
 
 # Bumped whenever the feature space or dataset changes, so a stale cached
 # model is retrained instead of silently reused.
-MODEL_VERSION = 2
+MODEL_VERSION = 3
 
 _CAPS_WORD_RE = re.compile(r"\b[A-Z]{3,}\b")
 _ELONGATED_RE = re.compile(r"([a-zA-Z])\1{2,}")
@@ -96,19 +96,39 @@ def _build_pipeline() -> Pipeline:
 
 def _dataset_fingerprint() -> str:
     digest = hashlib.sha256(config.SENTIMENT_DATASET_PATH.read_bytes()).hexdigest()[:16]
-    return f"v{MODEL_VERSION}-{digest}"
+    challenge = ""
+    if _CHALLENGE_PATH.exists():
+        challenge = hashlib.sha256(_CHALLENGE_PATH.read_bytes()).hexdigest()[:8]
+    return f"v{MODEL_VERSION}-{digest}-{challenge}"
 
 
-def _load_dataset():
+def _read_csv(path: Path):
     texts, labels = [], []
-    with open(config.SENTIMENT_DATASET_PATH, newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
+    with open(path, newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
             if not row.get("text"):
                 continue
             texts.append(row["text"])
             labels.append(row["label"])
     return texts, labels
+
+
+def _load_dataset():
+    return _read_csv(config.SENTIMENT_DATASET_PATH)
+
+
+def _score(pipeline, texts, labels) -> Dict:
+    pred = pipeline.predict(texts)
+    return {
+        "accuracy": round(float(accuracy_score(labels, pred)), 4),
+        "precision": round(float(precision_score(labels, pred, pos_label="frustrated",
+                                                  zero_division=0)), 4),
+        "recall": round(float(recall_score(labels, pred, pos_label="frustrated",
+                                            zero_division=0)), 4),
+        "f1_score": round(float(f1_score(labels, pred, pos_label="frustrated",
+                                          zero_division=0)), 4),
+        "size": len(texts),
+    }
 
 
 def train_frustration_classifier(force: bool = False) -> Dict:
@@ -126,19 +146,23 @@ def train_frustration_classifier(force: bool = False) -> Dict:
     pipeline = _build_pipeline()
     pipeline.fit(x_train, y_train)
 
-    y_pred = pipeline.predict(x_test)
-    metrics = {
-        "accuracy": round(float(accuracy_score(y_test, y_pred)), 4),
-        "precision": round(float(precision_score(y_test, y_pred, pos_label="frustrated",
-                                                  zero_division=0)), 4),
-        "recall": round(float(recall_score(y_test, y_pred, pos_label="frustrated",
-                                            zero_division=0)), 4),
-        "f1_score": round(float(f1_score(y_test, y_pred, pos_label="frustrated",
-                                          zero_division=0)), 4),
-        "train_size": len(x_train),
-        "test_size": len(x_test),
-        "fingerprint": fingerprint,
-    }
+    held_out = _score(pipeline, x_test, y_test)
+    metrics = dict(held_out)
+    metrics.pop("size", None)
+    metrics["train_size"] = len(x_train)
+    metrics["test_size"] = len(x_test)
+    metrics["fingerprint"] = fingerprint
+
+    # A held-out split of one synthetic file measures how well the model
+    # learned that file, including any artifact the file happens to contain.
+    # The challenge set is written separately, with different vocabulary, and
+    # is never trained on - so the gap between these two numbers is the
+    # honest estimate of how much of the headline score is memorisation.
+    if _CHALLENGE_PATH.exists():
+        c_texts, c_labels = _read_csv(_CHALLENGE_PATH)
+        metrics["challenge"] = _score(pipeline, c_texts, c_labels)
+        metrics["generalization_gap"] = round(
+            held_out["accuracy"] - metrics["challenge"]["accuracy"], 4)
 
     config.SENTIMENT_MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(pipeline, config.SENTIMENT_MODEL_PATH)

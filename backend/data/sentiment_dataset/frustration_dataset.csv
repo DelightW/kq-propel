@@ -1,101 +1,500 @@
 text,label
-"My flight has been delayed again and nobody is telling me what is happening",frustrated
-"This is the third time my baggage has been lost, I am absolutely furious",frustrated
-"I have been on hold for two hours and no one is helping me, this is ridiculous",frustrated
-"Why is this so complicated, I just want a refund and nobody will give me one",frustrated
-"I am extremely upset, my connecting flight was missed because of your delay",frustrated
-"This app is useless, it keeps giving me the wrong information about my flight",frustrated
-"I demand compensation right now, this is completely unacceptable service",frustrated
-"Nobody has responded to my baggage claim in five days, I am so frustrated",frustrated
-"I have missed my meeting because of this delay and no one seems to care",frustrated
-"This is beyond frustrating, I just want a straight answer about my refund",frustrated
-"Absolutely disgusted with how this airline treats its passengers",frustrated
-"I am so angry, my bag arrived damaged and no one will take responsibility",frustrated
-"Can someone please just tell me if my flight is cancelled or not",frustrated
-"I have been trying to reach support all day, this is a nightmare",frustrated
-"This overweight baggage fee seems unfair, I want to escalate this immediately",frustrated
-"Hi, could you let me know the baggage allowance for economy class",calm
-"What time does check-in open for international flights",calm
-"I would like to know the status of flight KQ100 today",calm
-"Can you tell me how much the overweight baggage fee is",calm
-"How do I pay for extra baggage using M-Pesa",calm
-"What is the refund policy for a non-refundable ticket",calm
-"Is there a lounge available if my flight is delayed",calm
-"I wanted to ask about the special assistance process for my mother",calm
-"Please share the requirements for travelling with a pet",calm
-"Thank you for the quick response, that answers my question",calm
-"Good afternoon, I need some information about ticket changes",calm
-"Could you clarify the process for changing my travel date",calm
-"I just wanted to confirm my booking reference is correct",calm
-"What documents do I need for my trip to London",calm
-"Thanks, that was really helpful, appreciate the assistance",calm
-"My flight was delayed by 30 minutes, just wanted to confirm the new time",calm
-"I have a quick question about the boarding gate closing time",calm
-"Not a big deal, but could you check if my seat has been assigned",calm
-"I am a bit worried about missing my connection, could you check the gate",frustrated
-"This is unacceptable, I paid for business class and got economy treatment",frustrated
-"I really appreciate the update, thank you for keeping me informed",calm
-"Everything about this experience has been a disaster from the start",frustrated
-"Just checking in to see if my baggage allowance includes sports equipment",calm
-"I am extremely disappointed with how long this has taken to resolve",frustrated
-"Could you please confirm the name correction process for my ticket",calm
-"WHY HAS NOBODY TOLD ME ANYTHING ABOUT MY FLIGHT?!",frustrated
-"I HAVE WAITED FOR 2 HOURS?! What time will the flight take off",frustrated
-"THIS IS RIDICULOUS!! I want to speak to a manager NOW",frustrated
-"I HAVE BEEN WAITING ALL DAY AND NOBODY IS HELPING ME",frustrated
-"WHERE IS MY LUGGAGE?!?!",frustrated
-"ARE YOU SERIOUS RIGHT NOW?! My flight was cancelled again",frustrated
-"WHY IS MY BAG STILL MISSING AFTER FOUR DAYS???",frustrated
-"I NEED AN ANSWER IMMEDIATELY!!!",frustrated
-"STILL NO REFUND!! It has been three weeks now",frustrated
-"HELLO??? Is anyone going to help me or not",frustrated
-"I am sick and tired of being passed around between departments",frustrated
-"Seriously?! Another delay? I cannot believe this airline",frustrated
-"You people have ruined my holiday, I want my money back now",frustrated
-"Worst airline experience of my entire life, never flying with you again",frustrated
-"I have been stranded at this airport since 6am with no information",frustrated
-"Stop giving me automated responses, I want to talk to a real person",frustrated
-"My daughter is waiting at the airport and no one can tell me anything",frustrated
-"This is the second time this week, absolutely appalling service",frustrated
-"I paid good money for this ticket and got treated like garbage",frustrated
-"Nobody at the desk would even look at me, completely unacceptable",frustrated
-"Why do I have to keep repeating myself to every single agent",frustrated
-"I am furious that you charged me twice for the same baggage fee",frustrated
-"Four hours late and not even a bottle of water, shameful",frustrated
-"I want compensation and I want it today, no more excuses",frustrated
-"Your website has crashed three times and I still cannot check in",frustrated
-"Enough is enough, escalate this to your supervisor right now",frustrated
-"I missed my daughter's wedding because of your incompetence",frustrated
-"Completely fed up with this airline and its empty promises",frustrated
-"Do not tell me to be patient, I have been patient for hours",frustrated
-"This whole situation is a total disgrace and someone must answer for it",frustrated
-"Hello, what time does boarding usually start for domestic flights",calm
-"Could you please confirm whether my seat selection went through",calm
-"I would like to understand the compensation rules for a short delay",calm
-"Is it possible to add extra baggage to my booking online",calm
-"What is the cabin baggage size limit for economy class",calm
-"Hi there, I am travelling next week and wanted to check the rules",calm
-"Could you let me know how early I should arrive at the airport",calm
-"I am curious whether lounge access is included with my fare",calm
-"Do you know if I can bring my golf clubs as checked baggage",calm
-"Please confirm the fee for changing my flight to a later date",calm
-"Would you be able to explain how the refund is processed",calm
-"Just wondering what happens if my connecting flight is delayed",calm
-"Can I check in online or do I need to visit the counter",calm
-"What identification do I need for a domestic flight",calm
-"Is there an allowance for a wheelchair and mobility equipment",calm
-"I would appreciate details on the unaccompanied minor service",calm
-"Thanks for explaining, that makes sense now",calm
-"Perfect, that is exactly what I needed to know",calm
-"Good morning, I have a question about my upcoming trip",calm
-"Could you send me the details of the baggage fee structure",calm
-"I need to update the spelling of my last name on the ticket",calm
-"How many bags am I allowed in business class",calm
-"Does the ticket price include airport taxes",calm
-"I would like to know if meals are served on this route",calm
-"Where can I find my booking reference number",calm
-"Is the flight on schedule today",calm
-"What happens to my bag if I have a connecting flight",calm
-"Appreciate the help, I will check back later",calm
-"Could you clarify the deadline for a free cancellation",calm
-"I am planning a trip and comparing baggage options",calm
+"Hi, could you let me know the baggage allowance for economy class?",calm
+What time does check-in open for international flights?,calm
+I would like to know the status of flight KQ100 today.,calm
+Can you tell me how much the overweight baggage fee is?,calm
+How do I pay for extra baggage using M-Pesa?,calm
+What is the refund policy for a non-refundable ticket?,calm
+"Good morning, I need to confirm my check-in time for Nairobi.",calm
+Could you confirm the cabin baggage size limit please?,calm
+How much does it cost to book a ticket by telephone in Business class?,calm
+I want to check whether my bag can go as hand luggage.,calm
+Is there a fee for changing the date on my ticket?,calm
+Please could you tell me the name correction fee?,calm
+What documents do I need for an infant travelling with me?,calm
+"Hello, is KQ310 departing on schedule this evening?",calm
+I am flying to Amsterdam next week and want to check the allowance.,calm
+Could I get the check-in deadline for a domestic flight?,calm
+What happens if my bag is slightly over the weight limit?,calm
+I would like to add a second bag to my booking.,calm
+Is it possible to pay for excess baggage in advance?,calm
+Can I carry a laptop bag in addition to my cabin bag?,calm
+What is the allowance for Premier World passengers?,calm
+I need information about travelling with sports equipment.,calm
+How early should I arrive at JKIA for an international departure?,calm
+Could you explain how the refund is processed?,calm
+"Hi there, what is the current status of KQ100?",calm
+I would like to understand the excess baggage charges.,calm
+Is my ticket refundable if I cancel a week before?,calm
+What is the maximum weight for a single checked bag?,calm
+Can you confirm whether meals are included on this route?,calm
+I am checking the baggage rules before I pack.,calm
+How do I correct a spelling mistake in my surname?,calm
+Does the allowance differ between economy and business?,calm
+Please share the fees for changing my flight date.,calm
+Would you be able to tell me the hand baggage weight limit?,calm
+I want to know if I can pay with a Visa card.,calm
+Are card payments accepted for excess baggage?,calm
+Could you tell me whether KQ505 has landed?,calm
+What is the procedure for claiming a refund?,calm
+I have a question about my baggage allowance.,calm
+"Good afternoon, I need the check-in cut off time.",calm
+Is there an extra charge for a golf bag?,calm
+How many pieces can I check in on a Europe route?,calm
+I would like to confirm my booking reference is valid.,calm
+Can you help me understand the delayed baggage process?,calm
+What are the cabin baggage dimensions for KQ?,calm
+I need to know if I can change my seat.,calm
+Could you send me details of the payment options?,calm
+"Hello, I want to ask about travelling with a pet.",calm
+Is the airport counter open for late check-in?,calm
+I am planning ahead and want the fee schedule.,calm
+Does a stroller count towards the baggage allowance?,calm
+What is the fee for a full name change?,calm
+Can I check in online for an international flight?,calm
+I would appreciate details of the refund timeline.,calm
+How long does a refund usually take to arrive?,calm
+Is there a difference for flights starting in Nairobi?,calm
+Could you clarify the rules for musical instruments?,calm
+What identification do I need at check-in?,calm
+I want to confirm the flight number for my booking.,calm
+Please advise on the excess baggage rate to Europe.,calm
+Are there any charges for seat selection?,calm
+I would like to know about the Premier World allowance.,calm
+Can you tell me what time boarding starts?,calm
+How do I contact the baggage office at JKIA?,calm
+What is the policy for a delayed bag?,calm
+I am checking whether my connection time is sufficient.,calm
+Would you confirm the baggage rules for infants?,calm
+Could I please have the telephone booking fee?,calm
+I want to pay the name correction charge now.,calm
+Is the fee the same for domestic and international?,calm
+What is the allowance on a codeshare flight?,calm
+"Hello, could you check the status of my refund?",calm
+I would like a breakdown of the charges.,calm
+"Thanks for the information, one more question about bags.",calm
+Can I take duty free items in addition to hand luggage?,calm
+What is the weight limit for cabin baggage in economy?,calm
+I need to add excess baggage to my booking today.,calm
+Could you tell me if the flight is on time?,calm
+Is there a paybill number for payments?,calm
+How does the payment work if I am outside Kenya?,calm
+I am happy to pay by card if that is easier.,calm
+Would it be possible to pay in dollars?,calm
+Can I use an international card for this fee?,calm
+What are the options for paying the change fee?,calm
+I would like to settle the fee before I travel.,calm
+Please let me know how much I owe.,calm
+Could you confirm the total amount due?,calm
+"Hi, I want to check in two bags on Friday.",calm
+Is there anything I should know about liquids in hand luggage?,calm
+What size of bag fits in the overhead locker?,calm
+I am travelling with a child and need the allowance.,calm
+Does KQ allow a car seat free of charge?,calm
+Could you help me find my booking details?,calm
+What is the cost of an extra bag to London?,calm
+I would like to understand my options for a date change.,calm
+Are refunds paid back to the original card?,calm
+Can you confirm whether my fare allows changes?,calm
+I have a simple question about check-in times.,calm
+How much notice do I need to give to cancel?,calm
+What happens to my bag if I miss a connection?,calm
+I would like to arrange assistance at the airport.,calm
+Could you tell me the sports equipment fee please?,calm
+Is there a limit on the number of cabin bags?,calm
+I want to confirm that my payment went through.,calm
+Please could you resend the confirmation?,calm
+How do I check the status of flight KQ100 online?,calm
+What is the baggage allowance for a student fare?,calm
+I am interested in the fees for heavy bags.,calm
+Could you advise whether I need a transit visa?,calm
+Is online check-in available 24 hours before?,calm
+I would like to know the departure gate.,calm
+What time should I be at the gate?,calm
+Can you explain the difference between the two fees?,calm
+I need the exact amount so I can pay.,calm
+"Hello, what is the process for a name correction?",calm
+Is the name change fee per passenger?,calm
+I want to check the allowance before booking.,calm
+Could you tell me if KQ100 is delayed today?,calm
+"Thank you, that answers my question about baggage.",calm
+"I appreciate the help, one last thing about payment.",calm
+Would you mind confirming the check-in deadline?,calm
+Is there a difference in allowance by destination?,calm
+How is the excess baggage fee calculated?,calm
+I am trying to work out what I will be charged.,calm
+Could I pay the fee at the airport instead?,calm
+What are my options if my bag is overweight?,calm
+I would like to know about the first needs allowance.,calm
+Does KQ provide compensation for delayed bags?,calm
+Can you tell me what I am entitled to?,calm
+I want to understand the policy before I decide.,calm
+"Hello, could you point me to the baggage rules?",calm
+What is the cut off for checking bags?,calm
+I need to know whether I can check in late.,calm
+Is the counter still open for KQ310?,calm
+Could you confirm my seat number?,calm
+I would like to request a window seat.,calm
+How do I add my frequent flyer number?,calm
+What is the allowance for a lap infant?,calm
+I am asking on behalf of my mother who is travelling.,calm
+Could you tell me the rules for medical equipment?,calm
+Is a wheelchair carried free of charge?,calm
+I want to check the fee for a second checked bag.,calm
+Please confirm whether the fee is in dollars or shillings.,calm
+What currency will I be charged in?,calm
+I would like to pay now if possible.,calm
+Can I settle this with M-Pesa?,calm
+Do you accept Mastercard for this payment?,calm
+How long do I have to pay before the booking is cancelled?,calm
+Could you send the payment link again?,calm
+I am ready to pay the excess baggage fee.,calm
+What is the next step after I pay?,calm
+Is a receipt issued after payment?,calm
+"Thanks, I will check the website as well.",calm
+"That is helpful, could you also check KQ505?",calm
+I appreciate the quick response.,calm
+"Good to know, and what about the return leg?",calm
+My flight has been delayed again and nobody is telling me what is happening.,frustrated
+"This is the third time my baggage has been lost, I am absolutely furious.",frustrated
+"I have been on hold for two hours and no one is helping me, this is ridiculous.",frustrated
+"Why is this so complicated, I just want a refund and nobody will give me one.",frustrated
+"I am extremely upset, my connecting flight was missed because of your delay.",frustrated
+"This app is useless, it keeps giving me the wrong information about my flight.",frustrated
+"Absolutely unacceptable service, I want to speak to a manager.",frustrated
+Nobody has called me back and my bag is still missing.,frustrated
+I am sick and tired of being passed between departments.,frustrated
+This is the worst experience I have ever had with an airline.,frustrated
+"I demand a refund immediately, this is completely unacceptable.",frustrated
+"Four emails and not one reply, this is appalling.",frustrated
+My luggage has been missing since Monday and no one will tell me anything.,frustrated
+I am beyond frustrated with how this has been handled.,frustrated
+Why does nobody answer the phone at your office?,frustrated
+I have wasted an entire day trying to sort this out.,frustrated
+"This is a complete disaster, my whole holiday is ruined.",frustrated
+I want to escalate this to a supervisor right now.,frustrated
+Your staff were rude and completely unhelpful.,frustrated
+I paid for a service I did not receive and now nobody will refund me.,frustrated
+"Enough is enough, I want this resolved today.",frustrated
+I am so angry about being charged twice for the same bag.,frustrated
+Nobody warned me about this fee and now I am stuck.,frustrated
+The charges are outrageous and nobody explained them.,frustrated
+I have never been treated so badly by any company.,frustrated
+My bag was damaged and your team just shrugged.,frustrated
+I am still waiting for a refund promised six weeks ago.,frustrated
+"Six weeks and not a single update, this is shameful.",frustrated
+Your website crashed and took my money anyway.,frustrated
+I missed my meeting because of your incompetence.,frustrated
+Stop sending me automated replies and actually help me.,frustrated
+I am going to report this to the aviation authority.,frustrated
+Never again will I fly with this airline.,frustrated
+The delay was bad enough but the silence is worse.,frustrated
+You have lost my bag and now you are blaming me.,frustrated
+I am extremely disappointed with the way this was handled.,frustrated
+How is it acceptable to cancel with no notice at all?,frustrated
+Why am I being charged for your mistake?,frustrated
+I want compensation for the time and money I have lost.,frustrated
+This has been going on for a month with no resolution.,frustrated
+Your customer service is nonexistent.,frustrated
+I was left standing at the counter for three hours.,frustrated
+"No food, no water, no information, absolutely nothing.",frustrated
+I am at my wits end with this whole situation.,frustrated
+Every person I speak to tells me something different.,frustrated
+I have had it with the excuses.,frustrated
+My flight was cancelled and nobody rebooked me.,frustrated
+I slept on the airport floor because of you.,frustrated
+This is totally unacceptable and you know it.,frustrated
+I want a written explanation for what happened.,frustrated
+Your systems are a mess and I am paying the price.,frustrated
+I have lost all confidence in this airline.,frustrated
+Please do not tell me to wait another 48 hours.,frustrated
+I am tired of chasing you for answers.,frustrated
+The lack of communication is what makes this so infuriating.,frustrated
+I was promised a callback that never came.,frustrated
+Three days of silence and counting.,frustrated
+You charged my card and cancelled my seat anyway.,frustrated
+I am raising a formal complaint about this.,frustrated
+This is absolutely ridiculous and I want it fixed.,frustrated
+My family was separated on the flight despite booking together.,frustrated
+Nobody takes responsibility for anything here.,frustrated
+I have spent more time complaining than flying.,frustrated
+The refund you sent is less than half of what I paid.,frustrated
+Why is there always another excuse?,frustrated
+I cannot believe how badly this has been handled.,frustrated
+Your agent hung up on me twice.,frustrated
+I am done being polite about this.,frustrated
+This whole process has been a nightmare from start to finish.,frustrated
+I expected far better for the price I paid.,frustrated
+My bag arrived soaked and nobody will take a claim.,frustrated
+You have had my money for two months now.,frustrated
+I am furious that nobody informed me of the change.,frustrated
+The gate was changed and nobody announced it.,frustrated
+I missed the flight because your information was wrong.,frustrated
+"This is negligence, plain and simple.",frustrated
+I want someone senior to call me today.,frustrated
+Being told to check the website again is not help.,frustrated
+I have attached the receipts three times already.,frustrated
+How many times do I have to explain this?,frustrated
+I am not paying another cent until this is sorted.,frustrated
+Your fees are hidden and misleading.,frustrated
+I felt completely abandoned at the airport.,frustrated
+"No apology, no explanation, nothing.",frustrated
+This is the last time I use this airline.,frustrated
+I am seriously considering legal advice.,frustrated
+The whole trip was a waste of money.,frustrated
+I have been given the runaround for weeks.,frustrated
+You cancelled my booking without asking me.,frustrated
+I am so frustrated I do not know what else to do.,frustrated
+Nothing about this has been acceptable.,frustrated
+Why should I have to pay for your error?,frustrated
+I am extremely angry about the way I was spoken to.,frustrated
+Your baggage handlers destroyed my suitcase.,frustrated
+I have been lied to repeatedly.,frustrated
+The compensation offered is frankly insulting.,frustrated
+I want this escalated beyond the call centre.,frustrated
+Two hours on hold and then disconnected.,frustrated
+This is beyond a joke now.,frustrated
+I have lost business because of this delay.,frustrated
+Nobody at the desk would even look at me.,frustrated
+I am appalled at the state of my luggage.,frustrated
+You have made a difficult trip so much worse.,frustrated
+I regret ever booking with you.,frustrated
+My complaint has been open for nine weeks.,frustrated
+I am furious about being downgraded without warning.,frustrated
+The seat I paid for was given to someone else.,frustrated
+I want a full refund and an apology.,frustrated
+This level of service is indefensible.,frustrated
+I have had enough of the automated responses.,frustrated
+Why is it so hard to get a straight answer?,frustrated
+I am utterly disgusted by this treatment.,frustrated
+My elderly mother was left without assistance.,frustrated
+Nobody helped her and she waited four hours.,frustrated
+"I am taking this further, this cannot continue.",frustrated
+The lack of accountability here is staggering.,frustrated
+I paid extra and received nothing in return.,frustrated
+This has cost me far more than the ticket.,frustrated
+I am incredibly frustrated by the constant delays.,frustrated
+Your team has wasted weeks of my time.,frustrated
+I will be leaving reviews everywhere about this.,frustrated
+How dare you charge me a change fee for your cancellation?,frustrated
+I am furious and I want answers today.,frustrated
+"Nothing works, nobody calls, nobody cares.",frustrated
+This is the single worst service I have encountered.,frustrated
+I have been more than patient and got nowhere.,frustrated
+You owe me an explanation at the very least.,frustrated
+I am fed up with being ignored.,frustrated
+My bag has been in transit for eleven days.,frustrated
+I want to know why nobody flagged this earlier.,frustrated
+The excuses are wearing very thin.,frustrated
+I have lost faith in this entire process.,frustrated
+Your refund policy is designed to be impossible.,frustrated
+I am escalating this because nothing else has worked.,frustrated
+"Three different agents, three different answers.",frustrated
+"I am not accepting a voucher, I want my money.",frustrated
+This was supposed to be a special trip and you ruined it.,frustrated
+I am so upset I can barely write this.,frustrated
+Nobody should have to go through this.,frustrated
+You have treated me with complete contempt.,frustrated
+I want this in writing and I want it now.,frustrated
+My patience has completely run out.,frustrated
+I have never felt so ignored by a company.,frustrated
+The whole experience has been humiliating.,frustrated
+I am furious about the hidden charges.,frustrated
+Why was I not told about this before I paid?,frustrated
+This is exactly why people stop flying with you.,frustrated
+I want a manager to review this immediately.,frustrated
+THIS IS COMPLETELY UNACCEPTABLE AND I WANT A REFUND,frustrated
+I HAVE BEEN WAITING FOR HOURS AND NOBODY HAS HELPED,frustrated
+Where is my bag?!,frustrated
+Answer me!!,frustrated
+Still nothing?? Seriously??,frustrated
+This is ridiculous!!!,frustrated
+I am DONE with this airline,frustrated
+WHY is nobody answering me,frustrated
+Why has nobody called me back about my claim?,frustrated
+How long am I supposed to wait for a refund?,frustrated
+Why was my seat given away when I had already checked in?,frustrated
+Do you have any idea how much this has cost me?,frustrated
+Why does every agent tell me something different?,frustrated
+How is this my problem when your flight was cancelled?,frustrated
+Why am I still waiting after four weeks?,frustrated
+What exactly am I paying this fee for?,frustrated
+Why did nobody tell me the flight was moved?,frustrated
+How many more times must I send the same documents?,frustrated
+Why is my bag still sitting in Amsterdam?,frustrated
+Who is actually responsible for this mess?,frustrated
+Why should I accept a voucher when I paid cash?,frustrated
+How is a two day delay acceptable?,frustrated
+Why was my booking cancelled without any warning?,frustrated
+What is the point of a helpline that nobody answers?,frustrated
+Why does your system keep losing my reference number?,frustrated
+How can you charge me twice for one ticket?,frustrated
+Why am I being penalised for your scheduling error?,frustrated
+When is somebody going to take this seriously?,frustrated
+Why has my case been closed with no explanation?,frustrated
+How long does it take to answer one simple email?,frustrated
+Why did you board me on a flight that was already full?,frustrated
+What kind of service is this?,frustrated
+Why can nobody in your office give me a straight answer?,frustrated
+How am I supposed to attend the funeral now?,frustrated
+Why was I left at the gate with no information?,frustrated
+Do you expect me to sleep in the terminal again?,frustrated
+Why is the compensation form rejecting my valid booking?,frustrated
+How many complaints does it take to get a response?,frustrated
+Why did the price change after I confirmed payment?,frustrated
+What happened to the seat I paid extra for?,frustrated
+Why is your call centre hanging up on me?,frustrated
+How is it possible to lose a wheelchair?,frustrated
+Why am I the one chasing you for updates?,frustrated
+Are you ever going to refund my money?,frustrated
+Why did you downgrade me without asking?,frustrated
+How can a confirmed ticket just disappear?,frustrated
+Why has the status said processing for a month?,frustrated
+What do I have to do to be heard here?,frustrated
+Why was my luggage opened and items taken?,frustrated
+How is nobody able to find my reservation?,frustrated
+Why do I keep getting automated replies?,frustrated
+When exactly will somebody fix this?,frustrated
+Why did you sell me a connection that cannot be made?,frustrated
+How is a three hour queue reasonable?,frustrated
+Why was my special meal request ignored again?,frustrated
+What use is a refund in twelve weeks?,frustrated
+Why am I being asked for the same receipt a fifth time?,frustrated
+How is this still unresolved?,frustrated
+Why did your agent laugh at me on the phone?,frustrated
+What justifies a fee for your own mistake?,frustrated
+Why has my child been seated alone?,frustrated
+How long before somebody actually calls me?,frustrated
+Why does your website take payment and then fail?,frustrated
+What am I meant to do now?,frustrated
+Why has my complaint reference stopped working?,frustrated
+How is it my fault the gate was changed?,frustrated
+Why do I have to pay to speak to a human?,frustrated
+When will you stop ignoring me?,frustrated
+Why was my flight cancelled for the third time?,frustrated
+How can you run an airline like this?,frustrated
+Why is there no manager available ever?,frustrated
+What happened to the callback you promised?,frustrated
+Why am I still without my suitcase?,frustrated
+How is losing a passport the passenger's problem?,frustrated
+Why did you charge excess on a bag that was within limits?,frustrated
+What more evidence do you need?,frustrated
+Why has the voucher expired before you processed it?,frustrated
+How is this acceptable after eight days?,frustrated
+Why did nobody meet my elderly mother at the gate?,frustrated
+When does this stop being my problem to solve?,frustrated
+Why is your app deleting my boarding pass?,frustrated
+How am I supposed to trust you again?,frustrated
+Why was I told to come back tomorrow?,frustrated
+What is being done about any of this?,frustrated
+I would like to check the baggage allowance for economy.,calm
+Please confirm the check-in time for my Nairobi flight.,calm
+I am planning to travel with an infant next month.,calm
+I want to add an extra bag to my booking.,calm
+Kindly send me the details of the frequent flyer programme.,calm
+I need information about travelling with a musical instrument.,calm
+I would like to change my seat to an aisle.,calm
+I am interested in an upgrade to business class.,calm
+I would like to book a return fare to Mombasa.,calm
+Please let me know the cabin bag dimensions.,calm
+I need to update the spelling of my surname.,calm
+I would like to request a vegetarian meal.,calm
+Kindly confirm whether lounge access is included.,calm
+I am looking for the schedule to Kisumu on Friday.,calm
+I want to understand the refund conditions before booking.,calm
+Please share the current fare rules for my ticket.,calm
+I would like to travel with my small dog.,calm
+I need assistance selecting travel insurance.,calm
+I am checking whether my miles can be transferred.,calm
+Thank you so much for your help!,calm
+"That is very helpful, thank you!",calm
+I appreciate the quick reply!,calm
+"Great, that answers my question perfectly!",calm
+"Wonderful, I will book that now!",calm
+"Thanks, that is exactly what I needed!",calm
+"Perfect, I have received the confirmation!",calm
+"Lovely, see you on the flight!",calm
+I would like to know more about the student fare.,calm
+Please confirm the departure terminal.,calm
+I want to add my loyalty number to an existing booking.,calm
+I would like details of the group booking policy.,calm
+Kindly advise on the unaccompanied minor service.,calm
+I am enquiring about sports equipment carriage.,calm
+I would like to reserve a bassinet seat.,calm
+Please tell me about the duty free options on board.,calm
+I need the fare difference for a date change.,calm
+I would like to travel on the earlier service instead.,calm
+Please confirm the visa requirements for transit.,calm
+I am asking about wheelchair assistance for my father.,calm
+I would like to pay the balance on my reservation.,calm
+Kindly send the e-ticket to my new email address.,calm
+I want to know the deadline for online check-in.,calm
+I would like to enquire about excess baggage rates.,calm
+Please confirm whether the flight offers wifi.,calm
+I am looking into flying to Lagos in December.,calm
+I would like the contact details for cargo services.,calm
+Kindly confirm the free allowance on codeshare flights.,calm
+I want to check whether my booking includes a meal.,calm
+I would like to know the aircraft type on this route.,calm
+Please advise how far in advance I can select seats.,calm
+I am considering the flexible fare option.,calm
+I would like to confirm my onward connection details.,calm
+Kindly outline the pet in cabin requirements.,calm
+I want to add a second passenger to this reservation.,calm
+I would like the receipt for my recent payment.,calm
+What documents do I need for travel to Dubai,calm
+How early should I arrive at the airport,calm
+What is the cabin bag size limit,calm
+How much is the name change fee,calm
+When does online check-in close,calm
+What meals are served on the Lagos route,calm
+How many bags can I take in business class,calm
+What is the fee to change my date,calm
+How do I add my frequent flyer number,calm
+Where can I find my booking reference,calm
+What time does the lounge open,calm
+How much extra baggage can I buy,calm
+Can I take a laptop in hand luggage,calm
+What is the policy on travelling while pregnant,calm
+How do I request a wheelchair,calm
+What is the charge for a seat with extra legroom,calm
+How long is the layover in Nairobi,calm
+What is the refund policy on flexible fares,calm
+Can I bring a stroller for my baby,calm
+How do I check the status of my refund,calm
+What is the infant fare,calm
+How many miles do I need for an upgrade,calm
+Where do I collect my boarding pass,calm
+What is the weight limit per bag,calm
+How do I book a group of ten people,calm
+What is the deadline to cancel,calm
+Can I change the passenger name on a ticket,calm
+How much does a pet in cabin cost,calm
+What terminal does the flight depart from,calm
+How do I add travel insurance,calm
+Which aircraft operates the Mombasa route,calm
+What is the student discount,calm
+How do I request a vegetarian meal,calm
+When will my miles be credited,calm
+Can I select my seat in advance,calm
+What is the transit visa requirement,calm
+How do I get a receipt for my booking,calm
+What happens if I miss my connection,calm
+How much is a one way fare to Kisumu,calm
+What sports equipment can I carry,calm
+Tell me about the loyalty programme tiers,calm
+Let me know the check-in deadline,calm
+I need to know the excess baggage rate,calm
+Please confirm the departure time,calm
+I have called six times and nobody has helped,frustrated
+Your agent hung up on me twice today,frustrated
+My bag has been missing for eleven days now,frustrated
+I am sick of being passed between departments,frustrated
+This is the third cancellation in one month,frustrated
+Nobody warned me the flight was rescheduled,frustrated
+I want a full refund and I want it this week,frustrated
+I have wasted an entire day at this airport,frustrated
+Your website took my money and gave me nothing,frustrated
+I am appalled by how this has been handled,frustrated
+My complaint has been open since January with no reply,frustrated
+I will be taking this further,frustrated
