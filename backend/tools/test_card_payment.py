@@ -30,6 +30,37 @@ from app import agent, config, database, daraja, paypal, sentiment  # noqa: E402
 
 POLICY_DIR = BACKEND / "data" / "policies"
 
+# Once real Daraja credentials are configured, the end-to-end tests below would
+# send genuine STK pushes to a number that belongs to somebody else, every time
+# anyone runs the suite. Tests exercise the agent's logic, not Safaricom's
+# availability, so the network call is stubbed out here and the stub records
+# what it was asked to send. test_the_suite_never_contacts_safaricom pins this.
+_STK_CALLS = []
+
+
+def _stub_stk_push(phone_number: str, amount: float, reference: str, description: str):
+    _STK_CALLS.append({"phone_number": phone_number, "amount": amount,
+                       "reference": reference})
+    return {
+        "source": "stubbed_for_tests",
+        "success": True,
+        "checkout_request_id": "ws_CO_TEST",
+        "merchant_request_id": "test",
+        "amount": amount,
+        "phone_number": phone_number,
+        "reference": reference,
+        "message": "Stubbed STK push.",
+    }
+
+
+def _stub_card_order(amount: float, currency: str, reference: str, description: str):
+    return paypal._simulated_order(amount, currency, reference, description,
+                                   "stubbed_for_tests")
+
+
+_LIVE_STK = daraja.initiate_stk_push
+daraja.initiate_stk_push = _stub_stk_push
+
 
 def test_card_acceptance_is_published_fact_not_invention():
     # The card rail's claim ("Kenya Airways accepts cards") must trace to the
@@ -242,12 +273,24 @@ def test_daraja_posture_is_reportable_without_exposing_secrets():
     assert config.DARAJA_PASSKEY not in blob or not config.DARAJA_PASSKEY
 
 
+def test_the_suite_never_contacts_safaricom():
+    # A test run must never cost anyone a real STK prompt. The agent calls
+    # daraja.initiate_stk_push by module attribute, so the stub installed at
+    # import time is the one that runs.
+    assert agent.daraja.initiate_stk_push is _stub_stk_push
+    _STK_CALLS.clear()
+    _continue_payment("test-guard", 75.0, "USD", "0722334455")
+    assert len(_STK_CALLS) == 1, _STK_CALLS
+    # And the amount reaching Safaricom would have been the converted one.
+    assert _STK_CALLS[0]["amount"] == round(75.0 * config.USD_TO_KES_RATE)
+
+
 def test_a_simulated_stk_push_is_labelled_as_simulated():
     # A simulated success must never be mistaken for evidence that Safaricom
-    # accepted anything.
+    # accepted anything. Checked against the real client, not the stub.
     if daraja.is_configured():
         return
-    result = daraja.initiate_stk_push("254712345678", 1, "TEST", "verification")
+    result = _LIVE_STK("254712345678", 1, "TEST", "verification")
     assert result["source"] == "simulated_sandbox", result
 
 

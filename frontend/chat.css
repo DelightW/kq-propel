@@ -154,11 +154,21 @@ body {
   border-radius: 18px;
   font-size: 15px;
   line-height: 1.5;
-  white-space: pre-wrap;
   word-wrap: break-word;
   overflow-wrap: anywhere;
   animation: rise 0.22s ease-out;
 }
+
+/* Paragraphs and bullets are built as real elements now, so the bubble must
+   not also collapse whitespace with pre-wrap - that would double the gaps. */
+.bubble .msg-p { margin: 0 0 10px; }
+.bubble .msg-p:last-child { margin-bottom: 0; }
+.bubble .msg-list { margin: 0 0 10px; padding-left: 18px; }
+.bubble .msg-list:last-child { margin-bottom: 0; }
+.bubble .msg-list li { margin-bottom: 6px; }
+.bubble .msg-list li:last-child { margin-bottom: 0; }
+.bubble strong { font-weight: 700; }
+.bubble.bot strong { color: var(--ink); }
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
 .bubble.user {
@@ -185,6 +195,73 @@ body {
   font-size: 11.5px;
   color: var(--ink-soft);
 }
+
+/* Citations are collapsed by default but never removed: an answer the reader
+   cannot trace back to a policy section is the failure mode this whole
+   project is built to avoid. */
+.src-details {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+
+.src-summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  user-select: none;
+}
+
+.src-summary::-webkit-details-marker { display: none; }
+
+.src-summary::before {
+  content: "\25B8";
+  font-size: 10px;
+  transition: transform 0.15s ease;
+}
+
+.src-details[open] .src-summary::before { transform: rotate(90deg); }
+.src-summary:hover { color: var(--red); }
+
+.src-body { margin-top: 7px; }
+
+.src-cited {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  padding: 4px 8px;
+  border-left: 2px solid var(--red);
+  background: var(--paper);
+  border-radius: 0 5px 5px 0;
+  margin-bottom: 4px;
+}
+
+.src-other-label {
+  margin-top: 7px;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+  opacity: 0.75;
+}
+
+.src-other {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  opacity: 0.8;
+  padding: 2px 0 2px 8px;
+  border-left: 2px solid var(--border);
+}
+
+.bubble.user .src-details { border-top-color: rgba(255,255,255,0.35); }
+.bubble.user .src-summary { color: rgba(255,255,255,0.85); }
 
 .bubble.user .src { color: rgba(255,255,255,0.85); border-top-color: rgba(255,255,255,0.35); }
 

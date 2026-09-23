@@ -45,6 +45,37 @@
   function appendRichText(parent, text) {
     // Minimal inline formatting: **bold** only. Built with text nodes so no
     // message content is ever injected as HTML.
+    var blocks = String(text).split(/\n{2,}/);
+    blocks.forEach(function (block) {
+      if (!block.trim()) { return; }
+      var para = document.createElement("p");
+      para.className = "msg-p";
+      // A leading "- " marks a bullet in the payment offer; render it as one
+      // rather than leaving the dash in the prose.
+      var lines = block.split("\n");
+      var allBullets = lines.length > 1 && lines.every(function (l) {
+        return l.trim().indexOf("- ") === 0;
+      });
+      if (allBullets) {
+        var ul = document.createElement("ul");
+        ul.className = "msg-list";
+        lines.forEach(function (l) {
+          var li = document.createElement("li");
+          appendInline(li, l.trim().slice(2));
+          ul.appendChild(li);
+        });
+        parent.appendChild(ul);
+        return;
+      }
+      lines.forEach(function (l, j) {
+        if (j) { para.appendChild(document.createElement("br")); }
+        appendInline(para, l);
+      });
+      parent.appendChild(para);
+    });
+  }
+
+  function appendInline(parent, text) {
     var parts = String(text).split(/(\*\*[^*]+\*\*)/g);
     parts.forEach(function (part) {
       if (!part) { return; }
@@ -58,25 +89,77 @@
     });
   }
 
+  function splitOutSources(text) {
+    // The cited source can appear anywhere in the answer, not only at the end
+    // - a payment offer is appended after it. Pulling every "Source:" line out
+    // by position rather than assuming it is last keeps the remaining prose
+    // formatted instead of dumping it into the citation.
+    var cited = [];
+    var kept = [];
+    String(text).split("\n").forEach(function (line) {
+      if (/^\s*Sources?:/i.test(line)) {
+        cited.push(line.replace(/^\s*Sources?:\s*/i, "").trim());
+      } else {
+        kept.push(line);
+      }
+    });
+    return { body: kept.join("\n").replace(/\n{3,}/g, "\n\n").trim(), cited: cited };
+  }
+
+  function buildSourceDisclosure(cited, retrieved) {
+    // Citations stay one click away rather than on screen permanently. They
+    // are never removed: an answer the user cannot trace back to a policy
+    // section is the exact failure mode this project is built to avoid.
+    var details = document.createElement("details");
+    details.className = "src-details";
+
+    var summary = document.createElement("summary");
+    summary.className = "src-summary";
+    summary.textContent = cited.length
+      ? (cited.length === 1 ? "Source" : cited.length + " sources")
+      : "Sources retrieved";
+    details.appendChild(summary);
+
+    var body = document.createElement("div");
+    body.className = "src-body";
+
+    cited.forEach(function (c) {
+      var row = document.createElement("div");
+      row.className = "src-cited";
+      row.textContent = c;
+      body.appendChild(row);
+    });
+
+    var others = (retrieved || []).filter(function (r) {
+      return cited.indexOf(r) === -1;
+    });
+    if (others.length) {
+      var lab = document.createElement("div");
+      lab.className = "src-other-label";
+      lab.textContent = "Also retrieved, not quoted";
+      body.appendChild(lab);
+      others.forEach(function (o) {
+        var row = document.createElement("div");
+        row.className = "src-other";
+        row.textContent = o;
+        body.appendChild(row);
+      });
+    }
+
+    details.appendChild(body);
+    return details;
+  }
+
   function addBubble(role, text, meta) {
     var bubble = document.createElement("div");
     bubble.className = "bubble " + role;
 
-    var body = text || "";
-    var source = "";
-    var idx = body.lastIndexOf("\n\nSource:");
-    if (idx !== -1) {
-      source = body.slice(idx + 2);
-      body = body.slice(0, idx);
-    }
+    var split = splitOutSources(text || "");
+    appendRichText(bubble, split.body);
 
-    appendRichText(bubble, body);
-
-    if (source) {
-      var s = document.createElement("span");
-      s.className = "src";
-      s.textContent = source;
-      bubble.appendChild(s);
+    var retrieved = (meta && meta.sources) || [];
+    if (split.cited.length || retrieved.length) {
+      bubble.appendChild(buildSourceDisclosure(split.cited, retrieved));
     }
 
     if (meta && meta.sentiment && meta.sentiment.label === "frustrated") {
