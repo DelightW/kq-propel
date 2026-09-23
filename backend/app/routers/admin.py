@@ -5,6 +5,8 @@ comparison introduced in the corrections document.
 """
 import json
 import statistics
+from typing import Dict
+
 from fastapi import APIRouter
 
 from app import config, database, sentiment
@@ -30,7 +32,18 @@ def overview():
     else:
         avg_context = avg_grounded = avg_relevance = hallucination_rate = 0.0
 
-    total_amount = sum(t["amount"] or 0 for t in transactions)
+    # Transactions can now settle on two rails in two currencies, so a single
+    # total would silently add dollars to shillings. Totals are kept per
+    # currency and the shilling figure is reported separately.
+    totals_by_currency: Dict[str, float] = {}
+    for t in transactions:
+        code = (t.get("currency") or "KES").upper()
+        totals_by_currency[code] = totals_by_currency.get(code, 0.0) + (t["amount"] or 0)
+    total_amount = totals_by_currency.get("KES", 0.0)
+    counts_by_method: Dict[str, int] = {}
+    for t in transactions:
+        rail = (t.get("method") or "mpesa").lower()
+        counts_by_method[rail] = counts_by_method.get(rail, 0) + 1
 
     return {
         "app_title": config.APP_TITLE,
@@ -47,6 +60,8 @@ def overview():
         "transactions": {
             "count": len(transactions),
             "total_amount_ksh": total_amount,
+            "totals_by_currency": {k: round(v, 2) for k, v in totals_by_currency.items()},
+            "counts_by_method": counts_by_method,
             "recent": transactions[:10],
         },
         "sentiment_model_metrics": sentiment.get_metrics(),

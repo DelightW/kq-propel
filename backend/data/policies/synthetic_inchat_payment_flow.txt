@@ -10,12 +10,21 @@ In this prototype flow the assistant reads the booking reference, confirms the a
 the guest to confirm the mobile number on file, and then triggers a push prompt to that
 handset. The guest enters their mobile money PIN on the handset rather than in the chat window.
 
-Section 3: Illustrative Confirmation and Timeout
+Section 3: Illustrative Card Checkout
+A mobile money push can only reach a subscriber of a local mobile money network, so the
+prototype also offers a card route for guests outside those markets. The assistant creates a
+hosted checkout with a payment provider and returns the link; the guest enters their card
+details on the provider's page, never in the chat window. The card route charges the fee in the
+currency the fee is published in, so no currency conversion is applied by the assistant. That
+card payment is accepted at all is verified airline information and is recorded in the payment
+methods document; the in-chat checkout described here is the synthetic part.
+
+Section 4: Illustrative Confirmation and Timeout
 A confirmation message is expected within ninety seconds. If no confirmation arrives the
 prototype marks the attempt as timed out and offers the guest a single retry before handing the
 booking back to the standard online payment page.
 
-Section 4: Data Handling in the Prototype
+Section 5: Data Handling in the Prototype
 No PIN, card number or mobile money credential is ever entered into or stored by the assistant.
-The prototype holds only the booking reference, the amount and the outcome status of the
-attempt.
+The prototype holds only the booking reference, the amount, the chosen payment route and the
+outcome status of the attempt.

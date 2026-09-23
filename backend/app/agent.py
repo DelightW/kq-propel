@@ -14,7 +14,7 @@ import uuid
 from typing import Dict, List, Optional, Tuple
 
 from app import (aviationstack, composer, config, daraja, database, evaluation,
-                  retrieval, sentiment)
+                  paypal, retrieval, sentiment)
 from app.llm import get_primary_llm
 from app.vectorstore import get_vector_store
 
@@ -49,7 +49,22 @@ _TRANSACTIONAL_RE = re.compile(
     r"charge\s+me|(?:can|could|may)\s+i\s+pay|i\s+(?:want|would\s+like|wish|need)\s+to\s+pay|"
     r"i'?d\s+like\s+to\s+pay|let'?s\s+pay|go\s+ahead\s+and\s+pay|settle\s+(?:it|the\s+fee)|"
     r"pay\s+(?:ksh|kes)\.?\s?[\d,]+|process\s+(?:the\s+)?payment)\b", re.IGNORECASE)
-_PAYMENT_TOPIC_RE = re.compile(r"\b(pay|payment|m-?pesa|mpesa|stk|till|settle)\b", re.IGNORECASE)
+_PAYMENT_TOPIC_RE = re.compile(r"\b(pay|payment|m-?pesa|mpesa|stk|till|settle|card|visa)\b",
+                                re.IGNORECASE)
+
+# Choosing the card rail. Includes the situation that motivated it: a guest
+# saying they have no Kenyan number is choosing a rail, not making small talk,
+# and must not be answered with "give me your M-Pesa number" again.
+_CARD_RE = re.compile(
+    r"\b(card|cards|visa|mastercard|master\s?card|amex|american\s+express|"
+    r"credit\s?card|debit\s?card|paypal|by\s+card|with\s+my\s+card|"
+    r"no\s+(?:kenyan|safaricom|mpesa|m-pesa)\s+(?:number|line|sim)|"
+    r"(?:don'?t|do\s+not|doesn'?t)\s+have\s+(?:a\s+)?(?:kenyan|safaricom|mpesa|m-pesa)|"
+    r"not\s+(?:in\s+)?kenyan?|outside\s+kenya|international\s+(?:number|card))\b",
+    re.IGNORECASE)
+# Explicitly choosing the mobile-money rail when both are on the table.
+_MPESA_RE = re.compile(r"\b(m-?pesa|mpesa|stk|mobile\s+money|phone|my\s+number)\b",
+                        re.IGNORECASE)
 
 # Short confirmations/declines only carry meaning while a payment offer is
 # outstanding, so they are evaluated against the stored payment state.
@@ -226,11 +241,43 @@ def _execute_payment(session_id: str, phone: str, amount: float, description: st
         phone_number=phone, amount=amount, reference=reference,
         description=description,
         status="initiated" if result.get("success") else "failed",
+        method="mpesa", currency="KES",
     )
     database.clear_pending_payment(session_id)
     result.setdefault("amount", amount)
     result.setdefault("phone_number", phone)
     result.setdefault("reference", reference)
+    result["method"] = "mpesa"
+    result["currency"] = "KES"
+    return result
+
+
+def _execute_card_payment(session_id: str, amount: float, currency: str,
+                           description: str, trace: List[Dict]) -> Dict:
+    """Creates a card checkout for the fee in the currency it is published in.
+
+    Nothing is converted here. That is the point of the rail: the dollar fees
+    Kenya Airways publishes can be charged as dollars, so the guest is never
+    quoted a figure that depends on this prototype's exchange-rate assumption.
+    """
+    reference = f"KQPROPEL-{uuid.uuid4().hex[:8].upper()}"
+    result = paypal.create_card_order(
+        amount=amount, currency=currency, reference=reference, description=description)
+    trace.append({"step": "action", "tool": "create_card_checkout",
+                   "input": {"amount": amount, "currency": currency,
+                             "reference": reference},
+                   "observation": result})
+    database.log_transaction(
+        session_id=session_id,
+        checkout_request_id=result.get("order_id", ""),
+        phone_number="",
+        amount=amount, reference=reference, description=description,
+        status="awaiting_approval" if result.get("success") else "failed",
+        method="card", currency=currency,
+    )
+    database.clear_pending_payment(session_id)
+    result.setdefault("reference", reference)
+    result["method"] = "card"
     return result
 
 
@@ -243,20 +290,90 @@ def _payment_sent_message(amount: float, phone: str) -> str:
     )
 
 
-def _ask_for_phone_message(amount: float) -> str:
-    return (
-        f"Happy to help you settle that. The amount due is **Ksh {amount:,.0f}**.\n\n"
+def _card_checkout_message(amount: float, currency: str, result: Dict) -> str:
+    simulated = "simulated" in str(result.get("source", ""))
+    link = result.get("approval_url") or ""
+    msg = (
+        f"Here's your secure card checkout for **{currency} {amount:,.2f}**.\n\n"
+        f"{link}\n\n"
+        "Visa, Mastercard and American Express are accepted, and you don't need a PayPal "
+        "account - choose the card option on that page. You're charged in "
+        f"{currency}, the currency the fee is published in, so there's no conversion on "
+        "our side; your bank may apply its own if your card is in another currency."
+    )
+    if simulated:
+        msg += ("\n\n*(Demonstration mode: no card gateway credentials are configured, so "
+                "that link is a simulated checkout rather than a live one.)*")
+    return msg
+
+
+def _ask_for_phone_message(amount: float, currency: str, kes_amount: float,
+                            conversion_note: Optional[str]) -> str:
+    """Asked when the guest has chosen M-Pesa but has not given a number yet.
+
+    The shilling figure is quoted because that is what Safaricom will actually
+    prompt for, but the published figure and the conversion note travel with it
+    so the guest is never shown a converted amount without being told it is one.
+    """
+    lines = [f"Happy to settle that over M-Pesa. The amount due is "
+             f"**{currency} {amount:,.2f}**."]
+    if conversion_note:
+        lines.append(conversion_note)
+        lines.append(f"So the prompt will be for **Ksh {kes_amount:,.0f}**.")
+    lines.append(
         "What's the M-Pesa number I should send the payment prompt to? You can give it as "
-        "07XX XXX XXX or 2547XX XXX XXX."
+        "07XX XXX XXX or 2547XX XXX XXX. It needs to be a Kenyan Safaricom line - if you "
+        "don't have one, say \"card\" instead and I'll generate a checkout link."
     )
+    return "\n\n".join(lines)
 
 
-def _offer_payment_message(amount: float) -> str:
-    return (
-        f"\n\nWould you like me to send an M-Pesa payment prompt for Ksh {amount:,.0f}? "
-        "Just reply with your M-Pesa number (for example 0712345678) and I'll push it to "
-        "your phone straight away."
-    )
+def _ask_for_method_message(amount: float, currency: str) -> str:
+    """Asked after the guest agrees to pay but before a rail is known."""
+    lines = [f"Happy to help you settle that. The amount due is **{currency} {amount:,.2f}**.",
+             "",
+             "How would you like to pay?",
+             "",
+             "- **Card** - say \"card\" and I'll generate a secure checkout link. Visa, "
+             "Mastercard and American Express, no PayPal account needed."]
+    if currency == "KES":
+        lines.append("- **M-Pesa** - reply with your Kenyan number (07XX XXX XXX or "
+                     "2547XX XXX XXX) and I'll push the prompt to your phone.")
+    else:
+        kes_amount, _ = _to_kes(amount, currency)
+        lines.append(f"- **M-Pesa** - reply with your Kenyan number (07XX XXX XXX). M-Pesa "
+                     f"settles in shillings, so that would be about "
+                     f"**Ksh {kes_amount:,.0f}** at this assistant's indicative rate of "
+                     f"{config.USD_TO_KES_RATE:,.2f} KES/USD, which is a prototype setting "
+                     f"rather than a published airline figure.")
+        lines.append("")
+        lines.append("Paying by card avoids that conversion entirely, since the fee is "
+                     f"published in {currency}.")
+    return "\n".join(lines)
+
+
+def _offer_payment_message(amount: float, currency: str,
+                            kes_amount: Optional[float]) -> str:
+    """Offers both rails.
+
+    M-Pesa is listed second and qualified, because an STK push can only reach a
+    Kenyan mobile number - offering it first to a guest flying from Amsterdam
+    would be offering something they cannot use.
+    """
+    lines = [f"\n\nWould you like to settle the **{currency} {amount:,.2f}** now? "
+             "There are two ways:"]
+    lines.append(f"\n\n- **Card** - I'll generate a secure checkout link and you pay the "
+                 f"{currency} {amount:,.2f} directly. Just say \"card\".")
+    if kes_amount is not None:
+        if currency == "KES":
+            lines.append("\n- **M-Pesa** - reply with your Kenyan number (for example "
+                         "0712345678) and I'll push the prompt to your phone.")
+        else:
+            lines.append(f"\n- **M-Pesa** - available on a Kenyan mobile number. M-Pesa "
+                         f"settles in shillings, so this would be **Ksh {kes_amount:,.0f}** "
+                         f"at the indicative rate below. Reply with your number "
+                         f"(for example 0712345678).")
+    return "".join(lines)
 
 
 def _to_kes(amount: float, currency: str) -> Tuple[float, Optional[str]]:
@@ -287,6 +404,7 @@ def _handle_pending_payment(session_id: str, message: str, pending: Dict,
     """Continues a payment conversation that is already in progress. Returns a
     finished turn, or None if the passenger has moved on to something else."""
     amount = float(pending["amount"])
+    currency = (pending.get("currency") or "KES").upper()
     description = pending.get("description") or "KQ-Propel ancillary fee settlement"
 
     if _DECLINE_RE.match(message):
@@ -294,29 +412,67 @@ def _handle_pending_payment(session_id: str, message: str, pending: Dict,
         trace.append({"step": "thought", "content": "Passenger declined the payment offer."})
         return _finalize_direct(
             session_id, message,
-            "No problem - I won't send the payment prompt. Let me know if you'd like to "
+            "No problem - I won't take any payment. Let me know if you'd like to "
             "pay later, or if there's anything else I can help you with.",
             trace, sentiment_result)
 
+    # A phone number is an unambiguous choice of the M-Pesa rail, so it is read
+    # before the card check - "pay with my card on 0712345678" is incoherent,
+    # but a number is the more specific signal.
     phone_match = _PHONE_RE.search(message)
     if phone_match:
         phone = _normalize_phone(phone_match)
+        kes_amount, conversion_note = _to_kes(amount, currency)
         trace.append({"step": "thought",
-                       "content": (f"M-Pesa number supplied for the outstanding Ksh {amount:,.0f} "
-                                   f"payment. Initiating STK push.")})
-        result = _execute_payment(session_id, phone, amount, description, trace)
-        answer = _payment_sent_message(amount, phone) if result.get("success") else (
-            "I wasn't able to send the M-Pesa prompt just now. Please try again in a moment, "
-            "or pay at the airport counter.")
+                       "content": (f"M-Pesa number supplied for the outstanding "
+                                   f"{currency} {amount:,.2f} payment. "
+                                   f"Pushing Ksh {kes_amount:,.0f}.")})
+        result = _execute_payment(session_id, phone, kes_amount, description, trace)
+        if result.get("success"):
+            answer = _payment_sent_message(kes_amount, phone)
+            if conversion_note:
+                answer = conversion_note + "\n\n" + answer
+        else:
+            answer = ("I wasn't able to send the M-Pesa prompt just now. Please try again in "
+                      "a moment, or say \"card\" and I'll generate a secure card checkout "
+                      "instead.")
         return _finalize_direct(session_id, message, _apply_empathy(answer, sentiment_result),
                                  trace, sentiment_result, payment=result)
 
-    if _AFFIRM_RE.match(message) or _TRANSACTIONAL_RE.search(message):
-        database.set_pending_payment(session_id, amount, description, "awaiting_phone")
+    if _CARD_RE.search(message):
         trace.append({"step": "thought",
-                       "content": "Payment confirmed; awaiting the passenger's M-Pesa number."})
+                       "content": (f"Passenger chose the card rail for {currency} "
+                                   f"{amount:,.2f}. No conversion is required - the card is "
+                                   f"charged in the published currency.")})
+        result = _execute_card_payment(session_id, amount, currency, description, trace)
+        answer = (_card_checkout_message(amount, currency, result) if result.get("success")
+                  else "I couldn't create the card checkout just now. Please try again in a "
+                       "moment, or pay at the airport counter.")
+        return _finalize_direct(session_id, message, _apply_empathy(answer, sentiment_result),
+                                 trace, sentiment_result, payment=result)
+
+    if _MPESA_RE.search(message):
+        # The rail is chosen but the number is not known yet, so nothing is
+        # pushed - we ask for the line first.
+        kes_amount, conversion_note = _to_kes(amount, currency)
+        database.set_pending_payment(session_id, amount, description, "awaiting_phone",
+                                      currency=currency)
+        trace.append({"step": "thought",
+                       "content": "Passenger chose M-Pesa but gave no number; asking for it."})
+        return _finalize_direct(
+            session_id, message,
+            _apply_empathy(_ask_for_phone_message(amount, currency, kes_amount,
+                                                   conversion_note), sentiment_result),
+            trace, sentiment_result)
+
+    if _AFFIRM_RE.match(message) or _TRANSACTIONAL_RE.search(message):
+        database.set_pending_payment(session_id, amount, description, "awaiting_method",
+                                      currency=currency)
+        trace.append({"step": "thought",
+                       "content": "Payment confirmed; awaiting the passenger's choice of rail."})
         return _finalize_direct(session_id, message,
-                                 _apply_empathy(_ask_for_phone_message(amount), sentiment_result),
+                                 _apply_empathy(_ask_for_method_message(amount, currency),
+                                                sentiment_result),
                                  trace, sentiment_result)
 
     return None
@@ -560,7 +716,7 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
             f"delay {flight_status.get('delay_minutes', 0)} minutes."
         )
 
-    # --- Action: payment tool (Safaricom Daraja STK push) ---
+    # --- Action: payment tools (M-Pesa STK push, or a card checkout) ---
     payment_result = None
     payment_prompt_text = None
     if _TRANSACTIONAL_RE.search(message):
@@ -568,8 +724,10 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
         amount_match = _AMOUNT_RE.search(message)
         if amount_match:
             amount = float(amount_match.group(1).replace(",", ""))
+            currency = "KES"
         else:
             amount = _extract_fee_from_context(retrieved, query)
+            currency = "KES"
 
         if amount is None:
             tool_observations.append(
@@ -578,25 +736,35 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
             )
             trace.append({"step": "thought",
                            "content": "Payment intent detected but no grounded amount available."})
-        elif not phone_match:
-            database.set_pending_payment(session_id, amount,
-                                          "KQ-Propel ancillary fee settlement", "awaiting_phone")
-            trace.append({"step": "thought",
-                           "content": f"Payment intent detected for Ksh {amount:,.0f}; awaiting phone number."})
-            return _finalize_direct(session_id, message,
-                                     _apply_empathy(_ask_for_phone_message(amount), sentiment_result),
-                                     trace, sentiment_result)
-        else:
+        elif phone_match:
             phone = _normalize_phone(phone_match)
             payment_result = _execute_payment(
                 session_id, phone, amount, "KQ-Propel ancillary fee settlement", trace)
             if payment_result.get("success"):
                 payment_prompt_text = _payment_sent_message(amount, phone)
             tool_observations.append(f"Payment tool result: {payment_result.get('message')}")
+        elif _CARD_RE.search(message):
+            payment_result = _execute_card_payment(
+                session_id, amount, currency, "KQ-Propel ancillary fee settlement", trace)
+            if payment_result.get("success"):
+                payment_prompt_text = _card_checkout_message(amount, currency, payment_result)
+            tool_observations.append(f"Payment tool result: {payment_result.get('message')}")
+        else:
+            database.set_pending_payment(session_id, amount,
+                                          "KQ-Propel ancillary fee settlement",
+                                          "awaiting_method", currency=currency)
+            trace.append({"step": "thought",
+                           "content": (f"Payment intent detected for {currency} {amount:,.2f}; "
+                                       f"awaiting the passenger's choice of rail.")})
+            return _finalize_direct(session_id, message,
+                                     _apply_empathy(_ask_for_method_message(amount, currency),
+                                                    sentiment_result),
+                                     trace, sentiment_result)
     elif _PAYMENT_TOPIC_RE.search(message):
         tool_observations.append(
             "The passenger is asking about payment options. Explain them, and mention that "
-            "I can send an M-Pesa STK push directly in this chat if they say they want to pay."
+            "I can either generate a secure card checkout link or send an M-Pesa STK push "
+            "to a Kenyan number, directly in this chat, if they say they want to pay."
         )
 
     # --- Compose the final grounded answer ---
@@ -627,23 +795,27 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
         fee = _payable_fee(answer, retrieved, message)
         if fee is not None:
             amount, currency = fee
+            # The fee is held in the currency the policy publishes it in. A
+            # shilling figure is derived only to show what the M-Pesa option
+            # would cost, and the conversion is disclosed; a guest who pays by
+            # card never encounters this assistant's exchange-rate assumption
+            # at all.
             kes_amount, conversion_note = _to_kes(amount, currency)
-            description = ("KQ-Propel ancillary fee settlement"
-                           if conversion_note is None else
-                           f"KQ-Propel ancillary fee settlement (USD {amount:,.0f} converted "
-                           f"at {config.USD_TO_KES_RATE:,.2f} KES/USD)")
-            database.set_pending_payment(session_id, kes_amount, description, "offered")
+            database.set_pending_payment(session_id, amount,
+                                          "KQ-Propel ancillary fee settlement",
+                                          "offered", currency=currency)
+            answer += _offer_payment_message(amount, currency, kes_amount)
             if conversion_note:
                 answer += "\n\n" + conversion_note
-            answer += _offer_payment_message(kes_amount)
             trace.append({"step": "thought",
                            "content": (
-                               f"Grounded payable fee of Ksh {kes_amount:,.0f} identified - "
-                               f"offering to settle it by M-Pesa."
+                               f"Grounded payable fee of {currency} {amount:,.2f} identified - "
+                               f"offering both settlement rails."
                                if conversion_note is None else
-                               f"Grounded payable fee of USD {amount:,.0f} identified. Daraja "
-                               f"settles in shillings, so it was converted at the declared "
-                               f"prototype rate of {config.USD_TO_KES_RATE:,.2f} KES/USD to "
+                               f"Grounded payable fee of USD {amount:,.0f} identified. Offered "
+                               f"by card in USD (no conversion) and by M-Pesa, which settles "
+                               f"only in shillings, at the declared prototype rate of "
+                               f"{config.USD_TO_KES_RATE:,.2f} KES/USD giving "
                                f"Ksh {kes_amount:,.0f}; the rate is disclosed in the reply.")})
 
     # Empathy framing wraps the completed answer so the acknowledgement always

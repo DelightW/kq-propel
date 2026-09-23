@@ -88,8 +88,20 @@
       "1 - groundedness"));
     kpis.appendChild(card("Indexed chunks", vs.chunks !== undefined ? vs.chunks : "-",
       (vs.documents !== undefined ? vs.documents : 0) + " policy documents"));
-    kpis.appendChild(card("M-Pesa value", "Ksh " + (tx.total_amount_ksh || 0).toLocaleString(),
-      (tx.count || 0) + " transactions"));
+    var totals = tx.totals_by_currency || {};
+    var rails = tx.counts_by_method || {};
+    var totalLabel = Object.keys(totals).length
+      ? Object.keys(totals).sort().map(function (c) {
+          return c + " " + Number(totals[c]).toLocaleString();
+        }).join("  |  ")
+      : "KES 0";
+    var railLabel = (tx.count || 0) + " transactions"
+      + (Object.keys(rails).length
+          ? " (" + Object.keys(rails).sort().map(function (m) {
+              return rails[m] + " " + (m === "card" ? "card" : "M-Pesa");
+            }).join(", ") + ")"
+          : "");
+    kpis.appendChild(card("Settled value", totalLabel, railLabel));
 
     triad.innerHTML = "";
     triad.appendChild(meterRow("Context relevance", t.context_relevance));
@@ -164,15 +176,18 @@
     txBody.innerHTML = "";
     var recent = tx.recent || [];
     if (!recent.length) {
-      emptyRow(txBody, 6, "No M-Pesa transactions recorded yet.");
+      emptyRow(txBody, 7, "No transactions recorded yet.");
     } else {
       recent.forEach(function (r) {
+        var method = r.method || "mpesa";
+        var currency = r.currency || "KES";
         var tr = el("tr");
         tr.appendChild(el("td", null, r.created_at || "-"));
         tr.appendChild(el("td", null, r.session_id || "-"));
+        tr.appendChild(el("td", null, method === "card" ? "Card" : "M-Pesa"));
         tr.appendChild(el("td", null, r.phone_number || "-"));
         tr.appendChild(el("td", null, r.amount !== undefined && r.amount !== null
-          ? Number(r.amount).toLocaleString() : "-"));
+          ? currency + " " + Number(r.amount).toLocaleString() : "-"));
         var st = el("td");
         var ok = String(r.status || "").toLowerCase().indexOf("success") !== -1 ||
                  String(r.status || "").toLowerCase().indexOf("accept") !== -1;

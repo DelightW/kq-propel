@@ -85,7 +85,7 @@
       "source_url": null,
       "retrieved_on": null,
       "confidence": "n/a",
-      "notes": "Prototype-only feature. Separated from payment_methods_policy.txt so that no single document mixes published fact with prototype behaviour. Section 1 discloses its synthetic status."
+      "notes": "Prototype-only feature. Separated from payment_methods_policy.txt so that no single document mixes published fact with prototype behaviour. Section 1 discloses its synthetic status. Section 3 describes the card checkout route; that Kenya Airways accepts cards is published fact held in payment_methods_policy.txt Section 4, while the in-chat checkout itself is prototype behaviour."
     }
   ],
   "deleted_synthetic_documents": [

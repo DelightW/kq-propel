@@ -95,14 +95,22 @@
     var card = document.createElement("div");
     card.className = "pay-card" + (p.success ? "" : " failed");
 
+    var isCard = (p.method || "mpesa") === "card";
+    var currency = p.currency || "KES";
+    var simulated = String(p.source || "").indexOf("simulated") === 0;
+
     var head = document.createElement("div");
     head.className = "pay-head";
     var logo = document.createElement("span");
     logo.className = "pay-logo";
-    logo.textContent = "M-PESA";
+    logo.textContent = isCard ? "CARD" : "M-PESA";
     var title = document.createElement("span");
     title.className = "pay-title";
-    title.textContent = p.success ? "Payment request sent" : "Payment request failed";
+    if (p.success) {
+      title.textContent = isCard ? "Checkout link ready" : "Payment request sent";
+    } else {
+      title.textContent = isCard ? "Checkout could not be created" : "Payment request failed";
+    }
     head.appendChild(logo);
     head.appendChild(title);
     card.appendChild(head);
@@ -110,15 +118,28 @@
     if (p.success) {
       var amt = document.createElement("div");
       amt.className = "pay-amount";
-      amt.textContent = "Ksh " + Number(p.amount || 0).toLocaleString();
+      amt.textContent = currency === "KES"
+        ? "Ksh " + Number(p.amount || 0).toLocaleString()
+        : currency + " " + Number(p.amount || 0).toLocaleString(undefined,
+            { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       card.appendChild(amt);
 
-      var rows = [
-        ["To", p.phone_number || "-"],
-        ["Reference", p.reference || "-"],
-        ["Checkout ID", p.checkout_request_id || "-"],
-        ["Channel", p.source === "daraja_sandbox" ? "Safaricom Daraja" : "Daraja (simulated)"]
-      ];
+      var rows;
+      if (isCard) {
+        rows = [
+          ["Reference", p.reference || "-"],
+          ["Order ID", p.order_id || "-"],
+          ["Charged in", currency + " (the published currency - no conversion applied)"],
+          ["Channel", simulated ? "Card gateway (simulated)" : "PayPal card checkout"]
+        ];
+      } else {
+        rows = [
+          ["To", p.phone_number || "-"],
+          ["Reference", p.reference || "-"],
+          ["Checkout ID", p.checkout_request_id || "-"],
+          ["Channel", simulated ? "Daraja (simulated)" : "Safaricom Daraja"]
+        ];
+      }
       var list = document.createElement("div");
       list.className = "pay-rows";
       rows.forEach(function (r) {
@@ -134,9 +155,31 @@
       });
       card.appendChild(list);
 
+      if (isCard && p.approval_url) {
+        var link = document.createElement("a");
+        link.className = "pay-link";
+        link.href = p.approval_url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = simulated
+          ? "Open simulated checkout"
+          : "Open secure checkout";
+        card.appendChild(link);
+      }
+
       var note = document.createElement("div");
       note.className = "pay-note";
-      note.textContent = "Enter your M-Pesa PIN on your phone to authorise this payment.";
+      if (isCard) {
+        note.textContent = simulated
+          ? "Demonstration mode: no card gateway credentials are configured, so this is a "
+            + "simulated checkout rather than a live one."
+          : "Enter your card details on the checkout page. Nothing is entered in this chat.";
+      } else {
+        note.textContent = simulated
+          ? "Demonstration mode: no Daraja credentials are configured, so this prompt is "
+            + "simulated rather than a live Safaricom request."
+          : "Enter your M-Pesa PIN on your phone to authorise this payment.";
+      }
       card.appendChild(note);
     } else {
       var err = document.createElement("div");

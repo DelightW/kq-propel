@@ -115,6 +115,8 @@ def main() -> int:
                  "hashed embeddings + extractive composer")
     check_simple("Safaricom Daraja", "DARAJA_CONSUMER_KEY",
                  "simulated STK push")
+    check_simple("PayPal (card rail)", "PAYPAL_CLIENT_ID",
+                 "simulated card checkout link")
     check_simple("MongoDB Atlas", "MONGODB_URI",
                  "local JSON vector store")
 

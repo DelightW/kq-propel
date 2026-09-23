@@ -107,6 +107,24 @@ DARAJA_SANDBOX = os.getenv("DARAJA_SANDBOX", "true").lower() != "false"
 # quotes states the rate it used.
 USD_TO_KES_RATE = float(os.getenv("USD_TO_KES_RATE", "129.0"))
 
+# --- Card payments (PayPal Orders API v2) ---
+# M-Pesa requires a Kenyan mobile number, so it cannot serve guests outside
+# Kenya and Tanzania at all. Kenya Airways publishes that it accepts local and
+# international credit and debit cards, so a card rail is the grounded way to
+# serve everyone else.
+#
+# The card rail also removes the conversion problem rather than managing it: a
+# card can be charged in the currency the fee is actually published in, so no
+# invented exchange rate is involved. USD_TO_KES_RATE therefore applies only to
+# the M-Pesa path.
+PAYPAL_CLIENT_ID = os.getenv("PAYPAL_CLIENT_ID", "").strip()
+PAYPAL_CLIENT_SECRET = os.getenv("PAYPAL_CLIENT_SECRET", "").strip()
+PAYPAL_SANDBOX = os.getenv("PAYPAL_SANDBOX", "true").lower() != "false"
+# Where PayPal returns the guest after they approve or cancel. In a deployed
+# system these are routes on the airline's own site.
+PAYPAL_RETURN_URL = os.getenv("PAYPAL_RETURN_URL", "https://example.com/payment/complete")
+PAYPAL_CANCEL_URL = os.getenv("PAYPAL_CANCEL_URL", "https://example.com/payment/cancelled")
+
 # --- MongoDB Atlas Vector Search (production target); falls back to a local
 #     JSON-persisted cosine-similarity index when no connection string is supplied ---
 MONGODB_URI = os.getenv("MONGODB_URI", "").strip()

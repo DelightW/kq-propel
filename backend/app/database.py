@@ -39,7 +39,11 @@ CREATE TABLE IF NOT EXISTS transactions (
     reference TEXT,
     description TEXT,
     status TEXT,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    -- Which rail settled the money, and in what currency. Without these a
+    -- shilling STK push and a dollar card charge are indistinguishable rows.
+    method TEXT NOT NULL DEFAULT 'mpesa',
+    currency TEXT NOT NULL DEFAULT 'KES'
 );
 
 -- `metric_version` records which evaluation implementation produced a row.
@@ -60,14 +64,19 @@ CREATE TABLE IF NOT EXISTS rag_evaluations (
 );
 
 -- Tracks a payment the agent has offered but not yet completed, so the
--- passenger can confirm and supply their M-Pesa number across several turns
--- instead of having to state everything in one message.
+-- passenger can confirm and choose a rail across several turns instead of
+-- having to state everything in one message.
+--
+-- `amount`/`currency` hold the fee exactly as the policy publishes it. The
+-- shilling figure is derived only when the guest chooses M-Pesa, so a guest
+-- paying by card is never quoted a converted amount.
 CREATE TABLE IF NOT EXISTS payment_state (
     session_id TEXT PRIMARY KEY,
     amount REAL,
     description TEXT,
     stage TEXT,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'KES'
 );
 """
 
@@ -101,6 +110,21 @@ def _migrate(conn):
         conn.execute("ALTER TABLE rag_evaluations ADD COLUMN "
                      "metric_version INTEGER NOT NULL DEFAULT 1")
 
+    tx_columns = {r["name"] for r in conn.execute("PRAGMA table_info(transactions)")}
+    if "method" not in tx_columns:
+        # Every pre-existing row was an M-Pesa STK push in shillings, which is
+        # what the defaults record.
+        conn.execute("ALTER TABLE transactions ADD COLUMN "
+                     "method TEXT NOT NULL DEFAULT 'mpesa'")
+    if "currency" not in tx_columns:
+        conn.execute("ALTER TABLE transactions ADD COLUMN "
+                     "currency TEXT NOT NULL DEFAULT 'KES'")
+
+    state_columns = {r["name"] for r in conn.execute("PRAGMA table_info(payment_state)")}
+    if "currency" not in state_columns:
+        conn.execute("ALTER TABLE payment_state ADD COLUMN "
+                     "currency TEXT NOT NULL DEFAULT 'KES'")
+
 
 def log_message(session_id: str, role: str, message: str,
                  sentiment_label: Optional[str] = None,
@@ -116,13 +140,15 @@ def log_message(session_id: str, role: str, message: str,
 
 
 def log_transaction(session_id: str, checkout_request_id: str, phone_number: str,
-                     amount: float, reference: str, description: str, status: str):
+                     amount: float, reference: str, description: str, status: str,
+                     method: str = "mpesa", currency: str = "KES"):
     with _connect() as conn:
         conn.execute(
             "INSERT INTO transactions (session_id, checkout_request_id, phone_number, "
-            "amount, reference, description, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "amount, reference, description, status, created_at, method, currency) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (session_id, checkout_request_id, phone_number, amount, reference, description,
-             status, datetime.utcnow().isoformat()),
+             status, datetime.utcnow().isoformat(), method, currency),
         )
 
 
@@ -181,14 +207,15 @@ def fetch_rag_evaluations(limit: int = 100,
         return [dict(r) for r in rows]
 
 
-def set_pending_payment(session_id: str, amount: float, description: str, stage: str):
+def set_pending_payment(session_id: str, amount: float, description: str, stage: str,
+                         currency: str = "KES"):
     with _connect() as conn:
         conn.execute(
-            "INSERT INTO payment_state (session_id, amount, description, stage, updated_at) "
-            "VALUES (?, ?, ?, ?, ?) ON CONFLICT(session_id) DO UPDATE SET "
+            "INSERT INTO payment_state (session_id, amount, description, stage, updated_at, "
+            "currency) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(session_id) DO UPDATE SET "
             "amount=excluded.amount, description=excluded.description, "
-            "stage=excluded.stage, updated_at=excluded.updated_at",
-            (session_id, amount, description, stage, datetime.utcnow().isoformat()),
+            "stage=excluded.stage, updated_at=excluded.updated_at, currency=excluded.currency",
+            (session_id, amount, description, stage, datetime.utcnow().isoformat(), currency),
         )
 
 

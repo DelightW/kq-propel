@@ -29,19 +29,22 @@ extended with the enhancements required by `Corrections.docx`. UI theme: **red &
   passenger saying "my bag is 5kg over" is matched to the 1–10kg fee band) and a
   section citation on every reply. Nothing is invented.
 - **ReAct agent loop** (`agent.py`): Thought → Action → Observation. Tools: policy
-  retrieval, live flight telemetry (AviationStack), and M-Pesa payment (Safaricom Daraja
-  STK Push). Falls back to sandbox/simulated responses without API keys. A payment is
+  retrieval, live flight telemetry (AviationStack), and payment by card (PayPal Orders
+  API) or M-Pesa (Safaricom Daraja STK Push). Falls back to sandbox/simulated responses
+  without API keys. A payment is
   only initiated on explicit transactional intent *and* a policy-grounded amount, so
   asking "how do I pay?" never charges anyone.
-- **Localized transaction execution (M-Pesa)**: when an answer quotes a specific,
+- **Localized transaction execution (card and M-Pesa)**: when an answer quotes a specific,
   policy-grounded fee, the agent offers to settle it there and then. The offer is driven
   by what the *answer* says, not by how the question was worded — "I have an overweight
   baggage by 10kg" contains no fee vocabulary yet still gets an offer. Money owed *to*
   the passenger (refunds, meal vouchers, delayed-baggage allowances) is never offered for
-  payment. The conversation is
-  stateful — the passenger can reply "yes", then send their number on a later turn, and
-  the agent still knows what it was charging for. The STK push is rendered in the chat as
-  an M-Pesa receipt card (amount, destination number, reference, checkout ID) and written
+  payment. The passenger chooses a rail: a **card**, charged in the currency the fee is
+  published in, or **M-Pesa**, which reaches Kenyan Safaricom lines only and settles in
+  shillings. The conversation is
+  stateful — the passenger can reply "yes", then choose a rail on a later turn, and
+  the agent still knows what it was charging for. Each is rendered in the chat as a
+  receipt card (amount, currency, reference, and the rail used) and written
   to the dashboard's audit trail. A payment is **only** initiated for an amount that came
   from a policy section, so nothing is ever invented — and asking "how do I pay?" never
   charges anyone.
@@ -63,7 +66,7 @@ extended with the enhancements required by `Corrections.docx`. UI theme: **red &
 | URL | `/` | `/admin` |
 | Assets | `index.html` → `chat.css`, `chat.js` | `admin.html` → `admin.css`, `admin.js` |
 | Audience | Passengers | Airline support supervisors |
-| Purpose | Ask questions, check flights, pay fees | Sentiment metrics, RAG-Triad scores, hallucination rate, M-Pesa audit trail, dual-model comparison |
+| Purpose | Ask questions, check flights, pay fees | Sentiment metrics, RAG-Triad scores, hallucination rate, payment audit trail (card and M-Pesa), dual-model comparison |
 
 The chatbot is fully **responsive**: a single-column, full-height layout with a sticky
 composer, horizontally scrolling suggestion chips and a slide-in reasoning panel on
@@ -127,12 +130,22 @@ same Wi-Fi network.
 Both the laptop and the phone must be on the same network, and the network must be
 marked **Private** in Windows.
 
-### Fees and paying by M-Pesa
+### Fees, and paying by card or M-Pesa
 
-Kenya Airways publishes most ancillary fees in US dollars, and M-Pesa settles in
-shillings. The agent converts at an **explicitly declared** rate (`USD_TO_KES_RATE`,
-default 129.0) and always discloses it — the converted figure is never presented as an
-airline-published amount:
+When the agent quotes a fee the passenger owes, it offers two settlement rails, because
+they have genuinely different reach:
+
+| | Card (PayPal Orders API) | M-Pesa (Daraja STK push) |
+|---|---|---|
+| Who it reaches | anyone with a Visa/Mastercard/Amex | Kenyan Safaricom lines only |
+| Currency charged | the currency the fee is **published** in | shillings only |
+| Exchange-rate assumption | **none** | `USD_TO_KES_RATE`, disclosed every time |
+| Grounding | Kenya Airways publishes that it accepts local and international credit and debit cards (`payment_methods_policy.txt` §4) | Kenya Airways publishes **no** paybill; the in-chat push is a disclosed prototype (`synthetic_inchat_payment_flow.txt`) |
+
+The card rail therefore does more than widen access: it removes the FX assumption rather
+than managing it. Kenya Airways publishes most ancillary fees in US dollars, and a card
+can simply be charged in dollars. Only the M-Pesa rail needs a rate, and when it uses one
+it says so — the converted figure is never presented as an airline-published amount:
 
 ```
 You:  I need to correct a typo in my name on my international booking
@@ -140,30 +153,41 @@ Bot:  Correcting up to three characters of a name costs 15 US dollars on a domes
       booking and 75 US dollars on an international booking...
       Source: Refund Policy - Section 5: Name Corrections and Name Changes
 
+      Would you like to settle the USD 75.00 now? There are two ways:
+      - Card - I'll generate a secure checkout link and you pay the USD 75.00 directly.
+      - M-Pesa - available on a Kenyan mobile number. M-Pesa settles in shillings, so
+        this would be Ksh 9,675 at the indicative rate below.
+
       The published charge is USD 75. Kenya Airways does not publish a shilling
       equivalent, so I've converted it at this assistant's configured indicative rate
-      of 129.00 KES per USD, which gives Ksh 9,675. That rate is a prototype setting,
-      not a live exchange rate...
+      of 129.00 KES per USD... That rate is a prototype setting, not a live exchange
+      rate.
 
-      Would you like me to send an M-Pesa payment prompt for Ksh 9,675?
-
-You:  yes please
-Bot:  The amount due is Ksh 9,675. What's the M-Pesa number?
-
-You:  0722334455
-Bot:  [M-PESA receipt card: Ksh 9,675 -> 254722334455, reference, checkout ID]
+You:  I don't have a Kenyan number
+Bot:  [CARD card: USD 75.00, checkout link, "charged in USD - no conversion on our side"]
 ```
+
+Saying *"I'm outside Kenya"* or *"my number is international"* routes to the card rail
+without the passenger having to name a payment instrument. Giving a phone number routes
+to M-Pesa. The pending-payment record stores the fee in its **published** currency;
+shillings are derived at the moment M-Pesa is chosen and never stored as the canonical
+amount.
 
 Fee sentences usually quote several figures, so the agent selects the one whose
 qualifying words match the passenger's own situation (`international` → 75, `domestic`
 → 15) and **declines rather than guesses** when the request is unspecific. Figures the
 source publishes with no currency label — the heavy-bag table — are never treated as
-money. `tools/test_fee_settlement.py` locks all of this down.
+money. `tools/test_fee_settlement.py` and `tools/test_card_payment.py` lock all of this
+down.
 
 Everything can also go in one message — *"I want to pay now, my bag is 5kg over, number
-0733445566"*. Without Daraja credentials the STK push is simulated end-to-end (clearly
-labelled "Daraja (simulated)" on the card); set `DARAJA_*` in `.env` to hit the real
-Safaricom sandbox. Either way the transaction appears in the dashboard's audit trail.
+0733445566"*. Without credentials both rails are simulated end-to-end and clearly
+labelled as such ("Daraja (simulated)", "Card gateway (simulated)"); the simulated
+checkout link is deliberately **not** a `paypal.com` URL, so it cannot be mistaken for a
+live one in a screenshot. Set `DARAJA_*` or `PAYPAL_*` in `.env` to hit the real
+sandboxes. Either way the transaction appears in the dashboard's audit trail, tagged
+with its rail and currency — the dashboard totals per currency rather than summing
+dollars into shillings.
 
 ## Configuration (all optional — sensible offline fallbacks are built in)
 
@@ -173,7 +197,8 @@ Safaricom sandbox. Either way the transaction appears in the dashboard's audit t
 | `OPEN_SOURCE_MODEL_NAME`, `OLLAMA_BASE_URL` | Second model for comparison via Ollama |
 | `AVIATIONSTACK_API_KEY` | Live flight telemetry |
 | `DARAJA_CONSUMER_KEY/SECRET/PASSKEY/SHORTCODE` | Live Safaricom Daraja STK push |
-| `USD_TO_KES_RATE` | Indicative rate for settling dollar-published fees over M-Pesa (default 129.0; disclosed to the passenger, not a live FX feed) |
+| `PAYPAL_CLIENT_ID/SECRET`, `PAYPAL_SANDBOX` | Live PayPal card checkout; without them the card rail returns a labelled simulated link |
+| `USD_TO_KES_RATE` | Indicative rate for settling dollar-published fees over M-Pesa (default 129.0; disclosed to the passenger, not a live FX feed). Not used on the card rail |
 | `LOCAL_EMBEDDING_MODEL`, `LOCAL_EMBEDDING_ENABLED` | Local sentence-transformer embeddings (default `all-MiniLM-L6-v2`); disable to force the hashed fallback |
 | `RETRIEVAL_MMR_LAMBDA` | Relevance/diversity trade-off in retrieval (default 0.8; 1.0 is plain top-k) |
 | `MONGODB_URI`, `MONGODB_DB_NAME` | MongoDB Atlas Vector Search backend |
