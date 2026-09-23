@@ -23,7 +23,8 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from app import config, retrieval
-from app.embeddings import cosine_similarity, embed_text, provider_name
+from app import embeddings as embeddings_module
+from app.embeddings import cosine_similarity, embed_text, embed_texts, provider_name
 
 _WORD_RE = re.compile(r"\S+")
 _SECTION_RE = re.compile(r"^Section\s+\d+\s*:", re.IGNORECASE | re.MULTILINE)
@@ -112,8 +113,65 @@ def _heading_boost(query_tokens: List[str], record: Dict) -> float:
     return 1.0 + 0.9 * (coverage ** 2)
 
 
+_MMR_CANDIDATE_POOL = 15
+
+
+def _mmr_select(order: List[int], scored: List[Dict], records: List[Dict],
+                k: int, lam: float, stale: bool) -> List[int]:
+    """Maximal Marginal Relevance selection over the top-ranked candidates.
+
+    Pure top-k selection assumes the best k chunks are the most *useful* k
+    chunks, which stops being true once a real sentence encoder is doing the
+    ranking. A trained encoder scores every paragraph of the one closest
+    document highly, so the top three can be three near-duplicates from the
+    same policy - fine for a single-fact question, fatal for one that spans two
+    documents, which is where this system's harder questions live.
+
+    MMR picks greedily on `lam * relevance - (1 - lam) * max similarity to what
+    is already chosen`, so each slot has to earn its place by adding something.
+    `lam = 1.0` disables it and restores plain top-k.
+
+    Document identity is folded into the redundancy term: two chunks of the same
+    policy are treated as at least moderately redundant even when their wording
+    diverges, because a second paragraph of an already-cited document adds less
+    than the first paragraph of an uncited one.
+    """
+    if k <= 0 or not order:
+        return []
+    if lam >= 1.0 or len(order) <= 1:
+        return order[:k]
+
+    pool = order[:max(k, _MMR_CANDIDATE_POOL)]
+    # Scale relevance by the best candidate rather than min-max normalising the
+    # pool. Min-max pins the weakest candidate at exactly zero relevance, so on
+    # a pool of near-ties the diversity term can never outweigh it and MMR
+    # quietly degenerates into plain top-k.
+    best_score = max(scored[i]["score"] for i in pool) or 1.0
+    rel = {i: scored[i]["score"] / best_score for i in pool}
+
+    def redundancy(i: int, j: int) -> float:
+        same_doc = 0.6 if scored[i].get("doc_id") == scored[j].get("doc_id") else 0.0
+        if stale:
+            return same_doc
+        sim = cosine_similarity(records[i].get("embedding") or [],
+                                records[j].get("embedding") or [])
+        return max(sim, same_doc)
+
+    selected = [pool[0]]
+    remaining = pool[1:]
+    while remaining and len(selected) < k:
+        best, best_value = None, None
+        for i in remaining:
+            penalty = max(redundancy(i, j) for j in selected)
+            value = lam * rel[i] - (1.0 - lam) * penalty
+            if best_value is None or value > best_value:
+                best, best_value = i, value
+        selected.append(best)
+        remaining.remove(best)
+    return selected
+
+
 class _HybridSearchMixin:
-    """Shared hybrid (BM25 + dense cosine) ranking logic."""
 
     def _rank(self, records: List[Dict], query: str, k: int) -> List[Dict]:
         if not records:
@@ -125,7 +183,12 @@ class _HybridSearchMixin:
         lexical_scores = bm25.scores(query_tokens)
 
         q_emb = embed_text(query)
-        dense_scores = [cosine_similarity(q_emb, r["embedding"]) for r in records]
+        # A stored index built by a different embedding backend has a different
+        # width, and cosine_similarity would quietly return 0.0 for every chunk
+        # - hybrid search would silently become pure BM25. Surface it instead.
+        stale = bool(records) and len(records[0].get("embedding") or []) != len(q_emb)
+        dense_scores = ([0.0] * len(records) if stale
+                        else [cosine_similarity(q_emb, r["embedding"]) for r in records])
 
         blended = retrieval.blend(lexical_scores, dense_scores)
 
@@ -135,10 +198,14 @@ class _HybridSearchMixin:
             item["score"] = round(score * _heading_boost(query_tokens, rec), 4)
             item["lexical_score"] = round(lex, 4)
             item["dense_score"] = round(dense, 4)
+            if stale:
+                item["dense_stage"] = "disabled - index built by a different embedding backend"
             scored.append(item)
 
-        scored.sort(key=lambda r: r["score"], reverse=True)
-        top = scored[:k]
+        order = sorted(range(len(scored)), key=lambda i: scored[i]["score"], reverse=True)
+        selected = _mmr_select(order, scored, records, k,
+                               config.RETRIEVAL_MMR_LAMBDA, stale)
+        top = [scored[i] for i in selected]
         # Drop chunks with no lexical signal at all when a stronger match
         # exists; prevents unrelated policies padding the grounding context.
         if top and top[0]["lexical_score"] > 0:
@@ -168,7 +235,11 @@ class LocalVectorStore(_HybridSearchMixin):
 
     def add_document(self, doc_id: str, source: str, text: str,
                      provenance: str = "undeclared"):
-        for c in chunk_document(text, doc_id):
+        chunks = chunk_document(text, doc_id)
+        if not chunks:
+            return
+        vectors = embed_texts([c["search_text"] for c in chunks])
+        for c, vector in zip(chunks, vectors):
             self.records.append({
                 "id": str(uuid.uuid4()),
                 "doc_id": doc_id,
@@ -178,9 +249,20 @@ class LocalVectorStore(_HybridSearchMixin):
                 "provenance": provenance,
                 "text": c["text"],
                 "search_text": c["search_text"],
-                "embedding": embed_text(c["search_text"]),
+                "embedding": vector,
             })
         self._persist()
+
+    def index_dimension(self) -> Optional[int]:
+        if not self.records:
+            return None
+        return len(self.records[0].get("embedding") or [])
+
+    def is_stale(self) -> bool:
+        """True when the persisted vectors were produced by a different
+        embedding backend than the one now active."""
+        stored = self.index_dimension()
+        return stored is not None and stored != embeddings_module.dimension()
 
     def similarity_search(self, query: str, k: int = 4) -> List[Dict]:
         return self._rank(self.records, query, k)
@@ -191,14 +273,20 @@ class LocalVectorStore(_HybridSearchMixin):
         for r in self.records:
             key = r.get("provenance", "undeclared")
             provenance[key] = provenance.get(key, 0) + 1
-        return {
+        stats = {
             "documents": len(docs),
             "chunks": len(self.records),
             "chunks_by_provenance": provenance,
             "backend": "local JSON index (hybrid BM25 + dense)",
-            "embedding_dimension": config.EMBEDDING_DIMENSIONS,
+            "embedding_dimension": self.index_dimension() or embeddings_module.dimension(),
             "embedding_provider": provider_name(),
+            "embedding": embeddings_module.describe(),
         }
+        if self.is_stale():
+            stats["index_status"] = ("stale - built with a "
+                                     f"{self.index_dimension()}-dimension backend, "
+                                     f"now running {provider_name()}; re-index required")
+        return stats
 
 
 class MongoVectorStore(_HybridSearchMixin):
@@ -218,8 +306,12 @@ class MongoVectorStore(_HybridSearchMixin):
 
     def add_document(self, doc_id: str, source: str, text: str,
                      provenance: str = "undeclared"):
+        chunks = chunk_document(text, doc_id)
+        if not chunks:
+            return
+        vectors = embed_texts([c["search_text"] for c in chunks])
         docs = []
-        for c in chunk_document(text, doc_id):
+        for c, vector in zip(chunks, vectors):
             docs.append({
                 "doc_id": doc_id,
                 "source": source,
@@ -228,7 +320,7 @@ class MongoVectorStore(_HybridSearchMixin):
                 "provenance": provenance,
                 "text": c["text"],
                 "search_text": c["search_text"],
-                "embedding": embed_text(c["search_text"]),
+                "embedding": vector,
             })
         if docs:
             self.collection.insert_many(docs)
@@ -240,20 +332,37 @@ class MongoVectorStore(_HybridSearchMixin):
             records.append(rec)
         return self._rank(records, query, k)
 
+    def index_dimension(self) -> Optional[int]:
+        sample = self.collection.find_one({}, {"embedding": 1})
+        if not sample:
+            return None
+        return len(sample.get("embedding") or [])
+
+    def is_stale(self) -> bool:
+        stored = self.index_dimension()
+        return stored is not None and stored != embeddings_module.dimension()
+
     def stats(self) -> Dict:
         doc_ids = self.collection.distinct("doc_id")
         provenance: Dict[str, int] = {}
         for value in self.collection.distinct("provenance"):
             provenance[value or "undeclared"] = self.collection.count_documents(
                 {"provenance": value})
-        return {
+        stats = {
             "documents": len(doc_ids),
             "chunks": self.collection.count_documents({}),
             "chunks_by_provenance": provenance,
             "backend": "MongoDB Atlas Vector Search (HNSW, cosine)",
-            "embedding_dimension": config.EMBEDDING_DIMENSIONS,
+            "embedding_dimension": self.index_dimension() or embeddings_module.dimension(),
             "embedding_provider": provider_name(),
+            "embedding": embeddings_module.describe(),
         }
+        if self.is_stale():
+            stats["index_status"] = ("stale - the Atlas index is declared over "
+                                     f"{self.index_dimension()} dimensions but the active "
+                                     f"backend emits {embeddings_module.dimension()}; "
+                                     "re-index and redefine the search index")
+        return stats
 
 
 _store_instance = None
@@ -299,6 +408,12 @@ def load_provenance(directory: Optional[Path] = None) -> Dict[str, str]:
 def ingest_policy_directory(directory: Optional[Path] = None, rebuild: bool = False):
     directory = directory or config.POLICY_DIR
     store = get_vector_store()
+    # A saved index is only reusable if the active embedding backend is the one
+    # that built it. Switching backends (or losing one and degrading to the
+    # hashed floor) changes the vector width, so rebuild rather than serve a
+    # dense stage that scores zero on every chunk.
+    if not rebuild and getattr(store, "is_stale", lambda: False)():
+        rebuild = True
     if rebuild:
         store.clear()
     stats = store.stats()

@@ -10,14 +10,20 @@ extended with the enhancements required by `Corrections.docx`. UI theme: **red &
 ## What was built
 
 - **Agentic RAG pipeline**: policy manuals are chunked (500 tokens, 50-token overlap),
-  embedded (1,536-dim), and indexed in a cosine-similarity vector store (`vectorstore.py`).
-  Uses MongoDB Atlas Vector Search when `MONGODB_URI` is set, otherwise an equivalent
-  local JSON-backed index — same interface either way.
-- **Section-aware chunking + hybrid retrieval** (`retrieval.py`, `vectorstore.py`): each
-  policy is split on its numbered section headings, then ranked by a blend of BM25
-  lexical scoring (with aviation synonym expansion) and dense cosine similarity. This
-  is what lets the assistant answer with the *one* relevant clause instead of dumping a
-  whole document.
+  embedded with `sentence-transformers/all-MiniLM-L6-v2` (384-dim, CPU) — or OpenAI
+  `text-embedding-3-small` when a key is present — and indexed in a cosine-similarity
+  vector store (`vectorstore.py`). Uses MongoDB Atlas Vector Search when `MONGODB_URI`
+  is set, otherwise an equivalent local JSON-backed index — same interface either way.
+  If no embedding model is available the pipeline still runs on a hashed bag-of-words
+  vector, but it reports that it has degraded rather than presenting lexical matching
+  as semantic retrieval.
+- **Section-aware chunking + hybrid retrieval with MMR** (`retrieval.py`,
+  `vectorstore.py`): each policy is split on its numbered section headings, then ranked
+  by a blend of BM25 lexical scoring (with aviation synonym expansion) and dense cosine
+  similarity. Selection is diversified by Maximal Marginal Relevance, because a trained
+  encoder scores every paragraph of the closest document highly and would otherwise fill
+  all three context slots with near-duplicates from one policy. This is what lets the
+  assistant answer with the *one* relevant clause instead of dumping a whole document.
 - **Grounded answer composition** (`composer.py`): the answer is assembled from the
   specific policy sentences that address the question, with numeric-band matching (a
   passenger saying "my bag is 5kg over" is matched to the 1–10kg fee band) and a
@@ -168,6 +174,8 @@ Safaricom sandbox. Either way the transaction appears in the dashboard's audit t
 | `AVIATIONSTACK_API_KEY` | Live flight telemetry |
 | `DARAJA_CONSUMER_KEY/SECRET/PASSKEY/SHORTCODE` | Live Safaricom Daraja STK push |
 | `USD_TO_KES_RATE` | Indicative rate for settling dollar-published fees over M-Pesa (default 129.0; disclosed to the passenger, not a live FX feed) |
+| `LOCAL_EMBEDDING_MODEL`, `LOCAL_EMBEDDING_ENABLED` | Local sentence-transformer embeddings (default `all-MiniLM-L6-v2`); disable to force the hashed fallback |
+| `RETRIEVAL_MMR_LAMBDA` | Relevance/diversity trade-off in retrieval (default 0.8; 1.0 is plain top-k) |
 | `MONGODB_URI`, `MONGODB_DB_NAME` | MongoDB Atlas Vector Search backend |
 
 Values are read from a `.env` file at the repository root (see `.env.example`), falling

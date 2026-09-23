@@ -7,3 +7,10 @@ scikit-learn>=1.5.2
 joblib>=1.4.2
 numpy>=2.1.1
 python-multipart>=0.0.9
+
+# Local semantic embeddings (all-MiniLM-L6-v2, 384d, CPU). Without this the
+# pipeline still runs, but retrieval degrades to a hashed bag-of-words vector
+# that cannot match "luggage" to "baggage". Install the CPU-only torch build:
+#   pip install --index-url https://download.pytorch.org/whl/cpu \
+#       --extra-index-url https://pypi.org/simple sentence-transformers
+sentence-transformers>=3.0

@@ -137,6 +137,29 @@
     if (vs.embedding_provider) {
       vectorstore.appendChild(kvRow("Embedding provider", vs.embedding_provider));
     }
+    var emb = vs.embedding || {};
+    if (emb.semantic === false) {
+      vectorstore.appendChild(kvRow("Retrieval mode",
+        "lexical only - no semantic embedding model is active"));
+    }
+    if (emb.degraded_reason) {
+      vectorstore.appendChild(kvRow("Embedding fallback reason", emb.degraded_reason));
+    }
+    if (vs.index_status) {
+      vectorstore.appendChild(kvRow("Index status", vs.index_status));
+    }
+    // Corpus composition is disclosed here so the dashboard states how much of
+    // the indexed knowledge base is published airline policy and how much is
+    // prototype-authored, rather than leaving that to the documentation.
+    var prov = vs.chunks_by_provenance;
+    if (prov) {
+      Object.keys(prov).sort().forEach(function (key) {
+        var label = key.replace(/_/g, " ");
+        var pct = vs.chunks ? Math.round((prov[key] / vs.chunks) * 100) : 0;
+        vectorstore.appendChild(kvRow("Chunks - " + label,
+          prov[key] + " (" + pct + "%)"));
+      });
+    }
 
     txBody.innerHTML = "";
     var recent = tx.recent || [];

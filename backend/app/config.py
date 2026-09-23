@@ -52,7 +52,30 @@ APP_DB_PATH = DATA_DIR / "kq_propel.db"
 # --- RAG chunking parameters (per proposal: 500 token chunks, 50 token overlap) ---
 CHUNK_SIZE_TOKENS = 500
 CHUNK_OVERLAP_TOKENS = 50
-EMBEDDING_DIMENSIONS = 1536
+
+# Dimension of the hashed fallback embedding only. The real providers declare
+# their own width (OpenAI 1536, all-MiniLM-L6-v2 384), so nothing should read
+# this constant to describe the active backend - ask embeddings.dimension().
+HASHED_EMBEDDING_DIMENSIONS = 1536
+EMBEDDING_DIMENSIONS = HASHED_EMBEDDING_DIMENSIONS  # backwards-compatible alias
+
+# --- Local sentence-transformer embeddings ---
+# Used when no OpenAI key is present. This is the offline semantic backend; if
+# the package or the weights are unavailable it degrades to the hashed
+# embedding, and the degradation is reported rather than hidden.
+LOCAL_EMBEDDING_MODEL = os.getenv("LOCAL_EMBEDDING_MODEL",
+                                  "sentence-transformers/all-MiniLM-L6-v2").strip()
+LOCAL_EMBEDDING_ENABLED = os.getenv("LOCAL_EMBEDDING_ENABLED", "true").strip().lower() \
+    not in {"0", "false", "no", "off"}
+
+# --- Retrieval diversification ---
+# Maximal Marginal Relevance trade-off: 1.0 is plain top-k, lower values buy
+# diversity at the cost of raw relevance. 0.8 is the lightest setting that
+# recovers the recall the sentence-transformer backend lost to near-duplicate
+# chunks (any-expected-document@3 back from 0.867 to 0.900) and it costs 0.002
+# of context relevance. Pushing further down buys nothing at k=3 until 0.4,
+# where answer relevance itself starts to fall. See tools/tune_retrieval.py.
+RETRIEVAL_MMR_LAMBDA = float(os.getenv("RETRIEVAL_MMR_LAMBDA", "0.8"))
 
 # --- LLM providers ---
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
