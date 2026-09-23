@@ -1,0 +1,20 @@
+Kenya Airways Payment Methods
+
+Section 1: Mobile Money Acceptance
+Kenya Airways accepts mobile money payment for bookings made in Kenya and in Tanzania. The
+accepted services are M-Pesa, Airtel Money and Equitel in Kenya, and Vodacom M-Pesa, MTN Mobile
+Money and Tigo Pesa in Tanzania.
+
+Section 2: How Mobile Money Payment Is Completed
+Mobile money payment is completed inside the online booking flow, which hands off to the
+airline's payment gateway. Kenya Airways does not publish a paybill or till number for manual
+entry, so a guest cannot pay by initiating a transfer from their handset independently of the
+booking.
+
+Section 3: Ticket Issue After Payment
+Once payment has been confirmed, the electronic ticket is issued and sent to the guest by
+email.
+
+Section 4: Card Payment
+Local and international credit and debit cards are accepted. Refunds to a card are returned to
+the original card and are processed within 21 to 30 business days.

@@ -48,14 +48,24 @@ _SYNONYMS = {
     "delay": ["delayed", "delay"],
     "delayed": ["delay"],
     "late": ["delay", "delayed"],
+    "latest": ["close", "closes", "closing", "counters", "checkin", "before"],
     "compensation": ["compensation", "entitled", "voucher"],
     "pay": ["payment", "pay", "mpesa"],
-    "mpesa": ["m-pesa", "mpesa", "payment", "stk"],
+    "mpesa": ["m-pesa", "mpesa", "payment", "mobile"],
     "refund": ["refund", "refundable"],
     "checkin": ["check-in", "checkin"],
-    "check": ["check-in", "checkin"],
+    "check": ["checked", "allowance"],
     "lost": ["lost", "delayed", "missing", "traced"],
-    "missing": ["lost", "traced", "irregularity"],
+    "missing": ["lost", "traced", "worldtracer", "file"],
+    # Kenya Airways does not use the industry phrase "Property Irregularity
+    # Report"; it issues a "file reference number". Guests ask using the
+    # industry phrase, so it is aliased onto the airline's own vocabulary.
+    "irregularity": ["file", "reference", "worldtracer", "tracing"],
+    "pir": ["file", "reference", "worldtracer", "tracing"],
+    "property": ["file", "reference", "tracing"],
+    "cabin": ["hand", "cabin", "carry-on"],
+    "carry": ["hand", "cabin"],
+    "hand": ["cabin", "hand"],
     "document": ["passport", "visa", "documentation"],
     "documents": ["passport", "visa", "documentation"],
     "passport": ["passport", "documentation"],
@@ -69,10 +79,11 @@ _SYNONYMS = {
     "change": ["change", "rebooking", "changes"],
     "reschedule": ["rebooking", "change"],
     # Duration phrasing ("how long does X take?") must reach the policy
-    # sections that state processing timelines.
+    # sections that state processing timelines. "take" on its own is the
+    # ordinary verb ("can I take my bicycle?") and must not be expanded, or
+    # every carriage question is pulled toward refund processing times; the
+    # duration reading is recognised as a phrase instead.
     "long": ["processing", "processed", "timelines", "within", "business", "days"],
-    "take": ["processed", "processing", "within", "timelines"],
-    "takes": ["processed", "processing", "within", "timelines"],
     "duration": ["processing", "timelines", "within"],
     "timeline": ["timelines", "processing", "within"],
     "timelines": ["processing", "within"],
@@ -86,11 +97,25 @@ _SYNONYMS = {
 _PHRASE_REWRITES = [
     (re.compile(r"\btak(?:e|es|ing)[\s-]?off\b", re.IGNORECASE), "departure"),
     (re.compile(r"\btake[\s-]?off\b", re.IGNORECASE), "departure"),
-    (re.compile(r"\bcheck[\s-]?in\b", re.IGNORECASE), "checkin"),
+    # "check in" is the airport process, but "how many bags can I check in
+    # Economy" uses "check" as a plain verb with "in Economy" as its adjunct.
+    # Gluing that into "checkin" sent every checked-baggage question to the
+    # check-in policy. Hyphenated and closed forms are unambiguous; the spaced
+    # form is only rewritten when a cabin or quantity noun does not follow.
+    (re.compile(r"\bcheck[-]in\b", re.IGNORECASE), "checkin"),
+    (re.compile(r"\bcheck\s+in\b(?!\s+(?:economy|business|first|premier|"
+                r"cabin|coach|total|the\s+hold))", re.IGNORECASE), "checkin"),
     (re.compile(r"\bm[\s-]?pesa\b", re.IGNORECASE), "mpesa"),
     (re.compile(r"\bcash\s+back\b", re.IGNORECASE), "refund"),
     (re.compile(r"\bcarry[\s-]?on\b", re.IGNORECASE), "cabin"),
     (re.compile(r"\bno[\s-]?show\b", re.IGNORECASE), "noshow"),
+    # "how late can I arrive" asks about counter closing times, not about a
+    # delayed flight, so it must not reach the "late" -> delay synonyms.
+    (re.compile(r"\bhow\s+late\b", re.IGNORECASE), "latest"),
+    # Only the duration reading of "take" maps to processing timelines.
+    (re.compile(r"\b(?:how\s+long\s+)?(?:does|do|will|to)\s+"
+                r"(?:\w+\s+){0,3}?tak(?:e|es)\b(?=\s*(?:\?|to\b|for\b|$))",
+                re.IGNORECASE), "processing timelines within"),
 ]
 
 
@@ -106,6 +131,24 @@ _INTERROGATIVE_RE = re.compile(
     r"i\s+need|i\s+want|help\s+me)\b", re.IGNORECASE)
 
 
+def _is_emotional(clause: str) -> bool:
+    """True when a clause is venting rather than carrying request detail.
+
+    Imported lazily: retrieval is used by tooling that must not pay the cost of
+    loading the classifier, and only multi-clause messages reach this path.
+    """
+    try:
+        from app import sentiment
+    except Exception:
+        return False
+    try:
+        result = sentiment.classify_frustration(clause)
+    except Exception:
+        return False
+    return result.get("label") == "frustrated" and \
+        float(result.get("frustration_score") or 0.0) >= 0.55
+
+
 def focus_query(text: str) -> str:
     """Narrows a message to the clause that actually carries the request.
 
@@ -114,18 +157,31 @@ def focus_query(text: str) -> str:
     words are real tokens that pull retrieval toward delay and compensation
     sections. The emotional prefix is what the frustration classifier is for;
     retrieval should see only the request itself.
+
+    Not every preceding clause is emotional, though. "I bought my ticket from a
+    travel agent. Can you refund me directly?" carries its subject in the first
+    clause, and discarding it sent the question to whichever refund section
+    happened to rank first. The frustration classifier - the component that
+    already exists to tell venting from content - decides which clauses are
+    dropped, rather than position alone.
     """
     text = (text or "").strip()
     clauses = [c.strip() for c in re.split(r"(?<=[.!?])\s+|\n+", text) if c.strip()]
     if len(clauses) < 2:
         return text
 
-    questions = [c for c in clauses if _INTERROGATIVE_RE.search(c)]
-    if not questions:
+    question_idx = [i for i, c in enumerate(clauses) if _INTERROGATIVE_RE.search(c)]
+    if not question_idx:
         return text
     # The request is nearly always the last thing asked.
-    focused = questions[-1]
-    return focused if len(tokenize(focused)) >= 2 else text
+    focused_i = question_idx[-1]
+    focused = clauses[focused_i]
+    if len(tokenize(focused)) < 2:
+        return text
+
+    kept = [c for i, c in enumerate(clauses)
+            if i == focused_i or not _is_emotional(c)]
+    return " ".join(kept) if len(kept) > 1 else focused
 
 
 def tokenize(text: str) -> List[str]:

@@ -11,9 +11,10 @@ supporting the groundedness / zero-hallucination goals.
 """
 import re
 import uuid
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
-from app import aviationstack, composer, daraja, database, evaluation, retrieval, sentiment
+from app import (aviationstack, composer, config, daraja, database, evaluation,
+                  retrieval, sentiment)
 from app.llm import get_primary_llm
 from app.vectorstore import get_vector_store
 
@@ -64,11 +65,22 @@ _FEE_TOPIC_RE = re.compile(r"\b(fee|fees|charge|charges|cost|costs|price|how\s+m
 # Whether a quoted amount is money the passenger *owes* (payable) or money owed
 # *to* them (an entitlement). Only the former may be offered for settlement.
 _PAYABLE_RE = re.compile(r"\b(fee|fees|charge|charged|charges|surcharge|payable|"
-                          r"excess|supplementary|incur|incurs|settle|settled)\b", re.IGNORECASE)
+                          r"cost|costs|costing|excess|supplementary|incur|incurs|"
+                          r"settle|settled)\b", re.IGNORECASE)
 _ENTITLEMENT_RE = re.compile(r"\b(entitled|entitlement|voucher|compensation|compensated|"
                               r"refund|refunds|refunded|reimburse|reimbursed|claim|"
                               r"allowance\s+of|credit|deducted|less\s+any)\b", re.IGNORECASE)
-_KSH_RE = re.compile(r"Ksh\s?([\d,]+)")
+# Published Kenya Airways fees are stated in US dollars, and some fee tables
+# carry no currency label at all. An amount may only be pushed to M-Pesa when
+# the source states Kenyan shillings: Daraja settles in KES, so treating a
+# "USD 75" fee as 75 shillings - or converting it at an invented rate - would
+# charge the passenger an amount no source supports.
+_MONEY_RE = re.compile(
+    r"Ksh\s?([\d,]+)"
+    r"|(?:USD|US\$|\$)\s?([\d,]+)"
+    r"|([\d,]+)\s+US\s+dollars",
+    re.IGNORECASE,
+)
 
 # Departure/arrival *times* are live operational data, not policy. The agent
 # has a telemetry tool for this, but it is keyed on a flight number - without
@@ -180,12 +192,20 @@ def _normalize_phone(raw_match) -> str:
     return "254" + raw_match.group(1)
 
 
-def _distinct_amounts(text: str) -> List[float]:
-    seen = []
-    for raw in _KSH_RE.findall(text or ""):
+def _distinct_amounts(text: str) -> List[Tuple[float, str]]:
+    """Returns each distinct money amount in the text with its stated currency.
+
+    Unlabelled figures are deliberately ignored. The published heavy-bag table
+    gives bare numbers with no currency, and guessing one would put an
+    unsupported amount in front of the passenger.
+    """
+    seen: List[Tuple[float, str]] = []
+    for kes, usd_prefix, usd_suffix in _MONEY_RE.findall(text or ""):
+        raw = kes or usd_prefix or usd_suffix
+        currency = "KES" if kes else "USD"
         value = float(raw.replace(",", ""))
-        if value not in seen:
-            seen.append(value)
+        if (value, currency) not in seen:
+            seen.append((value, currency))
     return seen
 
 
@@ -239,6 +259,29 @@ def _offer_payment_message(amount: float) -> str:
     )
 
 
+def _to_kes(amount: float, currency: str) -> Tuple[float, Optional[str]]:
+    """Converts a fee into the shillings Daraja settles in.
+
+    Returns the shilling amount and, when a conversion happened, the sentence
+    disclosing it. Kenya Airways publishes these fees in dollars and states no
+    exchange rate, so the rate used is the prototype's own declared constant -
+    the passenger is told the rate rather than shown a shilling figure that
+    appears to come from the airline.
+    """
+    if currency == "KES":
+        return amount, None
+    rate = config.USD_TO_KES_RATE
+    converted = round(amount * rate)
+    note = (
+        f"The published charge is USD {amount:,.0f}. Kenya Airways does not publish a "
+        f"shilling equivalent, so I've converted it at this assistant's configured "
+        f"indicative rate of {rate:,.2f} KES per USD, which gives Ksh {converted:,.0f}. "
+        f"That rate is a prototype setting, not a live exchange rate - the amount your "
+        f"bank or the airline finally applies may differ."
+    )
+    return float(converted), note
+
+
 def _handle_pending_payment(session_id: str, message: str, pending: Dict,
                              trace: List[Dict], sentiment_result: Dict) -> Optional[Dict]:
     """Continues a payment conversation that is already in progress. Returns a
@@ -279,26 +322,85 @@ def _handle_pending_payment(session_id: str, message: str, pending: Dict,
     return None
 
 
-def _payable_fee(answer: str, chunks: List[Dict]) -> Optional[float]:
-    """Returns the single fee the passenger owes, if the answer quotes exactly
-    one and it is genuinely a charge rather than money owed to them.
+def _amount_scopes(sentence: str) -> List[Tuple[set, Tuple[float, str]]]:
+    """Splits a fee sentence into one scope per amount.
+
+    Each amount's scope runs from the amount to the next one, so the qualifying
+    words travel with the figure they qualify. Splitting on conjunctions
+    instead leaves the sentence subject attached to the first amount only -
+    in "correcting a name costs 15 USD on a domestic booking and 75 USD on an
+    international booking", the word "name" would then appear to distinguish
+    the 15 from the 75.
+    """
+    matches = list(_MONEY_RE.finditer(sentence))
+    scopes: List[Tuple[set, Tuple[float, str]]] = []
+    for i, match in enumerate(matches):
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(sentence)
+        span = sentence[match.start():end]
+        amounts = _distinct_amounts(span)
+        if len(amounts) == 1:
+            scopes.append((set(retrieval.tokenize(span)), amounts[0]))
+    return scopes
+
+
+def _select_amount_by_context(sentence: str, message: str) -> Optional[Tuple[float, str]]:
+    """Picks the fee that matches the passenger's stated situation.
+
+    Published fee sentences almost always quote several figures at once -
+    "costs 15 US dollars on a domestic booking and 75 US dollars on an
+    international booking". Refusing to act on any of them makes the fee
+    unusable; guessing between them could charge the wrong one. The figure
+    whose qualifying words the passenger's own message matches is chosen, and
+    only when exactly one matches, so an unspecific request still declines.
+    """
+    context = set(retrieval.tokenize(message))
+    if not context:
+        return None
+
+    scopes = _amount_scopes(sentence)
+    if len(scopes) < 2:
+        return scopes[0][1] if scopes else None
+
+    shared = set.intersection(*(tokens for tokens, _ in scopes))
+    best: List[Tuple[int, Tuple[float, str]]] = []
+    for tokens, amount in scopes:
+        overlap = len(context & (tokens - shared))
+        if overlap:
+            best.append((overlap, amount))
+
+    if not best:
+        return None
+    best.sort(key=lambda b: b[0], reverse=True)
+    if len(best) > 1 and best[0][0] == best[1][0]:
+        return None  # genuinely ambiguous - do not guess
+    return best[0][1]
+
+
+def _payable_fee(answer: str, chunks: List[Dict],
+                  message: str = "") -> Optional[Tuple[float, str]]:
+    """Returns the single fee the passenger owes and the currency it is stated
+    in, if the answer quotes exactly one and it is genuinely a charge rather
+    than money owed to them.
 
     Whether a payment can be offered depends on what the *answer* says, not on
     how the question happened to be phrased - "I have an overweight baggage by
     10kg" contains no fee words yet clearly warrants an offer to settle.
     """
     amounts = _distinct_amounts(answer)
-    if len(amounts) != 1:
+    if not amounts:
         return None
 
-    sentence = next((s for s in re.split(r"(?<=[.!?])\s+", answer) if _KSH_RE.search(s)), "")
+    sentence = next((s for s in re.split(r"(?<=[.!?])\s+", answer) if _MONEY_RE.search(s)), "")
     if _ENTITLEMENT_RE.search(sentence):
         return None
 
     heading = chunks[0].get("section", "") if chunks else ""
-    if _PAYABLE_RE.search(sentence) or _PAYABLE_RE.search(heading):
+    if not (_PAYABLE_RE.search(sentence) or _PAYABLE_RE.search(heading)):
+        return None
+
+    if len(amounts) == 1:
         return amounts[0]
-    return None
+    return _select_amount_by_context(sentence, message)
 
 
 def _apply_empathy(answer: str, sentiment_result: Dict) -> str:
@@ -427,6 +529,7 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
         "input": query,
         "observation": [
             {"source": r.get("source"), "section": r.get("section"),
+             "provenance": r.get("provenance", "undeclared"),
              "score": r.get("score"), "excerpt": r["text"][:160]}
             for r in retrieved
         ],
@@ -521,18 +624,42 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
         # A grounded, payable fee is an opportunity to settle it there and
         # then, which is the localized transaction-execution capability the
         # proposal is built around.
-        fee = _payable_fee(answer, retrieved)
+        fee = _payable_fee(answer, retrieved, message)
         if fee is not None:
-            database.set_pending_payment(session_id, fee,
-                                          "KQ-Propel ancillary fee settlement", "offered")
-            answer += _offer_payment_message(fee)
+            amount, currency = fee
+            kes_amount, conversion_note = _to_kes(amount, currency)
+            description = ("KQ-Propel ancillary fee settlement"
+                           if conversion_note is None else
+                           f"KQ-Propel ancillary fee settlement (USD {amount:,.0f} converted "
+                           f"at {config.USD_TO_KES_RATE:,.2f} KES/USD)")
+            database.set_pending_payment(session_id, kes_amount, description, "offered")
+            if conversion_note:
+                answer += "\n\n" + conversion_note
+            answer += _offer_payment_message(kes_amount)
             trace.append({"step": "thought",
-                           "content": (f"Grounded payable fee of Ksh {fee:,.0f} identified - "
-                                       f"offering to settle it by M-Pesa.")})
+                           "content": (
+                               f"Grounded payable fee of Ksh {kes_amount:,.0f} identified - "
+                               f"offering to settle it by M-Pesa."
+                               if conversion_note is None else
+                               f"Grounded payable fee of USD {amount:,.0f} identified. Daraja "
+                               f"settles in shillings, so it was converted at the declared "
+                               f"prototype rate of {config.USD_TO_KES_RATE:,.2f} KES/USD to "
+                               f"Ksh {kes_amount:,.0f}; the rate is disclosed in the reply.")})
 
     # Empathy framing wraps the completed answer so the acknowledgement always
     # comes first and the escalation offer always comes last.
     answer = _apply_empathy(answer, sentiment_result)
+
+    # Disclose prototype-authored evidence regardless of which generator
+    # produced the answer. The offline composer adds this itself; a live LLM
+    # would not, so the check is repeated here against the cited sections.
+    if composer.SYNTHETIC_SOURCE_NOTE not in answer:
+        cited_synthetic = [
+            r for r in retrieved
+            if r.get("provenance") == "synthetic" and (r.get("section") or "") in answer
+        ]
+        if cited_synthetic:
+            answer += "\n\n" + composer.SYNTHETIC_SOURCE_NOTE
 
     trace.append({"step": "final_answer", "model": llm.name, "content": answer})
 

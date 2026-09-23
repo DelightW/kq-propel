@@ -166,7 +166,8 @@ class LocalVectorStore(_HybridSearchMixin):
         self.records = []
         self._persist()
 
-    def add_document(self, doc_id: str, source: str, text: str):
+    def add_document(self, doc_id: str, source: str, text: str,
+                     provenance: str = "undeclared"):
         for c in chunk_document(text, doc_id):
             self.records.append({
                 "id": str(uuid.uuid4()),
@@ -174,6 +175,7 @@ class LocalVectorStore(_HybridSearchMixin):
                 "source": source,
                 "section": c["section"],
                 "doc_title": c["doc_title"],
+                "provenance": provenance,
                 "text": c["text"],
                 "search_text": c["search_text"],
                 "embedding": embed_text(c["search_text"]),
@@ -185,9 +187,14 @@ class LocalVectorStore(_HybridSearchMixin):
 
     def stats(self) -> Dict:
         docs = {r["doc_id"] for r in self.records}
+        provenance: Dict[str, int] = {}
+        for r in self.records:
+            key = r.get("provenance", "undeclared")
+            provenance[key] = provenance.get(key, 0) + 1
         return {
             "documents": len(docs),
             "chunks": len(self.records),
+            "chunks_by_provenance": provenance,
             "backend": "local JSON index (hybrid BM25 + dense)",
             "embedding_dimension": config.EMBEDDING_DIMENSIONS,
             "embedding_provider": provider_name(),
@@ -209,7 +216,8 @@ class MongoVectorStore(_HybridSearchMixin):
     def clear(self):
         self.collection.delete_many({})
 
-    def add_document(self, doc_id: str, source: str, text: str):
+    def add_document(self, doc_id: str, source: str, text: str,
+                     provenance: str = "undeclared"):
         docs = []
         for c in chunk_document(text, doc_id):
             docs.append({
@@ -217,6 +225,7 @@ class MongoVectorStore(_HybridSearchMixin):
                 "source": source,
                 "section": c["section"],
                 "doc_title": c["doc_title"],
+                "provenance": provenance,
                 "text": c["text"],
                 "search_text": c["search_text"],
                 "embedding": embed_text(c["search_text"]),
@@ -233,9 +242,14 @@ class MongoVectorStore(_HybridSearchMixin):
 
     def stats(self) -> Dict:
         doc_ids = self.collection.distinct("doc_id")
+        provenance: Dict[str, int] = {}
+        for value in self.collection.distinct("provenance"):
+            provenance[value or "undeclared"] = self.collection.count_documents(
+                {"provenance": value})
         return {
             "documents": len(doc_ids),
             "chunks": self.collection.count_documents({}),
+            "chunks_by_provenance": provenance,
             "backend": "MongoDB Atlas Vector Search (HNSW, cosine)",
             "embedding_dimension": config.EMBEDDING_DIMENSIONS,
             "embedding_provider": provider_name(),
@@ -259,6 +273,29 @@ def get_vector_store():
     return _store_instance
 
 
+def load_provenance(directory: Optional[Path] = None) -> Dict[str, str]:
+    """Read the corpus provenance manifest.
+
+    The manifest is deliberately a sidecar JSON file rather than a header inside
+    each .txt: ingestion treats the leading lines of a document as a retrievable
+    intro chunk, so provenance written into the body would be returned to guests
+    as if it were policy.
+    """
+    directory = directory or config.POLICY_DIR
+    manifest_path = directory / "provenance.json"
+    if not manifest_path.exists():
+        return {}
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+    return {
+        entry["file"]: entry.get("provenance", "undeclared")
+        for entry in manifest.get("documents", [])
+        if "file" in entry
+    }
+
+
 def ingest_policy_directory(directory: Optional[Path] = None, rebuild: bool = False):
     directory = directory or config.POLICY_DIR
     store = get_vector_store()
@@ -267,7 +304,9 @@ def ingest_policy_directory(directory: Optional[Path] = None, rebuild: bool = Fa
     stats = store.stats()
     if stats["chunks"] > 0 and not rebuild:
         return stats
+    provenance = load_provenance(directory)
     for file_path in sorted(directory.glob("*.txt")):
         store.add_document(doc_id=file_path.stem, source=file_path.name,
-                            text=file_path.read_text(encoding="utf-8"))
+                            text=file_path.read_text(encoding="utf-8"),
+                            provenance=provenance.get(file_path.name, "undeclared"))
     return store.stats()

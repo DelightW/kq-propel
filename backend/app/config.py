@@ -11,6 +11,37 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
+ENV_PATH = BASE_DIR.parent / ".env"
+
+
+def _load_env_file(path: Path = ENV_PATH) -> None:
+    """Loads .env before any credential is read.
+
+    Without this, every `os.getenv` below returned the empty string no matter
+    what .env contained, so the documented configuration mechanism was inert
+    and a supplied API key silently produced sandbox data. Existing environment
+    variables take precedence, so a real deployment can override the file.
+    """
+    if not path.exists():
+        return
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(path, override=False)
+        return
+    except ImportError:
+        pass
+    # Dependency-free fallback, so configuration never depends on an optional
+    # package being present.
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+_load_env_file()
+
 POLICY_DIR = DATA_DIR / "policies"
 EVAL_DATASET_PATH = DATA_DIR / "eval" / "evaluation_dataset.json"
 SENTIMENT_DATASET_PATH = DATA_DIR / "sentiment_dataset" / "frustration_dataset.csv"
@@ -42,6 +73,16 @@ DARAJA_CONSUMER_SECRET = os.getenv("DARAJA_CONSUMER_SECRET", "").strip()
 DARAJA_SHORTCODE = os.getenv("DARAJA_SHORTCODE", "174379")
 DARAJA_PASSKEY = os.getenv("DARAJA_PASSKEY", "").strip()
 DARAJA_SANDBOX = os.getenv("DARAJA_SANDBOX", "true").lower() != "false"
+
+# Kenya Airways publishes most ancillary fees in US dollars, but Daraja settles
+# in Kenyan shillings. To let the STK push demonstrate end-to-end settlement on
+# a dollar-denominated fee, the prototype converts at this rate.
+#
+# This is a prototype convenience, not a live FX feed and not a Kenya Airways
+# published figure. It is declared here rather than buried in the agent so the
+# assumption is visible and overridable, and every converted amount the agent
+# quotes states the rate it used.
+USD_TO_KES_RATE = float(os.getenv("USD_TO_KES_RATE", "129.0"))
 
 # --- MongoDB Atlas Vector Search (production target); falls back to a local
 #     JSON-persisted cosine-similarity index when no connection string is supplied ---

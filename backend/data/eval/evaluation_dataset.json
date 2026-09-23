@@ -1,62 +1,182 @@
 [
   {
     "id": "q1",
-    "query": "My flight is delayed by 3 hours, my bag is 5kg over the limit, what is the exact fee and how do I pay?",
-    "expected_topics": ["delay_compensation_policy", "baggage_policy"],
-    "expected_keywords": ["1,500", "5,000", "M-Pesa", "STK"]
+    "query": "How many bags can I check in Economy on a flight from Nairobi to London?",
+    "expected_topics": ["baggage_allowance_policy"],
+    "expected_keywords": ["two pieces", "23kg"]
   },
   {
     "id": "q2",
-    "query": "How much is the overweight baggage fee for a bag that is 15kg over the limit?",
-    "expected_topics": ["baggage_policy"],
-    "expected_keywords": ["9,000"]
+    "query": "What is the weight limit for hand baggage in Economy on a flight to the United States?",
+    "expected_topics": ["hand_baggage_policy"],
+    "expected_keywords": ["12kg"]
   },
   {
     "id": "q3",
-    "query": "What compensation am I entitled to if my flight is delayed overnight?",
-    "expected_topics": ["delay_compensation_policy"],
-    "expected_keywords": ["hotel", "meal"]
+    "query": "How much is the heavy bag fee for an extra bag to Europe if I am starting my journey in Nairobi?",
+    "expected_topics": ["excess_baggage_fees_policy"],
+    "expected_keywords": ["75 for Europe", "no currency label"]
   },
   {
     "id": "q4",
-    "query": "Can I get a refund if my non-refundable ticket flight was cancelled by the airline?",
-    "expected_topics": ["refund_policy"],
-    "expected_keywords": ["full refund", "no service fee"]
+    "query": "My bag never arrived in Amsterdam. What can I claim after a day of waiting?",
+    "expected_topics": ["delayed_baggage_policy"],
+    "expected_keywords": ["24 hours", "100 US dollars", "file reference number"]
   },
   {
     "id": "q5",
-    "query": "What time does online check-in close for an international flight?",
+    "query": "What time does online check-in close?",
     "expected_topics": ["checkin_policy"],
-    "expected_keywords": ["90 minutes"]
+    "expected_keywords": ["one hour before departure"]
   },
   {
     "id": "q6",
-    "query": "My baggage has been missing for two days, what allowance can I claim?",
-    "expected_topics": ["baggage_policy"],
-    "expected_keywords": ["2,000", "Property Irregularity Report"]
+    "query": "How long will my refund take to come back to my card?",
+    "expected_topics": ["refund_policy"],
+    "expected_keywords": ["21 to 30 business days", "original form of payment"]
   },
   {
     "id": "q7",
-    "query": "How long does it take to get a refund back to my M-Pesa account?",
-    "expected_topics": ["refund_policy"],
-    "expected_keywords": ["3 to 5 business days"]
+    "query": "I want to bring my golf clubs from Nairobi to Paris. What will that cost?",
+    "expected_topics": ["special_baggage_policy"],
+    "expected_keywords": ["110", "doubled"]
   },
   {
     "id": "q8",
-    "query": "I need to travel with my golf clubs, is there an extra fee?",
-    "expected_topics": ["baggage_policy"],
-    "expected_keywords": ["3,500"]
+    "query": "Can I pay for my ticket with M-Pesa?",
+    "expected_topics": ["payment_methods_policy"],
+    "expected_keywords": ["M-Pesa", "paybill"]
   },
   {
     "id": "q9",
-    "query": "What documents do I need to bring to the airport for an international flight?",
+    "query": "How late can I arrive at the airport for a domestic flight to Mombasa?",
     "expected_topics": ["checkin_policy"],
-    "expected_keywords": ["passport", "visa"]
+    "expected_keywords": ["one and a half hours", "30 minutes"]
   },
   {
     "id": "q10",
-    "query": "Is compensation offered if my flight is delayed due to bad weather?",
-    "expected_topics": ["delay_compensation_policy"],
-    "expected_keywords": ["force majeure"]
+    "query": "My surname is spelled wrong by two letters on an international ticket. What do I pay to fix it?",
+    "expected_topics": ["refund_policy"],
+    "expected_keywords": ["three characters", "75 US dollars"]
+  },
+  {
+    "id": "q11",
+    "query": "Can I take my electric bicycle on the plane?",
+    "expected_topics": ["special_baggage_policy"],
+    "expected_keywords": ["Electric bicycles are not accepted"]
+  },
+  {
+    "id": "q12",
+    "query": "I am a Gold member of Asante Rewards. Do I get any extra baggage?",
+    "expected_topics": ["baggage_allowance_policy"],
+    "expected_keywords": ["one extra checked piece", "23kg"]
+  },
+  {
+    "id": "q13",
+    "query": "My flight was delayed by nine hours and I gave up on travelling. Can I get my money back?",
+    "expected_topics": ["refund_policy"],
+    "expected_keywords": ["eight hours", "online refund form"]
+  },
+  {
+    "id": "q14",
+    "query": "What compensation does the airline pay for an overnight delay?",
+    "expected_topics": ["synthetic_delay_care_framework"],
+    "expected_keywords": ["synthetic", "hotel accommodation", "does not publish monetary compensation"]
+  },
+  {
+    "id": "q15",
+    "query": "How big can my cabin bag be?",
+    "expected_topics": ["hand_baggage_policy"],
+    "expected_keywords": ["55cm", "25cm", "35cm"]
+  },
+  {
+    "id": "q16",
+    "query": "I bought my ticket from a travel agent. Can you refund me directly?",
+    "expected_topics": ["refund_policy"],
+    "expected_keywords": ["travel agency", "cannot refund"]
+  },
+  {
+    "id": "q17",
+    "query": "Is there a weight limit on a wheelchair?",
+    "expected_topics": ["special_baggage_policy"],
+    "expected_keywords": ["No weight limitation"]
+  },
+  {
+    "id": "q18",
+    "query": "How do I trace a bag that did not arrive and who do I call?",
+    "expected_topics": ["delayed_baggage_policy"],
+    "expected_keywords": ["WorldTracer", "+254-20-3274747"]
+  },
+  {
+    "id": "q19",
+    "query": "I have a single suitcase weighing 35kg. Will you accept it at the counter?",
+    "expected_topics": ["baggage_allowance_policy"],
+    "expected_keywords": ["more than 32kg", "authorised in advance", "XBAG"]
+  },
+  {
+    "id": "q20",
+    "query": "How long do I have to put a baggage compensation claim in writing?",
+    "expected_topics": ["delayed_baggage_policy"],
+    "expected_keywords": ["seven days"]
+  },
+  {
+    "id": "q21",
+    "query": "What is my checked allowance on the domestic flight to Kisumu and what does an extra bag cost there?",
+    "expected_topics": ["baggage_allowance_policy", "excess_baggage_fees_policy"],
+    "expected_keywords": ["one piece", "Kisumu", "25 on domestic services"]
+  },
+  {
+    "id": "q22",
+    "query": "I am flying Business to London with two checked bags and two cabin bags. Is all of that within my allowance?",
+    "expected_topics": ["baggage_allowance_policy", "hand_baggage_policy"],
+    "expected_keywords": ["two pieces of up to 32kg", "two cabin pieces", "18kg"]
+  },
+  {
+    "id": "q23",
+    "query": "My bag is delayed and I paid by M-Pesa. What allowance do I get and how would any refund reach me?",
+    "expected_topics": ["delayed_baggage_policy", "payment_methods_policy"],
+    "expected_keywords": ["100 US dollars", "original card", "21 to 30 business days"]
+  },
+  {
+    "id": "q24",
+    "query": "I need to change my international booking and correct three letters of my name at the same time. What is the total I will pay?",
+    "expected_topics": ["refund_policy", "excess_baggage_fees_policy"],
+    "expected_keywords": ["100 and 300 US dollars", "75 US dollars"]
+  },
+  {
+    "id": "q25",
+    "query": "I am checking in for an international flight with a surfboard. When must I be at the airport and what will the board cost?",
+    "expected_topics": ["checkin_policy", "special_baggage_policy"],
+    "expected_keywords": ["two and a half hours", "surfboards", "110"]
+  },
+  {
+    "id": "q26",
+    "query": "My flight is delayed four hours and my bag is one piece over the allowance to Europe. What am I owed and what do I owe?",
+    "expected_topics": ["synthetic_delay_care_framework", "excess_baggage_fees_policy"],
+    "expected_keywords": ["synthetic", "meal voucher", "75 for Europe"]
+  },
+  {
+    "id": "q27",
+    "query": "I am travelling with an infant and a stroller in Economy. What can I take into the cabin and what goes in the hold?",
+    "expected_topics": ["baggage_allowance_policy", "hand_baggage_policy"],
+    "expected_keywords": ["one stroller", "one car seat", "12kg"]
+  },
+  {
+    "id": "q28",
+    "query": "Can I pay inside this chat, and what happens if the payment prompt times out?",
+    "expected_topics": ["synthetic_inchat_payment_flow", "payment_methods_policy"],
+    "expected_keywords": ["synthetic prototype", "ninety seconds", "single retry"]
+  },
+  {
+    "id": "q29",
+    "query": "I am connecting from a Dreamliner onto a smaller aircraft with three bicycles. Is that going to work?",
+    "expected_topics": ["baggage_allowance_policy", "special_baggage_policy"],
+    "expected_keywords": ["narrow-body", "cannot be guaranteed", "three bicycles"]
+  },
+  {
+    "id": "q30",
+    "query": "I am departing Guangzhou with a bag that is over the allowance. When do counters close and what is the Asia fee from a non-hub point?",
+    "expected_topics": ["checkin_policy", "excess_baggage_fees_policy"],
+    "expected_keywords": ["90 minutes", "100 for Asia"]
   }
 ]

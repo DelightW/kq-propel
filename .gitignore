@@ -16,6 +16,7 @@ backend/data/vector_store.json
 backend/data/kq_propel.db
 backend/data/sentiment_dataset/*.joblib
 backend/data/sentiment_dataset/*.metrics.json
+backend/tools/recomputed_metrics.json
 
 # Editors / OS
 .vscode/

@@ -1,0 +1,25 @@
+Synthetic Delay Care Framework (Illustrative, Not Kenya Airways Policy)
+
+Section 1: Status of This Document
+The figures in this document are synthetic and were written for the KQ-Propel research
+prototype. Kenya Airways does not publish monetary compensation amounts for delayed or
+cancelled flights, so no published figure was available to use. Nothing here should be quoted
+as an airline entitlement. The one published rule in this area is separate and is recorded in
+the refunds document: a guest whose flight is delayed by more than eight hours may claim a
+refund.
+
+Section 2: Illustrative Delay Bands
+Under this illustrative framework a delay of two to four hours attracts a meal voucher, a delay
+of four to eight hours attracts a meal voucher and lounge access, and a delay beyond eight
+hours attracts hotel accommodation with airport transfer where an overnight stay is required.
+
+Section 3: Illustrative Rebooking Handling
+A guest affected by a cancellation would be offered the next available service in the same
+cabin at no additional charge, or a refund under the published refund rules. Where the next
+available service departs more than twelve hours later, accommodation would be arranged.
+
+Section 4: Why This Document Exists
+The prototype needed a policy area where no authoritative source exists, so that the retrieval
+and citation behaviour of the agent could be observed on clearly marked synthetic content
+alongside verified content. Retrieval results drawn from this document are expected to be
+labelled as synthetic in any evaluation.

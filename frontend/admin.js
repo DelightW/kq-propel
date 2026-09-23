@@ -183,8 +183,39 @@
 
   function renderComparison(data) {
     var results = data.results || [];
-    cmpStatus.textContent = "Completed " + results.length + " queries from the evaluation dataset (" +
+    var mode = data.comparison || {};
+
+    // The panel must describe what was actually compared. Offline, both
+    // columns are the same extractive composer, so presenting the run as a
+    // model study would misstate the evidence.
+    if (mode.title) {
+      var heading = document.getElementById("comparison-title");
+      if (heading) { heading.textContent = mode.title; }
+      var subtitle = document.getElementById("comparison-subtitle");
+      if (subtitle) { subtitle.textContent = mode.description || ""; }
+    }
+
+    var banner = document.getElementById("comparison-caveat");
+    if (banner) {
+      if (mode.caveat) {
+        banner.textContent = mode.caveat;
+        banner.style.display = "";
+      } else {
+        banner.textContent = "";
+        banner.style.display = "none";
+      }
+    }
+
+    var status = "Completed " + results.length + " queries from the evaluation dataset (" +
       (data.evaluation_dataset_size || results.length) + " total).";
+    if (data.identical_response_count) {
+      status += " " + data.identical_response_count + " of " + results.length +
+        " queries returned byte-identical responses from both configurations.";
+    }
+    if (data.metric_version) {
+      status += " Metric version " + data.metric_version + ".";
+    }
+    cmpStatus.textContent = status;
 
     var agg = {};
     cmpBody.innerHTML = "";
@@ -192,6 +223,7 @@
     results.forEach(function (row) {
       (row.models || []).forEach(function (m, i) {
         var tr = el("tr");
+        if (row.responses_identical) { tr.className = "identical"; }
         tr.appendChild(el("td", null, i === 0 ? row.query : ""));
         tr.appendChild(el("td", null, m.model || m.name || "-"));
         tr.appendChild(el("td", null, fmt(m.context_relevance)));

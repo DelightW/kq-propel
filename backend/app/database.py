@@ -12,6 +12,12 @@ from typing import Dict, List, Optional
 
 from app import config
 
+# Incremented whenever the evaluation metrics change in a way that makes new
+# scores incomparable with stored ones. Version 2 replaced bag-of-words
+# overlap with claim-level groundedness, bounded context relevance and
+# gold-key answer relevance.
+METRIC_VERSION = 2
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS conversations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,6 +42,11 @@ CREATE TABLE IF NOT EXISTS transactions (
     created_at TEXT NOT NULL
 );
 
+-- `metric_version` records which evaluation implementation produced a row.
+-- Version 1 used bag-of-words overlap, which scored fabrications as grounded
+-- and averaged an unbounded ranking score; those rows are not comparable with
+-- version 2 and are excluded from reported aggregates rather than deleted, so
+-- the correction remains auditable.
 CREATE TABLE IF NOT EXISTS rag_evaluations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     query_id TEXT,
@@ -44,6 +55,7 @@ CREATE TABLE IF NOT EXISTS rag_evaluations (
     groundedness REAL,
     answer_relevance REAL,
     model TEXT,
+    metric_version INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL
 );
 
@@ -75,6 +87,19 @@ def _connect():
 def init_db():
     with _connect() as conn:
         conn.executescript(_SCHEMA)
+        _migrate(conn)
+
+
+def _migrate(conn):
+    """Additive migrations for databases created before a column existed.
+
+    CREATE TABLE IF NOT EXISTS silently leaves an existing table untouched, so
+    a pre-existing kq_propel.db would otherwise keep the old schema.
+    """
+    columns = {r["name"] for r in conn.execute("PRAGMA table_info(rag_evaluations)")}
+    if "metric_version" not in columns:
+        conn.execute("ALTER TABLE rag_evaluations ADD COLUMN "
+                     "metric_version INTEGER NOT NULL DEFAULT 1")
 
 
 def log_message(session_id: str, role: str, message: str,
@@ -102,13 +127,14 @@ def log_transaction(session_id: str, checkout_request_id: str, phone_number: str
 
 
 def log_rag_evaluation(query_id: str, query: str, context_relevance: float,
-                        groundedness: float, answer_relevance: float, model: str):
+                        groundedness: float, answer_relevance: float, model: str,
+                        metric_version: int = METRIC_VERSION):
     with _connect() as conn:
         conn.execute(
             "INSERT INTO rag_evaluations (query_id, query, context_relevance, groundedness, "
-            "answer_relevance, model, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "answer_relevance, model, metric_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (query_id, query, context_relevance, groundedness, answer_relevance, model,
-             datetime.utcnow().isoformat()),
+             metric_version, datetime.utcnow().isoformat()),
         )
 
 
@@ -137,11 +163,21 @@ def fetch_sentiment_distribution() -> Dict:
         return {r["sentiment_label"]: r["cnt"] for r in rows}
 
 
-def fetch_rag_evaluations(limit: int = 100) -> List[Dict]:
+def fetch_rag_evaluations(limit: int = 100,
+                          metric_version: Optional[int] = METRIC_VERSION) -> List[Dict]:
+    """Most recent evaluations. Defaults to the current metric version so that
+    aggregates are never computed across incompatible implementations; pass
+    metric_version=None to retrieve the full history including superseded rows."""
     with _connect() as conn:
-        rows = conn.execute(
-            "SELECT * FROM rag_evaluations ORDER BY id DESC LIMIT ?", (limit,)
-        ).fetchall()
+        if metric_version is None:
+            rows = conn.execute(
+                "SELECT * FROM rag_evaluations ORDER BY id DESC LIMIT ?", (limit,)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM rag_evaluations WHERE metric_version = ? "
+                "ORDER BY id DESC LIMIT ?", (metric_version, limit)
+            ).fetchall()
         return [dict(r) for r in rows]
 
 

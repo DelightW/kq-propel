@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "description": "Provenance manifest for the KQ-Propel policy corpus. Ingestion globs only *.txt, so this file is not indexed. Every .txt file in this directory must have an entry.",
+  "provenance_values": {
+    "kenya_airways_published": "Every factual claim traces to a page published by Kenya Airways on the retrieved_on date. Wording is original; figures are theirs.",
+    "synthetic": "Written for this research prototype. Not airline policy. The document body discloses this in its first section.",
+    "hybrid": "Mixes published facts with prototype-only behaviour. Avoid; prefer splitting into a published document and a synthetic one."
+  },
+  "documents": [
+    {
+      "file": "baggage_allowance_policy.txt",
+      "provenance": "kenya_airways_published",
+      "source_url": "https://www.kenya-airways.com/en/fly/plan/baggage/checked-baggage/",
+      "retrieved_on": "2026-09-23",
+      "confidence": "high",
+      "notes": "Piece concept, 2x23kg Economy / 2x32kg Business on most routes; one-piece exceptions on BKK-CAN, NBO-BOM and Kenyan domestic. Supersedes the deleted synthetic baggage_policy.txt, which claimed 1x23kg Economy."
+    },
+    {
+      "file": "hand_baggage_policy.txt",
+      "provenance": "kenya_airways_published",
+      "source_url": "https://www.kenya-airways.com/en/fly/plan/baggage/hand-baggage/",
+      "retrieved_on": "2026-09-23",
+      "confidence": "high",
+      "notes": "Economy 12kg on EU/US/UK routes, 10kg elsewhere; Business 2 pieces to a combined 18kg. Dimensions 55x25x35cm."
+    },
+    {
+      "file": "excess_baggage_fees_policy.txt",
+      "provenance": "kenya_airways_published",
+      "source_url": "https://www.kenya-airways.com/en/fly/plan/baggage/excess-baggage/",
+      "retrieved_on": "2026-09-23",
+      "confidence": "medium",
+      "notes": "CURRENCY CAVEAT: the heavy bag and firearms tables are published with no currency label. USD is inferred because the administrative fee table on the same page is headed Fees(USD). The document states this caveat in its own body rather than asserting a currency. Administrative fees in Section 5 ARE explicitly USD."
+    },
+    {
+      "file": "special_baggage_policy.txt",
+      "provenance": "kenya_airways_published",
+      "source_url": "https://www.kenya-airways.com/en/fly/plan/baggage/sporting-equipment/",
+      "retrieved_on": "2026-09-23",
+      "confidence": "medium",
+      "notes": "Same unlabelled-currency caveat as excess_baggage_fees_policy.txt. Aircraft restrictions (3 bicycles on E170/E190, no electric bicycles) are stated explicitly by the source."
+    },
+    {
+      "file": "delayed_baggage_policy.txt",
+      "provenance": "kenya_airways_published",
+      "source_url": "https://www.kenya-airways.com/en/fly/plan/baggage/delayed-baggage/",
+      "retrieved_on": "2026-09-23",
+      "confidence": "high",
+      "notes": "First Needs Allowance is explicitly USD 150 premium / USD 100 economy. Kenya Airways uses 'file creation' and 'file reference number'; it does NOT use the industry phrase 'Property Irregularity Report'. The retriever should alias that phrase to this document."
+    },
+    {
+      "file": "checkin_policy.txt",
+      "provenance": "kenya_airways_published",
+      "source_url": "https://www.kenya-airways.com/en/fly/prepare/check-in/",
+      "retrieved_on": "2026-09-23",
+      "confidence": "high",
+      "notes": "NEGATIVE FINDING: Kenya Airways does not publish a boarding gate closing time. The document deliberately omits one rather than inventing it. Online check-in closes one hour before departure on all services, not 90 minutes as the deleted synthetic version claimed."
+    },
+    {
+      "file": "refund_policy.txt",
+      "provenance": "kenya_airways_published",
+      "source_url": "https://www.kenya-airways.com/en/fly/manage/refunds/",
+      "retrieved_on": "2026-09-23",
+      "confidence": "high",
+      "notes": "21-30 business days, not the 7-14 days claimed by the deleted synthetic version. Change fee USD 100-300; name correction USD 15 domestic / USD 75 international. These are explicitly USD at source."
+    },
+    {
+      "file": "payment_methods_policy.txt",
+      "provenance": "kenya_airways_published",
+      "source_url": "https://www.kenya-airways.com/en/fly/book/payment-options/",
+      "retrieved_on": "2026-09-23",
+      "confidence": "high",
+      "notes": "NEGATIVE FINDING: no paybill or till number is published. Mobile money is completed inside the booking flow via the airline's payment gateway. Accepted in Kenya and Tanzania only."
+    },
+    {
+      "file": "synthetic_delay_care_framework.txt",
+      "provenance": "synthetic",
+      "source_url": null,
+      "retrieved_on": null,
+      "confidence": "n/a",
+      "notes": "NEGATIVE FINDING drove this: Kenya Airways publishes no monetary delay or cancellation compensation. The only published rule is the 8-hour delay refund eligibility, which lives in refund_policy.txt and is real. Section 1 of this document discloses its synthetic status so the disclosure survives retrieval."
+    },
+    {
+      "file": "synthetic_inchat_payment_flow.txt",
+      "provenance": "synthetic",
+      "source_url": null,
+      "retrieved_on": null,
+      "confidence": "n/a",
+      "notes": "Prototype-only feature. Separated from payment_methods_policy.txt so that no single document mixes published fact with prototype behaviour. Section 1 discloses its synthetic status."
+    }
+  ],
+  "deleted_synthetic_documents": [
+    {
+      "file": "baggage_policy.txt",
+      "reason": "Superseded by baggage_allowance_policy.txt. Claimed 1x23kg Economy and Ksh 5,000/9,000 kilogram-band excess fees; both contradicted by the published source."
+    },
+    {
+      "file": "delay_compensation_policy.txt",
+      "reason": "Asserted invented Ksh compensation amounts as airline policy. Replaced by synthetic_delay_care_framework.txt, which carries the same scenario coverage but discloses that it is not airline policy."
+    }
+  ]
+}

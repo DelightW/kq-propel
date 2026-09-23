@@ -83,38 +83,76 @@ SEED = 42
 # Stage A: the ground-truth fee registry
 # ---------------------------------------------------------------------------
 
+PROVENANCE_JSON = POLICY_DIR / "provenance.json"
+
+KQ_BAGGAGE_URL = "https://www.kenya-airways.com/en/fly/plan/baggage/"
+KQ_REFUNDS_URL = "https://www.kenya-airways.com/en/fly/manage/refunds/"
+KQ_CHECKIN_URL = "https://www.kenya-airways.com/en/fly/prepare/check-in/"
+RETRIEVED_ON = "2026-09-23"
+
+# Every figure below is published by Kenya Airways. Where the source table
+# carries no currency label, `unit` is recorded as "unlabelled" rather than
+# guessed - see the currency caveat in provenance.json.
 FEE_REGISTRY: Dict[str, Dict] = {
-    "baggage_overweight_tier_1": {
-        "value": "5,000", "unit": "Ksh", "document": "baggage_policy",
-        "condition": "1-10kg over the permitted allowance",
+    "checked_allowance_economy_pieces": {
+        "value": "two pieces", "unit": "count", "document": "baggage_allowance_policy",
+        "condition": "Economy, Africa to Europe/Americas/Middle East/Asia and within Africa",
+        "provenance": "kenya_airways_published", "source_url": KQ_BAGGAGE_URL,
+        "retrieved_on": RETRIEVED_ON,
     },
-    "baggage_overweight_tier_2": {
-        "value": "9,000", "unit": "Ksh", "document": "baggage_policy",
-        "condition": "11-20kg over the permitted allowance",
+    "cabin_allowance_economy_weight": {
+        "value": "12kg", "unit": "kg", "document": "hand_baggage_policy",
+        "condition": "Economy cabin piece to or from the EU, US and UK",
+        "provenance": "kenya_airways_published", "source_url": KQ_BAGGAGE_URL,
+        "retrieved_on": RETRIEVED_ON,
     },
-    "baggage_delay_allowance": {
-        "value": "2,000", "unit": "Ksh", "document": "baggage_policy",
-        "condition": "per day, up to 5 days, baggage delayed over 24 hours",
+    "heavy_bag_europe_from_hub": {
+        "value": "75", "unit": "unlabelled", "document": "excess_baggage_fees_policy",
+        "condition": "heavy bag fee, Europe, journey beginning at the Nairobi hub",
+        "provenance": "kenya_airways_published", "source_url": KQ_BAGGAGE_URL,
+        "retrieved_on": RETRIEVED_ON,
     },
-    "sporting_equipment_fee": {
-        "value": "3,500", "unit": "Ksh", "document": "baggage_policy",
-        "condition": "per item of special or sporting equipment",
+    "heavy_bag_europe_other_points": {
+        "value": "100", "unit": "unlabelled", "document": "excess_baggage_fees_policy",
+        "condition": "heavy bag fee, Europe, journey beginning at all other points",
+        "provenance": "kenya_airways_published", "source_url": KQ_BAGGAGE_URL,
+        "retrieved_on": RETRIEVED_ON,
     },
-    "delay_meal_voucher": {
-        "value": "1,500", "unit": "Ksh", "document": "delay_compensation_policy",
-        "condition": "delays of 1 hour or more",
+    "sporting_equipment_africa_europe": {
+        "value": "110", "unit": "unlabelled", "document": "special_baggage_policy",
+        "condition": "golf, bicycle, diving, surf, ski equipment between Africa and Europe or the Americas",
+        "provenance": "kenya_airways_published", "source_url": KQ_BAGGAGE_URL,
+        "retrieved_on": RETRIEVED_ON,
     },
-    "refund_service_fee": {
-        "value": "1,000", "unit": "Ksh", "document": "refund_policy",
-        "condition": "voluntary refund of a refundable ticket",
+    "first_needs_allowance_premium": {
+        "value": "150 US dollars", "unit": "USD", "document": "delayed_baggage_policy",
+        "condition": "First Class and Premier World, baggage not received within 24 hours",
+        "provenance": "kenya_airways_published", "source_url": KQ_BAGGAGE_URL,
+        "retrieved_on": RETRIEVED_ON,
     },
-    "nonrefundable_change_fee": {
-        "value": "2,500", "unit": "Ksh", "document": "refund_policy",
-        "condition": "non-refundable ticket converted to credit voucher",
+    "first_needs_allowance_economy": {
+        "value": "100 US dollars", "unit": "USD", "document": "delayed_baggage_policy",
+        "condition": "Economy, baggage not received within 24 hours",
+        "provenance": "kenya_airways_published", "source_url": KQ_BAGGAGE_URL,
+        "retrieved_on": RETRIEVED_ON,
     },
-    "rebooking_fee_economy": {
-        "value": "2,000", "unit": "Ksh", "document": "refund_policy",
-        "condition": "date or route change, economy class",
+    "refund_processing_window": {
+        "value": "21 to 30 business days", "unit": "days", "document": "refund_policy",
+        "condition": "refund to the original credit or debit card",
+        "provenance": "kenya_airways_published", "source_url": KQ_REFUNDS_URL,
+        "retrieved_on": RETRIEVED_ON,
+    },
+    "name_correction_international": {
+        "value": "75\nUS dollars", "unit": "USD", "document": "refund_policy",
+        "condition": "correction of up to three characters, international booking",
+        "provenance": "kenya_airways_published", "source_url": KQ_REFUNDS_URL,
+        "retrieved_on": RETRIEVED_ON,
+    },
+    "domestic_counter_closing": {
+        "value": "30 minutes", "unit": "minutes", "document": "checkin_policy",
+        "condition": "domestic check-in counter closing time before departure",
+        "provenance": "kenya_airways_published", "source_url": KQ_CHECKIN_URL,
+        "retrieved_on": RETRIEVED_ON,
     },
 }
 
@@ -127,11 +165,54 @@ def audit_fee_registry() -> List[str]:
         if not doc.exists():
             problems.append(f"{key}: source document {doc.name} is missing")
             continue
-        if entry["value"] not in doc.read_text(encoding="utf-8"):
+        # Source documents are hard-wrapped, so a multi-word figure can straddle
+        # a line break. Collapse whitespace on both sides before matching.
+        haystack = re.sub(r"\s+", " ", doc.read_text(encoding="utf-8"))
+        needle = re.sub(r"\s+", " ", entry["value"])
+        if needle not in haystack:
             problems.append(
-                f"{key}: {entry['unit']} {entry['value']} not found in {doc.name}"
+                f"{key}: {entry['unit']} {needle!r} not found in {doc.name}"
             )
+        if entry.get("provenance") == "kenya_airways_published" and not entry.get("source_url"):
+            problems.append(f"{key}: published figure declares no source_url")
     return problems
+
+
+def audit_provenance_manifest() -> Tuple[List[str], Dict]:
+    """Every indexed document must be accounted for in provenance.json."""
+    problems: List[str] = []
+    if not PROVENANCE_JSON.exists():
+        return [f"{PROVENANCE_JSON.name} is missing"], {}
+
+    manifest = json.loads(PROVENANCE_JSON.read_text(encoding="utf-8"))
+    declared = {d["file"]: d for d in manifest.get("documents", [])}
+    on_disk = {p.name for p in POLICY_DIR.glob("*.txt")}
+
+    for name in sorted(on_disk - set(declared)):
+        problems.append(f"{name} is indexed but has no provenance entry")
+    for name in sorted(set(declared) - on_disk):
+        problems.append(f"{name} is declared in the manifest but is not on disk")
+
+    counts: Dict[str, int] = {}
+    for name, entry in declared.items():
+        if name not in on_disk:
+            continue
+        kind = entry.get("provenance", "undeclared")
+        counts[kind] = counts.get(kind, 0) + 1
+        if kind == "kenya_airways_published":
+            if not entry.get("source_url"):
+                problems.append(f"{name}: published document declares no source_url")
+            if not entry.get("retrieved_on"):
+                problems.append(f"{name}: published document declares no retrieved_on")
+        elif kind == "synthetic":
+            body = (POLICY_DIR / name).read_text(encoding="utf-8").lower()
+            if "synthetic" not in body:
+                problems.append(
+                    f"{name}: synthetic document does not disclose its status in its body"
+                )
+
+    stats = {"documents": len(on_disk), "by_provenance": counts}
+    return problems, stats
 
 
 def audit_evaluation_set() -> Tuple[List[str], Dict]:
@@ -447,6 +528,15 @@ def main() -> int:
     print("=" * 74)
 
     if args.report:
+        print("\n[Stage A] Policy corpus provenance manifest")
+        prov_problems, prov_stats = audit_provenance_manifest()
+        for k, v in prov_stats.items():
+            print(f"  {k:.<25} {v}")
+        for p in prov_problems:
+            print(f"  PROVENANCE GAP: {p}")
+        if not prov_problems:
+            print("  status ................... every document declares a verified provenance")
+
         print("\n[Stage A] Ground-truth fee registry")
         problems = audit_fee_registry()
         print(f"  declared figures ......... {len(FEE_REGISTRY)}")

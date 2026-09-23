@@ -15,6 +15,7 @@ from app import config
 
 class BaseLLM:
     name: str = "base"
+    is_simulated: bool = False
 
     def generate(self, system_prompt: str, user_prompt: str) -> str:
         raise NotImplementedError
@@ -59,12 +60,17 @@ class OllamaLLM(BaseLLM):
 
 class DeterministicExtractiveLLM(BaseLLM):
     """Offline fallback 'model'. Rather than hallucinate free-form prose, it
-    deterministically composes an answer strictly extracted from the
-    retrieved context chunks, guaranteeing zero-hallucination behaviour when
-    no live LLM API/inference endpoint is reachable. Two independent
-    configurations (`primary` / `alternate`) apply different selection
-    breadth, so a meaningful side-by-side comparison can still be produced
-    offline."""
+    deterministically composes an answer strictly extracted from the retrieved
+    context chunks, guaranteeing zero-hallucination behaviour when no live LLM
+    API or inference endpoint is reachable.
+
+    Two configurations (`primary` / `alternate`) differ only in selection
+    breadth. They are NOT stand-ins for GPT-4o-mini and Llama-3: they share one
+    code path and, on many queries, emit byte-identical text. Comparing them is
+    a response-breadth ablation, not a model comparison, and is labelled as
+    such throughout the API and dashboard."""
+
+    is_simulated = True
 
     def __init__(self, variant: str, name: str):
         self.variant = variant
@@ -126,7 +132,8 @@ def _parse_context_chunks(context: str) -> List[Dict]:
 def get_primary_llm() -> BaseLLM:
     if config.OPENAI_API_KEY:
         return OpenAILLM()
-    return DeterministicExtractiveLLM(variant="primary", name=f"{config.OPENAI_CHAT_MODEL} (offline-sim)")
+    return DeterministicExtractiveLLM(
+        variant="primary", name="extractive-broad (offline, not an LLM)")
 
 
 def get_alternate_llm() -> BaseLLM:
@@ -135,8 +142,51 @@ def get_alternate_llm() -> BaseLLM:
         return OllamaLLM()
     except Exception:
         return DeterministicExtractiveLLM(
-            variant="alternate", name=f"{config.OPEN_SOURCE_MODEL_NAME} (offline-sim)"
-        )
+            variant="alternate", name="extractive-concise (offline, not an LLM)")
+
+
+def comparison_mode() -> Dict:
+    """Describes what a comparison run would actually be comparing, so the API
+    and dashboard can label it honestly instead of implying a model study that
+    the current credential posture cannot support."""
+    primary, alternate = get_primary_llm(), get_alternate_llm()
+    simulated = [m for m in (primary, alternate) if m.is_simulated]
+
+    if not simulated:
+        return {
+            "mode": "live_model_comparison",
+            "title": "Controlled Dual-Model Comparison",
+            "description": ("Two distinct models over identical documents, chunking, "
+                            "embeddings, retrieval and prompts - only the model varies."),
+            "is_model_comparison": True,
+            "caveat": None,
+            "models": {"primary": primary.name, "alternate": alternate.name},
+        }
+
+    if len(simulated) == 2:
+        return {
+            "mode": "offline_breadth_ablation",
+            "title": "Response-Breadth Ablation (offline)",
+            "description": ("No LLM endpoint is reachable, so both columns are the same "
+                            "deterministic extractive composer differing only in how many "
+                            "sentences it selects."),
+            "is_model_comparison": False,
+            "caveat": ("This is NOT a GPT-4o-mini vs Llama-3 comparison. Both columns "
+                       "share one code path and frequently produce identical text. "
+                       "Set OPENAI_API_KEY and/or run Ollama to obtain a genuine "
+                       "model comparison."),
+            "models": {"primary": primary.name, "alternate": alternate.name},
+        }
+
+    return {
+        "mode": "partial_model_comparison",
+        "title": "Partial Model Comparison",
+        "description": "One live model is compared against the offline extractive composer.",
+        "is_model_comparison": False,
+        "caveat": ("Only one side is a live model; the other is the deterministic "
+                   "extractive fallback, so differences conflate model and method."),
+        "models": {"primary": primary.name, "alternate": alternate.name},
+    }
 
 
 def compare_models(system_prompt: str, user_prompt: str) -> List[Dict]:

@@ -121,22 +121,38 @@ same Wi-Fi network.
 Both the laptop and the phone must be on the same network, and the network must be
 marked **Private** in Windows.
 
-### Paying a fee by M-Pesa
+### Fees and paying by M-Pesa
 
-Ask about a fee, then settle it without leaving the chat:
+Kenya Airways publishes most ancillary fees in US dollars, and M-Pesa settles in
+shillings. The agent converts at an **explicitly declared** rate (`USD_TO_KES_RATE`,
+default 129.0) and always discloses it — the converted figure is never presented as an
+airline-published amount:
 
 ```
-You:  I have an overweight baggage by 15kg
-Bot:  Bags between 11kg and 20kg over the limit incur a flat fee of Ksh 9,000.
-      Source: Baggage Policy - Section 2: Overweight Baggage Fees
-      Would you like me to send an M-Pesa payment prompt for Ksh 9,000?
+You:  I need to correct a typo in my name on my international booking
+Bot:  Correcting up to three characters of a name costs 15 US dollars on a domestic
+      booking and 75 US dollars on an international booking...
+      Source: Refund Policy - Section 5: Name Corrections and Name Changes
 
-You:  can i pay it
-Bot:  The amount due is Ksh 9,000. What's the M-Pesa number?
+      The published charge is USD 75. Kenya Airways does not publish a shilling
+      equivalent, so I've converted it at this assistant's configured indicative rate
+      of 129.00 KES per USD, which gives Ksh 9,675. That rate is a prototype setting,
+      not a live exchange rate...
+
+      Would you like me to send an M-Pesa payment prompt for Ksh 9,675?
+
+You:  yes please
+Bot:  The amount due is Ksh 9,675. What's the M-Pesa number?
 
 You:  0722334455
-Bot:  [M-PESA receipt card: Ksh 9,000 -> 254722334455, reference, checkout ID]
+Bot:  [M-PESA receipt card: Ksh 9,675 -> 254722334455, reference, checkout ID]
 ```
+
+Fee sentences usually quote several figures, so the agent selects the one whose
+qualifying words match the passenger's own situation (`international` → 75, `domestic`
+→ 15) and **declines rather than guesses** when the request is unspecific. Figures the
+source publishes with no currency label — the heavy-bag table — are never treated as
+money. `tools/test_fee_settlement.py` locks all of this down.
 
 Everything can also go in one message — *"I want to pay now, my bag is 5kg over, number
 0733445566"*. Without Daraja credentials the STK push is simulated end-to-end (clearly
@@ -151,7 +167,11 @@ Safaricom sandbox. Either way the transaction appears in the dashboard's audit t
 | `OPEN_SOURCE_MODEL_NAME`, `OLLAMA_BASE_URL` | Second model for comparison via Ollama |
 | `AVIATIONSTACK_API_KEY` | Live flight telemetry |
 | `DARAJA_CONSUMER_KEY/SECRET/PASSKEY/SHORTCODE` | Live Safaricom Daraja STK push |
+| `USD_TO_KES_RATE` | Indicative rate for settling dollar-published fees over M-Pesa (default 129.0; disclosed to the passenger, not a live FX feed) |
 | `MONGODB_URI`, `MONGODB_DB_NAME` | MongoDB Atlas Vector Search backend |
+
+Values are read from a `.env` file at the repository root (see `.env.example`), falling
+back to real environment variables, which take precedence.
 
 ## Project layout
 
@@ -167,7 +187,9 @@ kq-propel/
       sentiment.py    Self-trained frustration classifier
       evaluation.py   RAG-Triad scoring
       routers/        /api/chat and /api/admin
-    data/policies/  Sample KQ policy manuals (RAG corpus)
+    data/policies/  RAG corpus - 8 documents from Kenya Airways' published
+                    pages plus 2 marked synthetic; provenance.json records
+                    the source URL and retrieval date for every one
     data/eval/      Evaluation dataset for RAG-Triad + model comparison
     data/sentiment_dataset/  Labelled frustration dataset
   frontend/

@@ -1,0 +1,21 @@
+Synthetic In-Chat Payment Flow (Prototype Feature, Not Kenya Airways Policy)
+
+Section 1: Status of This Document
+The flow described here is a synthetic prototype feature built for KQ-Propel. Kenya Airways
+does not offer payment inside a chat assistant, and the steps below do not describe any live
+airline service. Verified payment information is held in the payment methods document.
+
+Section 2: Illustrative Prompt and Push
+In this prototype flow the assistant reads the booking reference, confirms the amount due, asks
+the guest to confirm the mobile number on file, and then triggers a push prompt to that
+handset. The guest enters their mobile money PIN on the handset rather than in the chat window.
+
+Section 3: Illustrative Confirmation and Timeout
+A confirmation message is expected within ninety seconds. If no confirmation arrives the
+prototype marks the attempt as timed out and offers the guest a single retry before handing the
+booking back to the standard online payment page.
+
+Section 4: Data Handling in the Prototype
+No PIN, card number or mobile money credential is ever entered into or stored by the assistant.
+The prototype holds only the booking reference, the amount and the outcome status of the
+attempt.

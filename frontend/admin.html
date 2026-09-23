@@ -69,11 +69,12 @@
   <section class="panel">
     <div class="panel-head">
       <div>
-        <h2>Controlled Dual-Model Comparison</h2>
-        <p class="hint">Identical documents, chunking, embeddings, retrieval and prompts &mdash; only the model varies.</p>
+        <h2 id="comparison-title">Dual-Configuration Comparison</h2>
+        <p class="hint" id="comparison-subtitle">Identical documents, chunking, embeddings, retrieval and prompts &mdash; only the generator varies.</p>
       </div>
       <button id="run-comparison" class="btn">Run comparison</button>
     </div>
+    <div id="comparison-caveat" class="caveat" style="display:none"></div>
     <div id="comparison-status" class="status-line"></div>
     <div id="comparison-summary" class="meters"></div>
     <div class="table-scroll">

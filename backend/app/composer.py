@@ -19,6 +19,14 @@ from typing import Dict, List, Optional
 from app import retrieval
 
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+
+# Appended whenever an answer rests on a prototype-authored document, so the
+# system discloses the status of its own evidence rather than presenting
+# synthetic scaffolding as airline policy.
+SYNTHETIC_SOURCE_NOTE = (
+    "Note: this answer draws on a document written for this research prototype "
+    "rather than on published Kenya Airways policy."
+)
 _RANGE_RE = re.compile(
     r"between\s+(\d+)\s*(kg|hours?|hrs?|days?|characters?)?\s+and\s+(\d+)\s*(kg|hours?|hrs?|days?|characters?)?",
     re.IGNORECASE,
@@ -193,4 +201,6 @@ def compose_answer(question: str, chunks: List[Dict], max_sentences: int = 3,
             labels.append(label)
     if labels:
         answer += "\n\nSource: " + "; ".join(labels)
+    if any(c["chunk"].get("provenance") == "synthetic" for c in selected):
+        answer += "\n\n" + SYNTHETIC_SOURCE_NOTE
     return answer

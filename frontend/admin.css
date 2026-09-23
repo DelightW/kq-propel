@@ -145,6 +145,21 @@ body {
 }
 .hint { margin: 4px 0 12px; font-size: 12px; color: var(--ink-soft); line-height: 1.5; }
 
+/* Shown when a run does not measure what the panel title would normally
+   imply - e.g. offline, where both columns are the same composer. */
+.caveat {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--red);
+  background: var(--red-wash, #fbe9ec);
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.5;
+  border-radius: 4px;
+}
+
+tr.identical td { opacity: 0.72; font-style: italic; }
+
 .panel-head {
   display: flex;
   flex-wrap: wrap;

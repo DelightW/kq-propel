@@ -8,7 +8,7 @@ import statistics
 from fastapi import APIRouter
 
 from app import config, database, sentiment
-from app.llm import compare_models
+from app.llm import compare_models, comparison_mode
 from app.vectorstore import get_vector_store
 from app.agent import SYSTEM_PROMPT
 
@@ -42,6 +42,7 @@ def overview():
             "answer_relevance": avg_relevance,
             "hallucination_rate": hallucination_rate,
             "sample_size": len(evaluations),
+            "metric_version": database.METRIC_VERSION,
         },
         "transactions": {
             "count": len(transactions),
@@ -59,12 +60,17 @@ def transactions():
 
 @router.get("/model-comparison")
 def model_comparison():
-    """Runs both LLMs (primary GPT-4o-mini configuration vs. the open-source
-    alternate model) across the full evaluation dataset, over the identical
-    RAG context, per the corrections document's controlled comparison
-    requirement."""
+    """Runs both configured generators across the full evaluation dataset over
+    identical RAG context.
+
+    The response is self-describing: `comparison` states whether this run is a
+    genuine dual-model comparison or - when no LLM endpoint is reachable - a
+    response-breadth ablation of one deterministic composer. Both columns share
+    a code path in the offline case and must not be presented as a model study.
+    """
     dataset = json.loads(config.EVAL_DATASET_PATH.read_text(encoding="utf-8"))
     store = get_vector_store()
+    mode = comparison_mode()
     results = []
     for item in dataset:
         retrieved = store.similarity_search(item["query"], k=3)
@@ -74,7 +80,22 @@ def model_comparison():
         from app import evaluation
         row = {"query_id": item["id"], "query": item["query"], "models": []}
         for out in model_outputs:
-            metrics = evaluation.evaluate_response(item["query"], out["response"], retrieved)
+            metrics = evaluation.evaluate_response(
+                item["query"], out["response"], retrieved,
+                expected_keywords=item.get("expected_keywords"),
+            )
             row["models"].append({**out, **metrics})
+        # Whether the two generators actually diverged on this query.
+        responses = [m["response"] for m in row["models"]]
+        row["responses_identical"] = len(set(responses)) == 1
         results.append(row)
-    return {"evaluation_dataset_size": len(dataset), "results": results}
+
+    identical = sum(1 for r in results if r["responses_identical"])
+    return {
+        "evaluation_dataset_size": len(dataset),
+        "comparison": mode,
+        "metric_version": database.METRIC_VERSION,
+        "identical_response_count": identical,
+        "identical_response_rate": round(identical / len(results), 3) if results else 0.0,
+        "results": results,
+    }
