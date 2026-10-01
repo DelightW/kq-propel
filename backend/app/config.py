@@ -138,3 +138,39 @@ MONGODB_DB_NAME = os.getenv("MONGODB_DB_NAME", "kq_propel")
 
 APP_TITLE = "KQ-Propel"
 APP_TAGLINE = "Agentic RAG Framework for Aviation Support & Localized Transaction Execution"
+
+# --- Staff authentication ---
+# The administrative dashboard exposes the transaction ledger, which contains
+# passenger phone numbers, so it must not be anonymous. No default password is
+# defined here on purpose: a hard-coded credential in source is worse than the
+# missing authentication it would be replacing. When neither variable below is
+# set, auth.py generates a single-run password and prints it at startup.
+#
+# Generate a permanent hash with:  python -m app.auth <password>
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin").strip() or "admin"
+ADMIN_PASSWORD_HASH = os.getenv("ADMIN_PASSWORD_HASH", "").strip()
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "").strip()
+ADMIN_SESSION_TTL_MINUTES = int(os.getenv("ADMIN_SESSION_TTL_MINUTES", "120"))
+ADMIN_MAX_LOGIN_ATTEMPTS = int(os.getenv("ADMIN_MAX_LOGIN_ATTEMPTS", "5"))
+ADMIN_LOCKOUT_SECONDS = int(os.getenv("ADMIN_LOCKOUT_SECONDS", "300"))
+
+# Cookies carry the staff session, so they must be inaccessible to script and
+# must not travel cross-site. `secure` is configurable only because enabling it
+# would break a plain-HTTP local demonstration; it must be true behind TLS.
+SECURE_COOKIES = os.getenv("SECURE_COOKIES", "false").strip().lower() in {"1", "true", "yes", "on"}
+
+# --- Browser origin allowlist ---
+# Previously every origin was permitted, which would have let any website on
+# the internet issue credentialed requests against this API using a logged-in
+# operator's cookies. Credentialed CORS cannot use a wildcard at all, so an
+# explicit list is required rather than merely preferable.
+ALLOWED_ORIGINS = [
+    o.strip() for o in os.getenv(
+        "ALLOWED_ORIGINS",
+        "http://localhost:8000,http://127.0.0.1:8000",
+    ).split(",") if o.strip()
+]
+
+# Maximum accepted passenger message length. Unbounded input was accepted
+# before, so a single request could carry a 100,000-character payload.
+MAX_MESSAGE_CHARS = int(os.getenv("MAX_MESSAGE_CHARS", "2000"))

@@ -42,6 +42,46 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 | Admin dashboard | http://127.0.0.1:8000/admin |
 | API docs | http://127.0.0.1:8000/docs |
 
+### Signing in to the admin dashboard
+
+The dashboard shows the payment audit trail, which contains passenger phone numbers, so every `/api/admin/*` route needs a staff session. There is no default password in the source code.
+
+Set a permanent one:
+
+```powershell
+cd kq-propel\backend
+python -m app.auth "your-password"      # prints ADMIN_PASSWORD_HASH=scrypt$...
+```
+
+Paste the printed line into `.env` next to `ADMIN_USERNAME=admin`. Only the hash is stored; the password itself never enters the repository.
+
+If no credential is set, a one-time password is generated and printed to the console at startup, and it changes on every restart:
+
+```
+[auth] No ADMIN_PASSWORD_HASH or ADMIN_PASSWORD was configured.
+       A one-time password has been generated for THIS RUN ONLY.
+
+         username: admin
+         password: 8Kd2mQx7bLpR
+```
+
+| Control | Behaviour |
+|---|---|
+| Unauthenticated request | `401`, before any data is read |
+| Password storage | scrypt, standard library, never plaintext |
+| Session token | Random 32 bytes; only its SHA-256 digest is stored |
+| Cookie | `HttpOnly`, `SameSite=Lax`, `Secure` when `SECURE_COOKIES=true` |
+| Sign out | Revokes the session on the server, not just in the browser |
+| Repeated failures | Locks that username and IP for 5 minutes after 5 attempts |
+| Error message | The same for a wrong username as a wrong password, so accounts cannot be guessed |
+| Access log | Sign-ins and reads of passenger data are recorded and shown in the dashboard |
+
+### Passenger sessions
+
+The server issues the chat session (`POST /api/chat/session`) and binds it to an `HttpOnly` cookie. The browser used to invent its own identifier and the server trusted it, which meant anyone supplying another passenger's identifier inherited that conversation and its pending payment. A `session_id` that disagrees with the cookie is now rejected with `403`.
+
+`POST /api/chat/reset` starts a new session and clears any pending payment, which matters on a shared device.
+
 ### Opening the chatbot on your phone
 
 Running with `--host 0.0.0.0` makes the assistant reachable from other devices on the same Wi-Fi network.
@@ -91,6 +131,11 @@ Set values in a `.env` file at the repository root (see `.env.example`). Real en
 | `LOCAL_EMBEDDING_MODEL`, `LOCAL_EMBEDDING_ENABLED` | Local sentence-transformer embeddings (default `all-MiniLM-L6-v2`) |
 | `RETRIEVAL_MMR_LAMBDA` | Relevance and diversity balance in retrieval (default 0.8) |
 | `MONGODB_URI`, `MONGODB_DB_NAME` | MongoDB Atlas Vector Search. A local JSON index is used if unset |
+| `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH` | Staff login for the admin dashboard. Generate the hash with `python -m app.auth "password"` |
+| `ADMIN_SESSION_TTL_MINUTES`, `ADMIN_MAX_LOGIN_ATTEMPTS`, `ADMIN_LOCKOUT_SECONDS` | Session lifetime and brute-force lockout (defaults 120, 5, 300) |
+| `SECURE_COOKIES` | Marks session cookies `Secure`. Set to true when serving over HTTPS |
+| `ALLOWED_ORIGINS` | Browsers permitted to call the API. A wildcard is not allowed with cookies |
+| `MAX_MESSAGE_CHARS` | Longest passenger message accepted (default 2000) |
 
 ## More detail
 

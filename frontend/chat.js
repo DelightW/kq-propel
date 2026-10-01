@@ -19,17 +19,26 @@
   var statusText = document.getElementById("status-text");
 
   var busy = false;
-  var sessionId = getSessionId();
+  /* The server issues this. The client used to generate its own identifier
+     and the server trusted it, which meant anyone who supplied another
+     passenger's string inherited their conversation and their pending
+     payment. It is now held only in memory, backed by an HttpOnly cookie
+     the page itself cannot read. */
+  var sessionId = null;
 
-  function getSessionId() {
-    var key = "kqpropel_session";
-    var id = null;
-    try { id = window.localStorage.getItem(key); } catch (e) { /* private mode */ }
-    if (!id) {
-      id = "web-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
-      try { window.localStorage.setItem(key, id); } catch (e) { /* ignore */ }
-    }
-    return id;
+  function startSession() {
+    return fetch("/api/chat/session", {
+      method: "POST",
+      credentials: "same-origin"
+    })
+      .then(function (r) {
+        if (!r.ok) { throw new Error("HTTP " + r.status); }
+        return r.json();
+      })
+      .then(function (d) {
+        sessionId = d.session_id;
+        return d;
+      });
   }
 
   function isDesktop() {
@@ -451,12 +460,17 @@
 
     fetch(API, {
       method: "POST",
+      credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ session_id: sessionId, message: message })
     })
       .then(function (res) {
         if (!res.ok) { throw new Error("Server responded with " + res.status); }
         return res.json();
+      })
+      .then(function (data) {
+        if (data && data.session_id) { sessionId = data.session_id; }
+        return data;
       })
       .then(function (data) {
         typing.remove();
@@ -505,5 +519,19 @@
     "delay and cancellation entitlements, refunds, check-in times, and M-Pesa payments.\n\n" +
     "What would you like to know?");
 
-  input.focus();
+  /* The composer stays disabled until the server has issued a session, so a
+     message can never be sent without one. */
+  setBusy(true);
+  startSession()
+    .then(function () {
+      setBusy(false);
+      input.focus();
+    })
+    .catch(function (err) {
+      setBusy(false);
+      setStatus(false, "Reconnecting...");
+      addBubble("bot",
+        "I couldn't start a secure session (" + err.message +
+        "). Please reload the page.");
+    });
 })();

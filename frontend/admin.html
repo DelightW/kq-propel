@@ -10,6 +10,31 @@
 </head>
 <body>
 
+<!-- Staff sign-in. The dashboard exposes the transaction ledger, which holds
+     passenger phone numbers, so nothing below renders until the API confirms
+     an authenticated session. -->
+<div id="login-screen" class="login-screen" hidden>
+  <form id="login-form" class="login-card" autocomplete="on">
+    <div class="logo" aria-hidden="true">KQ</div>
+    <h1>Staff sign-in</h1>
+    <p class="login-sub">The administrative dashboard contains passenger payment
+      records. Authorised personnel only.</p>
+
+    <label for="login-user">Username</label>
+    <input id="login-user" name="username" type="text" autocomplete="username"
+           required autocapitalize="none" spellcheck="false" />
+
+    <label for="login-pass">Password</label>
+    <input id="login-pass" name="password" type="password"
+           autocomplete="current-password" required />
+
+    <button id="login-submit" class="btn" type="submit">Sign in</button>
+    <p id="login-error" class="login-error" role="alert" aria-live="assertive"></p>
+  </form>
+</div>
+
+<div id="dashboard" hidden>
+
 <header class="admin-header">
   <div class="brand">
     <div class="logo" aria-hidden="true">KQ</div>
@@ -18,7 +43,11 @@
       <p class="sub">Agentic RAG monitoring, hallucination telemetry &amp; M-Pesa audit</p>
     </div>
   </div>
-  <button id="refresh" class="btn">Refresh</button>
+  <div class="header-actions">
+    <span id="who" class="who"></span>
+    <button id="refresh" class="btn">Refresh</button>
+    <button id="logout" class="btn btn-ghost">Sign out</button>
+  </div>
 </header>
 
 <main class="wrap">
@@ -88,8 +117,23 @@
       </table>
     </div>
   </section>
+  <section class="panel">
+    <h2>Administrative Access Log</h2>
+    <p class="hint">Staff sign-ins and reads of passenger data. Recorded because
+      the ledger below contains personal information.</p>
+    <div class="table-scroll">
+      <table id="audit-table">
+        <thead>
+          <tr><th>Time</th><th>User</th><th>Action</th><th>Detail</th><th>IP</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
 
 </main>
+
+</div>
 
 <script src="/static/admin.js"></script>
 </body>

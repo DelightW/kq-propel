@@ -7,7 +7,7 @@ design).
 """
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
 from app import config
@@ -78,6 +78,49 @@ CREATE TABLE IF NOT EXISTS payment_state (
     updated_at TEXT NOT NULL,
     currency TEXT NOT NULL DEFAULT 'KES'
 );
+
+-- Staff sessions issued after a successful login. Only the SHA-256 digest of
+-- the token is stored, so read access to this file does not yield a usable
+-- credential. Rows are server-side state rather than a stateless signed
+-- token specifically so that logout and forced revocation are possible.
+CREATE TABLE IF NOT EXISTS admin_sessions (
+    token_hash TEXT PRIMARY KEY,
+    username TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    last_seen_at TEXT NOT NULL,
+    ip TEXT,
+    user_agent TEXT
+);
+
+-- Who looked at passenger data, and when. The transaction ledger contains
+-- phone numbers, so administrative reads are themselves events worth
+-- recording.
+CREATE TABLE IF NOT EXISTS admin_audit (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT,
+    action TEXT NOT NULL,
+    detail TEXT,
+    ip TEXT,
+    created_at TEXT NOT NULL
+);
+
+-- Passenger sessions. Previously the client invented its own identifier and
+-- the server trusted it, which meant conversation history and pending payment
+-- state could be addressed by anyone who supplied the right string.
+CREATE TABLE IF NOT EXISTS chat_sessions (
+    session_id TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL,
+    last_seen_at TEXT NOT NULL,
+    ip TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_conversations_session
+    ON conversations(session_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_session
+    ON transactions(session_id);
+CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires
+    ON admin_sessions(expires_at);
 """
 
 
@@ -124,6 +167,106 @@ def _migrate(conn):
     if "currency" not in state_columns:
         conn.execute("ALTER TABLE payment_state ADD COLUMN "
                      "currency TEXT NOT NULL DEFAULT 'KES'")
+
+
+# ---------------------------------------------------------------------------
+# Staff sessions and audit
+# ---------------------------------------------------------------------------
+
+def create_admin_session(token_hash: str, username: str, ttl_minutes: int,
+                          ip: str, user_agent: str) -> None:
+    now = datetime.utcnow()
+    expires = now + timedelta(minutes=ttl_minutes)
+    with _connect() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO admin_sessions (token_hash, username, created_at, "
+            "expires_at, last_seen_at, ip, user_agent) VALUES (?,?,?,?,?,?,?)",
+            (token_hash, username, now.isoformat(), expires.isoformat(),
+             now.isoformat(), ip, user_agent),
+        )
+
+
+def get_admin_session(token_hash: str) -> Optional[Dict]:
+    """Returns the session only while it is still valid.
+
+    Expiry is enforced on read rather than by a background job, so a stale row
+    can never authorise a request even if cleanup has not run.
+    """
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM admin_sessions WHERE token_hash = ?", (token_hash,)
+        ).fetchone()
+        if not row:
+            return None
+        try:
+            expires = datetime.fromisoformat(row["expires_at"])
+        except ValueError:
+            expires = datetime.utcnow() - timedelta(seconds=1)
+        if expires <= datetime.utcnow():
+            conn.execute("DELETE FROM admin_sessions WHERE token_hash = ?", (token_hash,))
+            return None
+        return dict(row)
+
+
+def touch_admin_session(token_hash: str) -> None:
+    with _connect() as conn:
+        conn.execute("UPDATE admin_sessions SET last_seen_at = ? WHERE token_hash = ?",
+                     (datetime.utcnow().isoformat(), token_hash))
+
+
+def delete_admin_session(token_hash: str) -> None:
+    with _connect() as conn:
+        conn.execute("DELETE FROM admin_sessions WHERE token_hash = ?", (token_hash,))
+
+
+def purge_expired_admin_sessions() -> int:
+    with _connect() as conn:
+        cur = conn.execute("DELETE FROM admin_sessions WHERE expires_at <= ?",
+                            (datetime.utcnow().isoformat(),))
+        return cur.rowcount or 0
+
+
+def record_admin_audit(username: Optional[str], action: str,
+                        detail: Optional[str] = None, ip: Optional[str] = None) -> None:
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO admin_audit (username, action, detail, ip, created_at) "
+            "VALUES (?,?,?,?,?)",
+            (username, action, detail, ip, datetime.utcnow().isoformat()),
+        )
+
+
+def fetch_admin_audit(limit: int = 50) -> List[Dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT username, action, detail, ip, created_at FROM admin_audit "
+            "ORDER BY id DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Passenger sessions
+# ---------------------------------------------------------------------------
+
+def create_chat_session(session_id: str, ip: Optional[str] = None) -> None:
+    now = datetime.utcnow().isoformat()
+    with _connect() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO chat_sessions (session_id, created_at, "
+            "last_seen_at, ip) VALUES (?,?,?,?)", (session_id, now, now, ip),
+        )
+
+
+def get_chat_session(session_id: str) -> Optional[Dict]:
+    with _connect() as conn:
+        row = conn.execute("SELECT * FROM chat_sessions WHERE session_id = ?",
+                            (session_id,)).fetchone()
+        if not row:
+            return None
+        conn.execute("UPDATE chat_sessions SET last_seen_at = ? WHERE session_id = ?",
+                      (datetime.utcnow().isoformat(), session_id))
+        return dict(row)
 
 
 def log_message(session_id: str, role: str, message: str,

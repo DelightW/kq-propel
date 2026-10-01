@@ -289,3 +289,129 @@ td.empty {
 @media (prefers-reduced-motion: reduce) {
   * { transition-duration: 0.001ms !important; }
 }
+
+/* ------------------------------ sign-in -------------------------------- */
+/* The dashboard is hidden until the API confirms a session. This styling is
+   presentation only - the server rejects unauthenticated requests regardless. */
+.login-screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  padding-top: calc(20px + env(safe-area-inset-top));
+  background: linear-gradient(140deg, var(--red-darker), var(--red));
+  z-index: 60;
+  overflow-y: auto;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--white);
+  border-radius: var(--radius);
+  padding: 26px 22px calc(22px + env(safe-area-inset-bottom));
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+}
+
+.login-card .logo {
+  width: 46px;
+  height: 46px;
+  border-radius: 11px;
+  background: var(--red);
+  color: var(--white);
+  font-weight: 700;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+
+.login-card h1 {
+  margin: 0 0 6px;
+  font-size: 1.25rem;
+  color: var(--red-darker);
+}
+
+.login-sub {
+  margin: 0 0 18px;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.login-card label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-bottom: 5px;
+  color: var(--ink);
+}
+
+.login-card input {
+  font: inherit;
+  /* 16px minimum stops iOS Safari zooming the page on focus. */
+  font-size: 16px;
+  padding: 11px 12px;
+  margin-bottom: 15px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--white);
+  color: var(--ink);
+}
+
+.login-card input:focus-visible {
+  outline: 2px solid var(--red);
+  outline-offset: 1px;
+  border-color: var(--red);
+}
+
+.login-card .btn {
+  width: 100%;
+  padding: 12px;
+  font-size: 0.97rem;
+  background: var(--red);
+  color: var(--white);
+  border: none;
+}
+
+.login-card .btn:hover:not(:disabled) { background: var(--red-dark); }
+.login-card .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.login-error {
+  margin: 12px 0 0;
+  min-height: 1.1em;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--red-dark);
+  text-align: center;
+}
+
+/* --------------------------- header actions ---------------------------- */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.who {
+  font-size: 0.8rem;
+  opacity: 0.92;
+  white-space: nowrap;
+}
+
+.btn-ghost {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  color: var(--white);
+}
+
+.btn-ghost:hover:not(:disabled) { background: rgba(255, 255, 255, 0.16); }
+
+@media (max-width: 420px) {
+  .who { width: 100%; }
+}

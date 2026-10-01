@@ -2,14 +2,20 @@
 Administrative Dashboard API: sentiment metrics, hallucination/groundedness
 telemetry, RAG-Triad scores, transaction audit trail, and the dual-model
 comparison introduced in the corrections document.
+
+Every data route requires an authenticated staff session. These endpoints
+expose the transaction ledger, which stores passenger phone numbers, so
+anonymous access was a disclosure of personal data, not merely an untidy
+default.
 """
 import json
 import statistics
-from typing import Dict
+from typing import Dict, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from pydantic import BaseModel
 
-from app import config, database, sentiment
+from app import auth, config, database, sentiment
 from app.llm import compare_models, comparison_mode
 from app.vectorstore import get_vector_store
 from app.agent import SYSTEM_PROMPT
@@ -17,9 +23,86 @@ from app.agent import SYSTEM_PROMPT
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+@router.post("/login")
+def login(req: LoginRequest, request: Request, response: Response):
+    """Authenticates a staff member and issues a session cookie.
+
+    Failures are deliberately indistinguishable from one another: a wrong
+    username and a wrong password return the same message, so this endpoint
+    cannot be used to enumerate valid accounts.
+    """
+    ip = auth.client_ip(request)
+    username = (req.username or "").strip()
+
+    locked = auth.lockout_remaining(username, ip)
+    if locked:
+        database.record_admin_audit(username, "login_blocked",
+                                     f"locked for {locked}s", ip)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many failed attempts. Try again in {locked} seconds.",
+        )
+
+    cred = auth.credential()
+    username_ok = username.lower() == cred.username.lower()
+    # Verify the password even when the username is wrong, so the response
+    # time does not reveal which half of the credential was incorrect.
+    password_ok = auth.verify_password(req.password or "", cred.password_hash)
+
+    if not (username_ok and password_ok):
+        auth.record_failure(username, ip)
+        database.record_admin_audit(username, "login_failed", None, ip)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                             detail="Invalid username or password.")
+
+    auth.clear_failures(username, ip)
+    token = auth.issue_staff_session(
+        cred.username, ip, request.headers.get("user-agent", ""))
+    response.set_cookie(
+        auth.ADMIN_COOKIE, token,
+        **auth.cookie_kwargs(max_age=config.ADMIN_SESSION_TTL_MINUTES * 60),
+    )
+    database.record_admin_audit(cred.username, "login_success", None, ip)
+    return {"authenticated": True, "username": cred.username,
+            "expires_in_minutes": config.ADMIN_SESSION_TTL_MINUTES}
+
+
+@router.post("/logout")
+def logout(request: Request, response: Response,
+            session: Optional[Dict] = Depends(auth.optional_staff)):
+    token = request.cookies.get(auth.ADMIN_COOKIE)
+    if token:
+        auth.revoke_staff_session(token)
+    if session:
+        database.record_admin_audit(session.get("username"), "logout", None,
+                                     auth.client_ip(request))
+    response.delete_cookie(auth.ADMIN_COOKIE, path="/")
+    return {"authenticated": False}
+
+
+@router.get("/session")
+def session_status(session: Optional[Dict] = Depends(auth.optional_staff)):
+    """Unauthenticated probe so the dashboard can decide what to render.
+
+    It reports whether a session exists and nothing else - no metrics, no
+    passenger data - so it is safe to leave open.
+    """
+    if not session:
+        return {"authenticated": False}
+    return {"authenticated": True, "username": session.get("username"),
+            "last_seen_at": session.get("last_seen_at")}
+
+
 @router.get("/overview")
-def overview():
+def overview(request: Request, session: Dict = Depends(auth.require_staff)):
     vector_stats = get_vector_store().stats()
+    database.record_admin_audit(session.get("username"), "view_overview", None,
+                                 auth.client_ip(request))
     sentiment_dist = database.fetch_sentiment_distribution()
     evaluations = database.fetch_rag_evaluations(limit=200)
     transactions = database.fetch_transactions(limit=200)
@@ -69,12 +152,20 @@ def overview():
 
 
 @router.get("/transactions")
-def transactions():
+def transactions(request: Request, session: Dict = Depends(auth.require_staff)):
+    database.record_admin_audit(session.get("username"), "view_transactions",
+                                 None, auth.client_ip(request))
     return database.fetch_transactions(limit=100)
 
 
+@router.get("/audit")
+def audit(session: Dict = Depends(auth.require_staff)):
+    """Who accessed passenger data, and when."""
+    return {"entries": database.fetch_admin_audit(limit=100)}
+
+
 @router.get("/model-comparison")
-def model_comparison():
+def model_comparison(request: Request, session: Dict = Depends(auth.require_staff)):
     """Runs both configured generators across the full evaluation dataset over
     identical RAG context.
 
@@ -84,6 +175,8 @@ def model_comparison():
     a code path in the offline case and must not be presented as a model study.
     """
     dataset = json.loads(config.EVAL_DATASET_PATH.read_text(encoding="utf-8"))
+    database.record_admin_audit(session.get("username"), "run_model_comparison",
+                                 f"{len(dataset)} queries", auth.client_ip(request))
     store = get_vector_store()
     mode = comparison_mode()
     results = []

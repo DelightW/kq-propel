@@ -14,6 +14,98 @@
   var cmpStatus = document.getElementById("comparison-status");
   var refreshBtn = document.getElementById("refresh");
   var runCmpBtn = document.getElementById("run-comparison");
+  var auditBody = document.querySelector("#audit-table tbody");
+  var loginScreen = document.getElementById("login-screen");
+  var loginForm = document.getElementById("login-form");
+  var loginUser = document.getElementById("login-user");
+  var loginPass = document.getElementById("login-pass");
+  var loginError = document.getElementById("login-error");
+  var loginSubmit = document.getElementById("login-submit");
+  var dashboard = document.getElementById("dashboard");
+  var logoutBtn = document.getElementById("logout");
+  var who = document.getElementById("who");
+
+  /* ------------------------------- auth -------------------------------- */
+
+  /* Every request carries the session cookie, and any 401 drops straight back
+     to the sign-in screen. The server is the authority: hiding the dashboard
+     in the client is presentation, not protection. */
+  function api(path, options) {
+    var opts = options || {};
+    opts.credentials = "same-origin";
+    return fetch(path, opts).then(function (r) {
+      if (r.status === 401) {
+        showLogin("Your session has expired. Please sign in again.");
+        throw new Error("Not signed in");
+      }
+      return r;
+    });
+  }
+
+  function showLogin(message) {
+    dashboard.hidden = true;
+    loginScreen.hidden = false;
+    loginError.textContent = message || "";
+    if (loginUser) { loginUser.focus(); }
+  }
+
+  function showDashboard(username) {
+    loginScreen.hidden = true;
+    dashboard.hidden = false;
+    if (who && username) { who.textContent = "Signed in as " + username; }
+    loadOverview();
+  }
+
+  function checkSession() {
+    fetch("/api/admin/session", { credentials: "same-origin" })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d && d.authenticated) { showDashboard(d.username); }
+        else { showLogin(""); }
+      })
+      .catch(function () {
+        showLogin("Cannot reach the server.");
+      });
+  }
+
+  function submitLogin(ev) {
+    ev.preventDefault();
+    loginSubmit.disabled = true;
+    loginError.textContent = "";
+    fetch("/api/admin/login", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: loginUser.value.trim(),
+        password: loginPass.value
+      })
+    })
+      .then(function (r) {
+        return r.json().then(function (body) { return { ok: r.ok, body: body }; });
+      })
+      .then(function (res) {
+        if (!res.ok) {
+          throw new Error((res.body && res.body.detail) || "Sign-in failed.");
+        }
+        loginPass.value = "";
+        showDashboard(res.body.username);
+      })
+      .catch(function (err) {
+        loginError.textContent = err.message;
+      })
+      .then(function () { loginSubmit.disabled = false; });
+  }
+
+  function doLogout() {
+    logoutBtn.disabled = true;
+    fetch("/api/admin/logout", { method: "POST", credentials: "same-origin" })
+      .catch(function () { /* sign out locally regardless */ })
+      .then(function () {
+        logoutBtn.disabled = false;
+        showLogin("You have been signed out.");
+      });
+  }
 
   function el(tag, cls, text) {
     var n = document.createElement(tag);
@@ -62,17 +154,42 @@
 
   function loadOverview() {
     refreshBtn.disabled = true;
-    fetch("/api/admin/overview")
+    api("/api/admin/overview")
       .then(function (r) {
         if (!r.ok) { throw new Error("HTTP " + r.status); }
         return r.json();
       })
       .then(renderOverview)
+      .then(loadAudit)
       .catch(function (err) {
+        if (err.message === "Not signed in") { return; }
         kpis.innerHTML = "";
         kpis.appendChild(card("Connection", "Offline", err.message));
       })
       .then(function () { refreshBtn.disabled = false; });
+  }
+
+  function loadAudit() {
+    return api("/api/admin/audit")
+      .then(function (r) { return r.ok ? r.json() : { entries: [] }; })
+      .then(function (d) {
+        var entries = (d && d.entries) || [];
+        auditBody.innerHTML = "";
+        if (!entries.length) {
+          emptyRow(auditBody, 5, "No administrative activity recorded yet.");
+          return;
+        }
+        entries.forEach(function (e) {
+          var tr = el("tr");
+          tr.appendChild(el("td", null, e.created_at || "-"));
+          tr.appendChild(el("td", null, e.username || "-"));
+          tr.appendChild(el("td", null, (e.action || "-").replace(/_/g, " ")));
+          tr.appendChild(el("td", null, e.detail || "-"));
+          tr.appendChild(el("td", null, e.ip || "-"));
+          auditBody.appendChild(tr);
+        });
+      })
+      .catch(function () { /* audit is supplementary; never block the view */ });
   }
 
   function renderOverview(d) {
@@ -228,13 +345,18 @@
     cmpBody.innerHTML = "";
     cmpSummary.innerHTML = "";
 
-    fetch("/api/admin/model-comparison")
+    fetch("/api/admin/model-comparison", { credentials: "same-origin" })
       .then(function (r) {
+        if (r.status === 401) {
+          showLogin("Your session has expired. Please sign in again.");
+          throw new Error("Not signed in");
+        }
         if (!r.ok) { throw new Error("HTTP " + r.status); }
         return r.json();
       })
       .then(renderComparison)
       .catch(function (err) {
+        if (err.message === "Not signed in") { return; }
         cmpStatus.textContent = "Comparison failed: " + err.message;
       })
       .then(function () { runCmpBtn.disabled = false; });
@@ -319,6 +441,8 @@
 
   refreshBtn.addEventListener("click", loadOverview);
   runCmpBtn.addEventListener("click", runComparison);
+  loginForm.addEventListener("submit", submitLogin);
+  logoutBtn.addEventListener("click", doLogout);
 
-  loadOverview();
+  checkSession();
 })();
