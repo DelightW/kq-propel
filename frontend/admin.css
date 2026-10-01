@@ -415,3 +415,8 @@ td.empty {
 @media (max-width: 420px) {
   .who { width: 100%; }
 }
+
+/* A class that sets `display` outranks the browser's own [hidden] rule, so
+   `el.hidden = true` would leave the login overlay covering the dashboard.
+   This keeps the attribute authoritative wherever it is used. */
+[hidden] { display: none !important; }

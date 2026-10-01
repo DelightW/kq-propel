@@ -138,6 +138,23 @@ async function load(path) {
   check("viewport meta present",
     !!cdoc.querySelector('meta[name="viewport"]'));
 
+  /* An author rule that sets `display` beats the browser's built-in
+     [hidden] { display: none }, because author styles outrank the user-agent
+     stylesheet whatever the specificity. When that happened to .login-screen
+     the overlay stayed painted over the dashboard after a successful
+     sign-in. jsdom does not model the user-agent stylesheet, so this is
+     asserted against the stylesheet text rather than the rendered result. */
+  console.log("\n=== Stylesheets: hidden attribute stays authoritative ===");
+  const guard = /\[hidden\][^{]*\{[^}]*display\s*:\s*none\s*!important/;
+  for (const sheet of ["admin.css", "chat.css"]) {
+    const css = await (await fetch(BASE + "/static/" + sheet)).text();
+    const setsDisplay = /\.(login-screen|scrim)[^{]*\{[^}]*display\s*:/.test(css);
+    check(sheet + " keeps [hidden] winning over class display rules",
+      guard.test(css) || !setsDisplay,
+      setsDisplay ? "sets display on an element toggled via .hidden but has no [hidden] override"
+                  : "no overlay rule sets display");
+  }
+
   console.log("\n" + "=".repeat(56));
   console.log("PASSED " + pass + "   FAILED " + fail);
   process.exit(fail ? 1 : 0);

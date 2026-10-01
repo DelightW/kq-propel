@@ -569,3 +569,8 @@ body {
   *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
   .chat-window { scroll-behavior: auto; }
 }
+
+/* An author rule that sets `display` outranks the browser's own [hidden]
+   rule, which would leave an element painted after `el.hidden = true`.
+   This keeps the attribute authoritative wherever it is used. */
+[hidden] { display: none !important; }
