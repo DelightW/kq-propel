@@ -102,11 +102,18 @@ def _is_heading(sentence: str) -> bool:
 
 
 def _section_label(chunk: Dict) -> str:
+    """'Refund Policy - Section 5: Name Corrections (version 1.0, as published
+    23 Sep 2026)'. The edition says which version of the policy was relied on."""
+    from app import provenance
     section = (chunk.get("section") or "").strip()
-    source = (chunk.get("source") or "").replace(".txt", "").replace("_", " ").title()
+    raw_source = chunk.get("source") or ""
+    source = raw_source.replace(".txt", "").replace("_", " ").title()
     if section and not section.lower().startswith(source.lower()):
-        return f"{source} - {section}"
-    return section or source
+        label = f"{source} - {section}"
+    else:
+        label = section or source
+    edition = provenance.edition_label(raw_source)
+    return f"{label} ({edition})" if edition else label
 
 
 def compose_answer(question: str, chunks: List[Dict], max_sentences: int = 3,

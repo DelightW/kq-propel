@@ -15,7 +15,7 @@ from typing import Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
 
-from app import auth, config, database, sentiment
+from app import auth, config, database, payments, sentiment
 from app.llm import compare_models, comparison_mode
 from app.vectorstore import get_vector_store
 from app.agent import SYSTEM_PROMPT
@@ -105,7 +105,6 @@ def overview(request: Request, session: Dict = Depends(auth.require_staff)):
                                  auth.client_ip(request))
     sentiment_dist = database.fetch_sentiment_distribution()
     evaluations = database.fetch_rag_evaluations(limit=200)
-    transactions = database.fetch_transactions(limit=200)
 
     if evaluations:
         avg_context = round(statistics.mean(e["context_relevance"] for e in evaluations), 3)
@@ -115,18 +114,12 @@ def overview(request: Request, session: Dict = Depends(auth.require_staff)):
     else:
         avg_context = avg_grounded = avg_relevance = hallucination_rate = 0.0
 
-    # Transactions can now settle on two rails in two currencies, so a single
-    # total would silently add dollars to shillings. Totals are kept per
-    # currency and the shilling figure is reported separately.
-    totals_by_currency: Dict[str, float] = {}
-    for t in transactions:
-        code = (t.get("currency") or "KES").upper()
-        totals_by_currency[code] = totals_by_currency.get(code, 0.0) + (t["amount"] or 0)
-    total_amount = totals_by_currency.get("KES", 0.0)
-    counts_by_method: Dict[str, int] = {}
-    for t in transactions:
-        rail = (t.get("method") or "mpesa").lower()
-        counts_by_method[rail] = counts_by_method.get(rail, 0) + 1
+    # Settled value is paid transactions only, per currency. It used to add up
+    # every row - failed, pending and simulated attempts included - so a failed
+    # Ksh 5,000 push and a pending Ksh 9,000 one were reported as Ksh 14,000
+    # received. Pending money is shown separately and never as income.
+    payments.reconcile_pending()
+    ledger = payments.summary(limit_recent=10)
 
     return {
         "app_title": config.APP_TITLE,
@@ -141,11 +134,12 @@ def overview(request: Request, session: Dict = Depends(auth.require_staff)):
             "metric_version": database.METRIC_VERSION,
         },
         "transactions": {
-            "count": len(transactions),
-            "total_amount_ksh": total_amount,
-            "totals_by_currency": {k: round(v, 2) for k, v in totals_by_currency.items()},
-            "counts_by_method": counts_by_method,
-            "recent": transactions[:10],
+            "count": ledger["count"],
+            "settled_by_currency": {k: round(v, 2) for k, v in ledger["settled_by_currency"].items()},
+            "pending_by_currency": {k: round(v, 2) for k, v in ledger["pending_by_currency"].items()},
+            "counts_by_status": ledger["counts_by_status"],
+            "counts_by_method": ledger["counts_by_method"],
+            "recent": ledger["recent"],
         },
         "sentiment_model_metrics": sentiment.get_metrics(),
     }

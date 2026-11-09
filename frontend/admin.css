@@ -267,6 +267,8 @@ td.empty {
 }
 .pill.ok { background: #e2f7e8; color: #1c6b34; }
 .pill.fail { background: var(--red); color: var(--white); }
+.pill.warn { background: #fff4d6; color: #7a5300; }
+.pill.muted { background: #ececec; color: #555; }
 
 /* ============================ tablet / laptop ============================ */
 @media (min-width: 600px) {

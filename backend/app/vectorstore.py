@@ -17,12 +17,13 @@ answers possible (a whole-document chunk forces the model to dump the entire
 manual back at the passenger).
 """
 import json
+import os
 import re
 import uuid
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from app import config, retrieval
+from app import config, places, retrieval
 from app import embeddings as embeddings_module
 from app.embeddings import cosine_similarity, embed_text, embed_texts, provider_name
 
@@ -115,6 +116,53 @@ def _heading_boost(query_tokens: List[str], record: Dict) -> float:
 
 _MMR_CANDIDATE_POOL = 15
 
+# Applied to a section that lists specific routes when the passenger named a
+# place that none of those routes cover (see places.route_mismatch). The
+# exception list for Nairobi to Mumbai and Kenyan domestic flights otherwise
+# outranked the general allowance for a Nairobi to London question, because
+# "Nairobi" matched lexically. A penalty, not removal: the section is still
+# retrievable when nothing better exists.
+_ROUTE_MISMATCH_FACTOR = float(os.getenv("RETRIEVAL_ROUTE_MISMATCH_FACTOR", "0.75"))
+
+# How redundant an additional chunk of an already-represented document is.
+# The first repeat is plausibly useful - a long policy often answers a question
+# across two paragraphs - so it is only moderately penalised. Each further
+# repeat is penalised harder, because by the third paragraph of one document
+# the marginal value is almost always below that of the first paragraph of a
+# document not yet represented at all. See tools/tune_retrieval.py.
+_SAME_DOC_BASE = float(os.getenv("RETRIEVAL_SAME_DOC_BASE", "0.6"))
+_SAME_DOC_STEP = float(os.getenv("RETRIEVAL_SAME_DOC_STEP", "0.3"))
+
+# How far a sub-question match may promote a chunk, relative to the whole
+# question's own best match.
+#
+# DEFAULT 0.0 - DECOMPOSITION IS DISABLED, AND THAT IS A MEASURED DECISION.
+# Splitting compound questions ("What am I owed and what do I owe?") and fusing
+# the per-intent rankings is a standard multi-hop technique and it was expected
+# to help here. Swept over the whole evaluation set it never did: at every
+# weight low enough to be safe (<= 0.85) it changed nothing at all, and at
+# every weight high enough to change the ranking it *cost* recall - -0.011 at
+# 0.90, -0.033 at 0.95 - entirely on the multi-hop questions it was meant to
+# fix. Fragment matches promoted chunks that answered half the question well
+# and the whole question badly.
+#
+# The code is kept, reachable, and reproducible via tools/tune_doc_diversity.py
+# so the negative result can be re-checked against a larger evaluation set,
+# where it may well behave differently. It is not enabled on the strength of
+# being a good idea.
+_SUBQUERY_WEIGHT = float(os.getenv("RETRIEVAL_SUBQUERY_WEIGHT", "0.0"))
+
+
+def _same_doc_penalty(repeats: int) -> float:
+    """Redundancy attributed to a candidate purely for repeating a document.
+
+    `repeats` is how many already-selected chunks come from the same document.
+    Returns 0.0 for a document not yet represented.
+    """
+    if repeats <= 0:
+        return 0.0
+    return min(1.0, _SAME_DOC_BASE + _SAME_DOC_STEP * (repeats - 1))
+
 
 def _mmr_select(order: List[int], scored: List[Dict], records: List[Dict],
                 k: int, lam: float, stale: bool) -> List[int]:
@@ -131,10 +179,19 @@ def _mmr_select(order: List[int], scored: List[Dict], records: List[Dict],
     is already chosen`, so each slot has to earn its place by adding something.
     `lam = 1.0` disables it and restores plain top-k.
 
-    Document identity is folded into the redundancy term: two chunks of the same
-    policy are treated as at least moderately redundant even when their wording
-    diverges, because a second paragraph of an already-cited document adds less
-    than the first paragraph of an uncited one.
+    Document identity is folded into the redundancy term, and *escalates* with
+    the number of chunks already taken from that document. An earlier version
+    applied a flat same-document penalty through `max()`, which saturated: the
+    second chunk of a document cost exactly as much as the fourth, so nothing
+    stopped a single policy occupying every slot.
+
+    Measured honestly, escalation raises the average number of distinct
+    documents per answer from 2.13 to 2.37 but leaves gold-key coverage at
+    0.900 - identical to plain top-k. It is kept because more distinct sources
+    per answer is the behaviour the design intends, not because it fixed
+    multi-hop recall. It did not. The chunks holding the missing keys rank
+    #5 to #20, far below the cut, so no diversity term could have promoted
+    them; see tools/rank_missing_keys.py.
     """
     if k <= 0 or not order:
         return []
@@ -149,21 +206,23 @@ def _mmr_select(order: List[int], scored: List[Dict], records: List[Dict],
     best_score = max(scored[i]["score"] for i in pool) or 1.0
     rel = {i: scored[i]["score"] / best_score for i in pool}
 
-    def redundancy(i: int, j: int) -> float:
-        same_doc = 0.6 if scored[i].get("doc_id") == scored[j].get("doc_id") else 0.0
+    def penalty_for(i: int, selected: List[int]) -> float:
+        repeats = sum(1 for j in selected
+                      if scored[i].get("doc_id") == scored[j].get("doc_id"))
+        doc_penalty = _same_doc_penalty(repeats)
         if stale:
-            return same_doc
-        sim = cosine_similarity(records[i].get("embedding") or [],
-                                records[j].get("embedding") or [])
-        return max(sim, same_doc)
+            return doc_penalty
+        sim = max(cosine_similarity(records[i].get("embedding") or [],
+                                    records[j].get("embedding") or [])
+                  for j in selected)
+        return max(sim, doc_penalty)
 
     selected = [pool[0]]
     remaining = pool[1:]
     while remaining and len(selected) < k:
         best, best_value = None, None
         for i in remaining:
-            penalty = max(redundancy(i, j) for j in selected)
-            value = lam * rel[i] - (1.0 - lam) * penalty
+            value = lam * rel[i] - (1.0 - lam) * penalty_for(i, selected)
             if best_value is None or value > best_value:
                 best, best_value = i, value
         selected.append(best)
@@ -174,8 +233,56 @@ def _mmr_select(order: List[int], scored: List[Dict], records: List[Dict],
 class _HybridSearchMixin:
 
     def _rank(self, records: List[Dict], query: str, k: int) -> List[Dict]:
+        """Rank for one query, decomposing compound questions first.
+
+        Compound questions are the last source of partial recall on the
+        evaluation set: "What am I owed and what do I owe?" embeds to a point
+        between its two intents, and the chunk answering the second half ranked
+        #20 of 52.
+
+        Sub-question results are fused by taking each chunk's best score across
+        the intents, then a single MMR pass runs over the fused ranking. An
+        earlier attempt interleaved each sub-question's top-k instead, which
+        *lost* 0.033 coverage: weak fragment matches displaced strong whole-
+        question ones, and running MMR per fragment meant nothing enforced
+        diversity across the merged set.
+        """
         if not records:
             return []
+        parts = retrieval.subqueries(query) if _SUBQUERY_WEIGHT > 0 else [query]
+        scored, stale = self._score_all(records, parts[0])
+
+        for part in parts[1:]:
+            alt, _ = self._score_all(records, part)
+            # Scale each intent to its own best chunk so a sub-question that
+            # simply matches the corpus less well overall cannot be drowned
+            # out by one that matches it better. The weight caps how far a
+            # fragment match may promote a chunk above the whole question's
+            # own ranking; it is swept, not assumed.
+            alt_best = max((a["score"] for a in alt), default=0.0) or 1.0
+            own_best = max((s["score"] for s in scored), default=0.0) or 1.0
+            for base, other in zip(scored, alt):
+                rescaled = other["score"] / alt_best * own_best * _SUBQUERY_WEIGHT
+                if rescaled > base["score"]:
+                    base["score"] = round(rescaled, 4)
+                    base["lexical_score"] = other["lexical_score"]
+                    base["dense_score"] = other["dense_score"]
+                    base["matched_subquery"] = part
+
+        order = sorted(range(len(scored)), key=lambda i: scored[i]["score"], reverse=True)
+        selected = _mmr_select(order, scored, records, k,
+                               config.RETRIEVAL_MMR_LAMBDA, stale)
+        top = [scored[i] for i in selected]
+        # Drop chunks with no lexical signal at all when a stronger match
+        # exists; prevents unrelated policies padding the grounding context.
+        if top and top[0]["lexical_score"] > 0:
+            top = [t for t in top if t["lexical_score"] > 0] or top[:1]
+        return top
+
+    def _score_all(self, records: List[Dict], query: str):
+        """Score every chunk for one query. Returns (scored, stale)."""
+        if not records:
+            return [], False
         query_tokens = retrieval.expand_query(retrieval.tokenize(query))
 
         corpus_tokens = [retrieval.tokenize(r.get("search_text") or r["text"]) for r in records]
@@ -195,22 +302,18 @@ class _HybridSearchMixin:
         scored = []
         for rec, lex, dense, score in zip(records, lexical_scores, dense_scores, blended):
             item = {key: value for key, value in rec.items() if key != "embedding"}
-            item["score"] = round(score * _heading_boost(query_tokens, rec), 4)
+            boosted = score * _heading_boost(query_tokens, rec)
+            if places.route_mismatch(query, rec.get("text") or ""):
+                boosted *= _ROUTE_MISMATCH_FACTOR
+                item["route_mismatch"] = True
+            item["score"] = round(boosted, 4)
             item["lexical_score"] = round(lex, 4)
             item["dense_score"] = round(dense, 4)
             if stale:
                 item["dense_stage"] = "disabled - index built by a different embedding backend"
             scored.append(item)
 
-        order = sorted(range(len(scored)), key=lambda i: scored[i]["score"], reverse=True)
-        selected = _mmr_select(order, scored, records, k,
-                               config.RETRIEVAL_MMR_LAMBDA, stale)
-        top = [scored[i] for i in selected]
-        # Drop chunks with no lexical signal at all when a stronger match
-        # exists; prevents unrelated policies padding the grounding context.
-        if top and top[0]["lexical_score"] > 0:
-            top = [t for t in top if t["lexical_score"] > 0] or top[:1]
-        return top
+        return scored, stale
 
 
 class LocalVectorStore(_HybridSearchMixin):

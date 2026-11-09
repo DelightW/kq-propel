@@ -5,9 +5,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from app import auth, config, database, sentiment
+from app import auth, config, database, payments, sentiment
 from app.vectorstore import ingest_policy_directory
-from app.routers import chat, admin
+from app.routers import admin, chat
+from app.routers import payments as payment_routes
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend"
 
@@ -25,6 +26,7 @@ app.add_middleware(
 
 app.include_router(chat.router)
 app.include_router(admin.router)
+app.include_router(payment_routes.router)
 
 
 @app.on_event("startup")
@@ -33,6 +35,8 @@ def startup():
     database.purge_expired_admin_sessions()
     ingest_policy_directory()
     sentiment.train_frustration_classifier()
+    # Settle or expire payments whose outcome arrived while the server was down.
+    payments.reconcile_pending()
     print(auth.startup_banner(), flush=True)
 
 

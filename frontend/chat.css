@@ -427,6 +427,22 @@ body {
   padding: 8px 10px;
 }
 
+.pay-status {
+  margin-top: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 7px 10px;
+  background: #fff4d6;
+  color: #7a5300;
+}
+.pay-status.paid { background: #e2f7e8; color: #1c6b34; }
+.pay-status.failed,
+.pay-status.needs_review { background: #fde4e4; color: #8a1c1c; }
+.pay-status.cancelled,
+.pay-status.expired,
+.pay-status.simulated { background: #ececec; color: #555; }
+
 .pay-link {
   display: inline-block;
   margin-top: 10px;

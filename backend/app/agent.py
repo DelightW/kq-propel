@@ -14,7 +14,7 @@ import uuid
 from typing import Dict, List, Optional, Tuple
 
 from app import (aviationstack, composer, config, daraja, database, evaluation,
-                  paypal, retrieval, sentiment)
+                  payments, paypal, retrieval, sentiment)
 from app.llm import get_primary_llm
 from app.vectorstore import get_vector_store
 
@@ -53,6 +53,13 @@ _TRANSACTIONAL_RE = re.compile(
 # boundary, so a marginal call does not open with an apology to a passenger
 # who merely asked a question. Named because it is applied in two places.
 EMPATHY_THRESHOLD = 0.55
+
+# Share of a question's subject words that the retrieved sections must
+# contain, and that the policy vocabulary must contain, before the agent
+# answers from them. Tuned with
+# tools/test_grounding_guard.py against the evaluation set (every question must
+# pass) and off-topic probes (every probe must be refused).
+GROUNDING_MIN_COVERAGE = 0.5
 
 _PAYMENT_TOPIC_RE = re.compile(r"\b(pay|payment|m-?pesa|mpesa|stk|till|settle|card|visa)\b",
                                 re.IGNORECASE)
@@ -196,16 +203,42 @@ def _is_grounded_in_context(message: str, chunks: List[Dict]) -> bool:
     the question. Retrieval always returns its best candidates, so without this
     check an off-topic question is answered from whichever section ranked
     highest - which is how a departure-time question ended up being answered
-    with refund processing timelines."""
-    query_tokens = set(retrieval.tokenize(message))
-    if not query_tokens:
+    with refund processing timelines.
+
+    Only words that carry subject matter are weighed (`topical_tokens` drops
+    filler words and place names), and only those the policy corpus could
+    possibly contain. A word the corpus never uses ("nobody", "weather") says
+    nothing about whether a retrieved section is relevant, so it neither helps
+    nor hurts. Each word also matches through its synonyms, so a "bag" question
+    is supported by a "baggage" section.
+
+    Two failures motivated this form. "My bag has been missing for three days
+    and NOBODY is helping me!! What can I claim?" was refused although the
+    delayed-baggage sections were retrieved, because filler words diluted the
+    overlap below the old 30% threshold. "What is the weather in Nairobi?" was
+    answered, because "nairobi" alone matched a baggage section.
+    """
+    vocab = retrieval.corpus_vocabulary()
+
+    def forms(token: str) -> set:
+        return set(retrieval.expand_query([token]))
+
+    topical = list(dict.fromkeys(retrieval.topical_tokens(message)))
+    evidence = [t for t in topical if forms(t) & vocab]
+    # A question mostly about things the policies never mention ("exchange
+    # rate of the shilling", "translate hello") is off-topic even when one of
+    # its words happens to appear somewhere in the corpus.
+    if not evidence or len(evidence) / len(topical) < GROUNDING_MIN_COVERAGE:
         return False
-    for chunk in chunks[:2]:
-        chunk_tokens = set(retrieval.tokenize(
+    # Coverage is judged across all retrieved sections together: a multi-part
+    # question ("when must I be at the airport and what will the surfboard
+    # cost?") is answered by two documents, neither of which covers it alone.
+    retrieved_tokens = set()
+    for chunk in chunks:
+        retrieved_tokens.update(retrieval.tokenize(
             chunk.get("search_text") or chunk.get("text") or ""))
-        if len(query_tokens & chunk_tokens) / len(query_tokens) >= 0.3:
-            return True
-    return False
+    hits = sum(1 for t in evidence if forms(t) & retrieved_tokens)
+    return hits / len(evidence) >= GROUNDING_MIN_COVERAGE
 
 
 def _normalize_phone(raw_match) -> str:
@@ -229,74 +262,123 @@ def _distinct_amounts(text: str) -> List[Tuple[float, str]]:
     return seen
 
 
+def _new_reference() -> str:
+    # Daraja accepts at most 12 characters of account reference.
+    return f"KQ{uuid.uuid4().hex[:8].upper()}"
+
+
+def _existing_attempt_result(attempt: Dict) -> Dict:
+    """A payment result describing an attempt already in progress, returned
+    instead of charging the passenger a second time."""
+    return {
+        "success": True, "duplicate": True, "source": attempt.get("source"),
+        "status": attempt.get("status"), "method": attempt.get("method"),
+        "currency": attempt.get("currency"),
+        "amount": payments.from_minor(attempt.get("amount_minor")),
+        "phone_number": attempt.get("phone_number"), "reference": attempt.get("reference"),
+        "checkout_request_id": attempt.get("checkout_request_id"),
+    }
+
+
 def _execute_payment(session_id: str, phone: str, amount: float, description: str,
-                      trace: List[Dict]) -> Dict:
-    """Runs the STK push, records it in the audit trail, and clears any
-    outstanding payment offer for the session."""
-    reference = f"KQPROPEL-{uuid.uuid4().hex[:8].upper()}"
+                      trace: List[Dict], quote_id: Optional[str] = None) -> Dict:
+    """Sends an STK push for a quoted fee and records it in the ledger.
+
+    If the quote already has a payment in progress, that payment is returned
+    and nothing is sent: a repeated "yes" or a retried request must never
+    charge twice.
+    """
+    existing = payments.open_attempt(quote_id)
+    if existing:
+        trace.append({"step": "thought",
+                       "content": f"Payment {existing['reference']} for this quote is already "
+                                  f"{existing['status']}; not sending a second prompt."})
+        return _existing_attempt_result(existing)
+
+    reference = _new_reference()
     result = daraja.initiate_stk_push(
         phone_number=phone, amount=amount, reference=reference, description=description,
     )
     trace.append({"step": "action", "tool": "initiate_mpesa_stk_push",
                    "input": {"phone": phone, "amount": amount, "reference": reference},
                    "observation": result})
-    database.log_transaction(
-        session_id=session_id,
-        checkout_request_id=result.get("checkout_request_id", ""),
-        phone_number=phone, amount=amount, reference=reference,
-        description=description,
-        status="initiated" if result.get("success") else "failed",
-        method="mpesa", currency="KES",
-    )
-    database.clear_pending_payment(session_id)
-    result.setdefault("amount", amount)
-    result.setdefault("phone_number", phone)
-    result.setdefault("reference", reference)
-    result["method"] = "mpesa"
-    result["currency"] = "KES"
+    charged = result.get("amount", amount)
+    row, created = payments.record_attempt(
+        session_id=session_id, quote_id=quote_id, method="mpesa", currency="KES",
+        amount=charged, result=result, phone_number=phone, reference=reference,
+        description=description)
+    if not created:
+        return _existing_attempt_result(row)
+    if result.get("success"):
+        database.clear_pending_payment(session_id)
+    result.update({"amount": charged, "phone_number": phone, "reference": reference,
+                   "method": "mpesa", "currency": "KES", "status": row["status"]})
     return result
 
 
 def _execute_card_payment(session_id: str, amount: float, currency: str,
-                           description: str, trace: List[Dict]) -> Dict:
+                           description: str, trace: List[Dict],
+                           quote_id: Optional[str] = None) -> Dict:
     """Creates a card checkout for the fee in the currency it is published in.
 
     Nothing is converted here. That is the point of the rail: the dollar fees
     Kenya Airways publishes can be charged as dollars, so the guest is never
     quoted a figure that depends on this prototype's exchange-rate assumption.
     """
-    reference = f"KQPROPEL-{uuid.uuid4().hex[:8].upper()}"
+    existing = payments.open_attempt(quote_id)
+    if existing:
+        trace.append({"step": "thought",
+                       "content": f"Payment {existing['reference']} for this quote is already "
+                                  f"{existing['status']}; not creating a second checkout."})
+        return _existing_attempt_result(existing)
+
+    reference = _new_reference()
     result = paypal.create_card_order(
         amount=amount, currency=currency, reference=reference, description=description)
     trace.append({"step": "action", "tool": "create_card_checkout",
                    "input": {"amount": amount, "currency": currency,
                              "reference": reference},
                    "observation": result})
-    database.log_transaction(
-        session_id=session_id,
-        checkout_request_id=result.get("order_id", ""),
-        phone_number="",
-        amount=amount, reference=reference, description=description,
-        status="awaiting_approval" if result.get("success") else "failed",
-        method="card", currency=currency,
-    )
-    database.clear_pending_payment(session_id)
-    result.setdefault("reference", reference)
-    result["method"] = "card"
+    row, created = payments.record_attempt(
+        session_id=session_id, quote_id=quote_id, method="card", currency=currency,
+        amount=amount, result=result, reference=reference, description=description)
+    if not created:
+        return _existing_attempt_result(row)
+    if result.get("success"):
+        database.clear_pending_payment(session_id)
+    result.update({"reference": reference, "method": "card", "status": row["status"]})
     return result
 
 
-def _payment_sent_message(amount: float, phone: str) -> str:
+def _duplicate_payment_message(result: Dict) -> str:
+    if result.get("status") == payments.PAID:
+        return (f"That fee has already been paid (reference {result.get('reference')}). "
+                "You won't be charged again.")
+    rail = "M-Pesa prompt" if result.get("method") == "mpesa" else "card checkout"
+    return (f"A {rail} for this fee is already in progress (reference "
+            f"{result.get('reference')}), so I haven't started another one. Complete or "
+            "cancel that one first - its status is shown below.")
+
+
+def _payment_sent_message(amount: float, phone: str, result: Optional[Dict] = None) -> str:
+    if result and result.get("duplicate"):
+        return _duplicate_payment_message(result)
+    if result and result.get("source") == payments.SIMULATED:
+        return (f"Demonstration mode: this is where an M-Pesa prompt for **Ksh {amount:,.0f}** "
+                f"would be sent to {phone}. No real payment request was made, and nothing "
+                "will be charged.")
     return (
-        f"Done - I've sent an M-Pesa payment prompt for **Ksh {amount:,.0f}** to {phone}.\n\n"
-        "Check your phone: a payment request should appear within a few seconds. Enter your "
-        "M-Pesa PIN to authorise it, and you'll get a confirmation SMS from Safaricom.\n\n"
-        "If the prompt doesn't arrive, tell me and I'll send it again."
+        f"I've sent an M-Pesa payment prompt for **Ksh {amount:,.0f}** to {phone}.\n\n"
+        "Check your phone: the request should appear within a few seconds. Enter your "
+        "M-Pesa PIN to authorise it. The payment status below updates once Safaricom "
+        "confirms the outcome - the fee isn't settled until it shows as paid."
     )
 
 
 def _card_checkout_message(amount: float, currency: str, result: Dict) -> str:
-    simulated = "simulated" in str(result.get("source", ""))
+    if result.get("duplicate"):
+        return _duplicate_payment_message(result)
+    simulated = result.get("source") == payments.SIMULATED
     link = result.get("approval_url") or ""
     msg = (
         f"Here's your secure card checkout for **{currency} {amount:,.2f}**.\n\n"
@@ -411,6 +493,23 @@ def _handle_pending_payment(session_id: str, message: str, pending: Dict,
     amount = float(pending["amount"])
     currency = (pending.get("currency") or "KES").upper()
     description = pending.get("description") or "KQ-Propel ancillary fee settlement"
+    quote_id = pending.get("quote_id")
+
+    # A quote is only good for PAYMENT_QUOTE_TTL_MINUTES. Settling an old one
+    # could charge a fee the policy no longer states.
+    if payments.quote_expired(pending):
+        database.clear_pending_payment(session_id)
+        replying_to_offer = bool(_AFFIRM_RE.match(message) or _PHONE_RE.search(message)
+                                 or _CARD_RE.search(message) or _MPESA_RE.search(message)
+                                 or _TRANSACTIONAL_RE.search(message))
+        if not replying_to_offer:
+            return None
+        trace.append({"step": "thought", "content": "Payment offer has expired; not settling it."})
+        return _finalize_direct(
+            session_id, message,
+            "That payment offer has expired, so I haven't charged anything. Ask me about "
+            "the fee again and I'll quote it afresh from the current policy.",
+            trace, sentiment_result)
 
     if _DECLINE_RE.match(message):
         database.clear_pending_payment(session_id)
@@ -432,10 +531,11 @@ def _handle_pending_payment(session_id: str, message: str, pending: Dict,
                        "content": (f"M-Pesa number supplied for the outstanding "
                                    f"{currency} {amount:,.2f} payment. "
                                    f"Pushing Ksh {kes_amount:,.0f}.")})
-        result = _execute_payment(session_id, phone, kes_amount, description, trace)
+        result = _execute_payment(session_id, phone, kes_amount, description, trace,
+                                   quote_id=quote_id)
         if result.get("success"):
-            answer = _payment_sent_message(kes_amount, phone)
-            if conversion_note:
+            answer = _payment_sent_message(kes_amount, phone, result)
+            if conversion_note and not result.get("duplicate"):
                 answer = conversion_note + "\n\n" + answer
         else:
             answer = ("I wasn't able to send the M-Pesa prompt just now. Please try again in "
@@ -449,7 +549,8 @@ def _handle_pending_payment(session_id: str, message: str, pending: Dict,
                        "content": (f"Passenger chose the card rail for {currency} "
                                    f"{amount:,.2f}. No conversion is required - the card is "
                                    f"charged in the published currency.")})
-        result = _execute_card_payment(session_id, amount, currency, description, trace)
+        result = _execute_card_payment(session_id, amount, currency, description, trace,
+                                        quote_id=quote_id)
         answer = (_card_checkout_message(amount, currency, result) if result.get("success")
                   else "I couldn't create the card checkout just now. Please try again in a "
                        "moment, or pay at the airport counter.")
@@ -460,8 +561,7 @@ def _handle_pending_payment(session_id: str, message: str, pending: Dict,
         # The rail is chosen but the number is not known yet, so nothing is
         # pushed - we ask for the line first.
         kes_amount, conversion_note = _to_kes(amount, currency)
-        database.set_pending_payment(session_id, amount, description, "awaiting_phone",
-                                      currency=currency)
+        database.update_pending_stage(session_id, "awaiting_phone")
         trace.append({"step": "thought",
                        "content": "Passenger chose M-Pesa but gave no number; asking for it."})
         return _finalize_direct(
@@ -471,8 +571,7 @@ def _handle_pending_payment(session_id: str, message: str, pending: Dict,
             trace, sentiment_result)
 
     if _AFFIRM_RE.match(message) or _TRANSACTIONAL_RE.search(message):
-        database.set_pending_payment(session_id, amount, description, "awaiting_method",
-                                      currency=currency)
+        database.update_pending_stage(session_id, "awaiting_method")
         trace.append({"step": "thought",
                        "content": "Payment confirmed; awaiting the passenger's choice of rail."})
         return _finalize_direct(session_id, message,
@@ -599,14 +698,17 @@ def _serialize_context(chunks: List[Dict]) -> str:
     return "\n---\n".join(blocks)
 
 
-def _extract_fee_from_context(chunks: List[Dict], message: str) -> Optional[float]:
-    """Finds the fee amount the policy actually specifies for this passenger's
-    situation, so a payment is never initiated for an invented amount."""
+def _extract_fee_from_context(chunks: List[Dict], message: str) -> Optional[Tuple[float, str]]:
+    """The fee the policy states for this passenger's situation, with the
+    currency it is published in, or None.
+
+    This is the only source of a payment amount. An earlier version took the
+    amount from the passenger's own message ("pay Ksh 1") and only recognised
+    shilling figures, so it could charge a typed amount and missed every fee
+    Kenya Airways publishes in dollars.
+    """
     grounded = composer.compose_answer(message, chunks, max_sentences=2)
-    amounts = re.findall(r"Ksh\s?([\d,]+)", grounded)
-    if amounts:
-        return float(amounts[0].replace(",", ""))
-    return None
+    return _payable_fee(grounded, chunks, message)
 
 
 def _finalize_direct(session_id: str, message: str, answer: str, trace: List[Dict],
@@ -698,7 +800,12 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
     })
 
     # --- Observation: is the retrieved policy text actually on topic? ---
-    if not _is_grounded_in_context(query, retrieved) and not flight_number \
+    # The isolated request clause can be too short to show its subject ("What
+    # can I claim?"), so the whole message is consulted as well. Filler and
+    # place words are ignored either way, so venting cannot ground an answer.
+    grounded = _is_grounded_in_context(query, retrieved) or (
+        query != message and _is_grounded_in_context(message, retrieved))
+    if not grounded and not flight_number \
             and not _PAYMENT_TOPIC_RE.search(message):
         trace.append({
             "step": "thought",
@@ -716,56 +823,67 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
         flight_status = aviationstack.get_flight_status(flight_number)
         trace.append({"step": "action", "tool": "get_flight_status",
                        "input": flight_number, "observation": flight_status})
-        tool_observations.append(
-            f"Live status for {flight_number}: {flight_status.get('status')}, "
-            f"route {flight_status.get('route', 'n/a')}, gate {flight_status.get('gate', 'n/a')}, "
-            f"delay {flight_status.get('delay_minutes', 0)} minutes."
-        )
+        tool_observations.append(aviationstack.describe(flight_status))
 
     # --- Action: payment tools (M-Pesa STK push, or a card checkout) ---
     payment_result = None
     payment_prompt_text = None
     if _TRANSACTIONAL_RE.search(message):
         phone_match = _PHONE_RE.search(message)
-        amount_match = _AMOUNT_RE.search(message)
-        if amount_match:
-            amount = float(amount_match.group(1).replace(",", ""))
-            currency = "KES"
-        else:
-            amount = _extract_fee_from_context(retrieved, query)
-            currency = "KES"
+        fee = _extract_fee_from_context(retrieved, query)
+        description = "KQ-Propel ancillary fee settlement"
 
-        if amount is None:
+        if fee is None:
             tool_observations.append(
                 "Payment requested but the applicable fee could not be determined from "
-                "policy. Ask the passenger to confirm the amount."
+                "policy. Ask the passenger which fee they want to pay."
             )
             trace.append({"step": "thought",
                            "content": "Payment intent detected but no grounded amount available."})
-        elif phone_match:
-            phone = _normalize_phone(phone_match)
-            payment_result = _execute_payment(
-                session_id, phone, amount, "KQ-Propel ancillary fee settlement", trace)
-            if payment_result.get("success"):
-                payment_prompt_text = _payment_sent_message(amount, phone)
-            tool_observations.append(f"Payment tool result: {payment_result.get('message')}")
-        elif _CARD_RE.search(message):
-            payment_result = _execute_card_payment(
-                session_id, amount, currency, "KQ-Propel ancillary fee settlement", trace)
-            if payment_result.get("success"):
-                payment_prompt_text = _card_checkout_message(amount, currency, payment_result)
-            tool_observations.append(f"Payment tool result: {payment_result.get('message')}")
         else:
-            database.set_pending_payment(session_id, amount,
-                                          "KQ-Propel ancillary fee settlement",
-                                          "awaiting_method", currency=currency)
-            trace.append({"step": "thought",
-                           "content": (f"Payment intent detected for {currency} {amount:,.2f}; "
-                                       f"awaiting the passenger's choice of rail.")})
-            return _finalize_direct(session_id, message,
-                                     _apply_empathy(_ask_for_method_message(amount, currency),
-                                                    sentiment_result),
-                                     trace, sentiment_result)
+            amount, currency = fee
+            typed = _AMOUNT_RE.search(message)
+            if typed and float(typed.group(1).replace(",", "")) != amount:
+                trace.append({"step": "thought",
+                               "content": (f"Passenger named an amount ({typed.group(0)}) that "
+                                           f"differs from the policy fee of {currency} "
+                                           f"{amount:,.2f}; only the policy fee may be charged.")})
+                payment_prompt_text = (f"I can only take the fee the policy states, which is "
+                                       f"**{currency} {amount:,.2f}**, not the amount in your "
+                                       f"message.")
+            quote_id = payments.new_quote(session_id, amount, currency, description,
+                                          stage="awaiting_method")
+            if phone_match:
+                phone = _normalize_phone(phone_match)
+                kes_amount, conversion_note = _to_kes(amount, currency)
+                payment_result = _execute_payment(session_id, phone, kes_amount, description,
+                                                  trace, quote_id=quote_id)
+                text = (_payment_sent_message(kes_amount, phone, payment_result)
+                        if payment_result.get("success") else
+                        "I wasn't able to send the M-Pesa prompt just now. Nothing has been "
+                        "charged - please try again in a moment.")
+                if conversion_note and payment_result.get("success") \
+                        and not payment_result.get("duplicate"):
+                    text = conversion_note + "\n\n" + text
+                payment_prompt_text = "\n\n".join(t for t in (payment_prompt_text, text) if t)
+            elif _CARD_RE.search(message):
+                payment_result = _execute_card_payment(session_id, amount, currency, description,
+                                                       trace, quote_id=quote_id)
+                text = (_card_checkout_message(amount, currency, payment_result)
+                        if payment_result.get("success") else
+                        "I couldn't create the card checkout just now. Nothing has been charged "
+                        "- please try again in a moment.")
+                payment_prompt_text = "\n\n".join(t for t in (payment_prompt_text, text) if t)
+            else:
+                trace.append({"step": "thought",
+                               "content": (f"Payment intent detected for {currency} {amount:,.2f}; "
+                                           f"awaiting the passenger's choice of rail.")})
+                reply = _ask_for_method_message(amount, currency)
+                if payment_prompt_text:
+                    reply = payment_prompt_text + "\n\n" + reply
+                return _finalize_direct(session_id, message,
+                                         _apply_empathy(reply, sentiment_result),
+                                         trace, sentiment_result)
     elif _PAYMENT_TOPIC_RE.search(message):
         tool_observations.append(
             "The passenger is asking about payment options. Explain them, and mention that "
@@ -808,9 +926,8 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
             # card never encounters this assistant's exchange-rate assumption
             # at all.
             kes_amount, conversion_note = _to_kes(amount, currency)
-            database.set_pending_payment(session_id, amount,
-                                          "KQ-Propel ancillary fee settlement",
-                                          "offered", currency=currency)
+            payments.new_quote(session_id, amount, currency,
+                               "KQ-Propel ancillary fee settlement", stage="offered")
             answer += _offer_payment_message(amount, currency, kes_amount)
             if conversion_note:
                 answer += "\n\n" + conversion_note
@@ -845,8 +962,7 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
     metrics = evaluation.evaluate_response(message, answer, retrieved)
     sources = []
     for r in retrieved:
-        source = (r.get("source") or "").replace(".txt", "").replace("_", " ").title()
-        label = f"{source} - {r.get('section')}" if r.get("section") else source
+        label = composer._section_label(r)
         if label not in sources:
             sources.append(label)
 

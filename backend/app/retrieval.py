@@ -14,6 +14,7 @@ Relevance in the RAG-Triad evaluation compared to either signal alone.
 import math
 import re
 from collections import Counter
+from functools import lru_cache
 from typing import Dict, Iterable, List
 
 _WORD_RE = re.compile(r"[a-z0-9]+")
@@ -88,6 +89,18 @@ _SYNONYMS = {
     "timeline": ["timelines", "processing", "within"],
     "timelines": ["processing", "within"],
     "soon": ["processing", "within", "days"],
+    # Passengers describe a name correction in their own words ("my surname is
+    # spelled wrong by two letters"); the policy says "name correction" and
+    # "characters". Without these the question shared no subject word with
+    # the section that answers it.
+    "surname": ["name"],
+    "spelled": ["correction", "name"],
+    "spelling": ["correction", "name"],
+    "misspelled": ["correction", "name"],
+    "typo": ["correction", "name"],
+    "letter": ["character"],
+    "fix": ["correction"],
+    "wrong": ["correction"],
 }
 
 # Multi-word phrases are collapsed *before* tokenisation, so a phrasal verb is
@@ -184,17 +197,127 @@ def focus_query(text: str) -> str:
     return " ".join(kept) if len(kept) > 1 else focused
 
 
+_PLURAL_KEEP = {"business", "address", "excess", "class", "gas", "always",
+                "plus", "bonus", "status", "miss", "press", "less", "this",
+                "as", "is", "was", "has", "us", "its"}
+
+# Splits a compound *request* into the separate things being asked. Applied
+# only to the interrogative part of a message: an earlier version split the
+# whole text and cut declarative context clauses like "My bag is delayed" or
+# "I am travelling with an infant and a stroller" into useless fragments,
+# which cost 0.033 recall.
+_SUBQUERY_SPLIT_RE = re.compile(
+    r"\s+(?:and|also|plus|as\s+well\s+as)\s+|\s*;\s*", re.IGNORECASE)
+# A fragment only counts as its own request if it opens with an interrogative.
+_WH_OPENER_RE = re.compile(
+    r"^\s*(what|when|where|which|who|why|how|can|could|do|does|did|is|are|"
+    r"will|would|should|am|must|may)\b", re.IGNORECASE)
+
+
+def subqueries(text: str, max_parts: int = 3) -> List[str]:
+    """Split a compound question into the separate requests it contains.
+
+    A question like "What am I owed and what do I owe?" carries two intents.
+    Embedded as one vector it lands between them and matches neither well: on
+    the evaluation set the chunk answering the second half ranked #20 of 52.
+    Ranking each intent separately and fusing the scores puts both in context.
+
+    Only the interrogative sentence is split, and each fragment keeps the
+    surrounding declarative context - "...one piece over the allowance to
+    Europe" belongs to both halves of the question that follows it, and a
+    fragment stripped of it retrieves nothing useful. A fragment must open with
+    an interrogative word to count, so lists ("an infant and a stroller") are
+    left alone.
+
+    Returns a single-element list when the question is not compound. Callers
+    must treat that as the normal case: most questions are not compound, and a
+    split that fires too eagerly costs recall on the easy majority.
+    """
+    text = (text or "").strip()
+    if not text:
+        return []
+
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+|\n+", text) if s.strip()]
+    if not sentences:
+        return [text]
+
+    # The request is the last interrogative sentence; everything else is the
+    # context that every sub-question needs to keep.
+    q_idx = [i for i, s in enumerate(sentences) if _INTERROGATIVE_RE.search(s)]
+    if not q_idx:
+        return [text]
+    target = q_idx[-1]
+    question = sentences[target]
+    context = " ".join(sentences[:target]).strip()
+
+    raw = [p.strip(" ,.?!") for p in _SUBQUERY_SPLIT_RE.split(question) if p and p.strip()]
+    if len(raw) < 2:
+        return [text]
+
+    fragments = [p for p in raw if _WH_OPENER_RE.match(p) and len(tokenize(p)) >= 2]
+    if len(fragments) < 2:
+        return [text]
+
+    # The whole question stays first: it is still the single best query for
+    # most of the corpus, and fusion only ever promotes a chunk above it.
+    out = [text]
+    for frag in fragments[:max_parts]:
+        combined = (context + " " + frag).strip() if context else frag
+        if combined.lower() != text.lower():
+            out.append(combined)
+    return out
+
+
+def fold_plural(token: str) -> str:
+    """Conservative singular/plural folding for lexical matching.
+
+    BM25 treats "surfboard" and "surfboards" as unrelated terms, so a question
+    about a surfboard scored 0.000 against the only chunk that mentions one -
+    the chunk holding the answer ranked #14 of 52 on the dense signal alone.
+    A full stemmer is more aggressive than this corpus wants (it would fold
+    "business" to "busi" and risk mangling fare-class words), so this handles
+    only regular plurals and leaves anything doubtful alone.
+
+    Applied to the corpus and the query through the same `tokenize`, so the two
+    sides can never drift apart.
+    """
+    if len(token) <= 3 or token.isdigit() or token in _PLURAL_KEEP:
+        return token
+    if token.endswith("ies") and len(token) > 4:
+        return token[:-3] + "y"
+    if token.endswith(("sses", "shes", "ches", "xes", "zes")):
+        return token[:-2]
+    if token.endswith("ss"):
+        return token
+    if token.endswith("s"):
+        return token[:-1]
+    return token
+
+
 def tokenize(text: str) -> List[str]:
     text = normalize_phrases(text or "")
     tokens = [t for t in _WORD_RE.findall(text.lower()) if t not in _STOPWORDS]
-    return tokens
+    return [fold_plural(t) for t in tokens]
+
+
+# Synonym keys are written naturally, so four of them ("bags", "documents",
+# "sports", "timelines") are plural and would have stopped matching the moment
+# tokenize started folding plurals - silently, with no error and no test
+# failure. Folding the keys once here keeps the two sides from drifting.
+_SYNONYMS_FOLDED = {}
+for _key, _vals in _SYNONYMS.items():
+    _SYNONYMS_FOLDED.setdefault(fold_plural(_key), []).extend(_vals)
+
+
+def _synonyms_for(token: str) -> List[str]:
+    return _SYNONYMS_FOLDED.get(token, [])
 
 
 def expand_query(tokens: Iterable[str]) -> List[str]:
     expanded = list(tokens)
     for tok in list(tokens):
-        for syn in _SYNONYMS.get(tok, []):
-            expanded.extend(_WORD_RE.findall(syn))
+        for syn in _synonyms_for(tok):
+            expanded.extend(fold_plural(t) for t in _WORD_RE.findall(syn))
     return expanded
 
 
@@ -260,3 +383,46 @@ def blend(lexical: List[float], dense: List[float], lexical_weight: float = 0.6)
         lexical_weight * l + (1 - lexical_weight) * d
         for l, d in zip(lex_n, dense_n)
     ]
+
+
+# Words that carry no subject matter in a passenger question. They are excluded
+# when the grounding guard decides whether retrieved policy text is on topic:
+# "My bag has been missing and NOBODY is helping me" is about a missing bag,
+# and counting "been", "nobody" and "helping" as unmatched topic words was
+# enough to make the guard refuse a question the policy answers.
+_GENERIC_QUERY_WORDS = frozenset("""
+where which whose whom there here any some about been being get got gets give
+tell know need want like please help helping helped nobody anybody anyone
+someone somebody everyone thing things just also very really still yet again
+much many lot lots would could should shall may might must let make made
+going go goes went come came say said told ask asked right now today
+tomorrow yesterday time thank thanks hello hi hey okay ok sure yes no
+by into onto than then them they their these those we us all each every other
+such only even non way
+""".split())
+
+
+@lru_cache(maxsize=1)
+def corpus_vocabulary() -> frozenset:
+    """Every token in the policy corpus, tokenised exactly as questions are.
+
+    Read from the source documents rather than the vector store so the guard
+    behaves the same whichever store back end is active.
+    """
+    from app import config
+    vocab = set()
+    for path in sorted(config.POLICY_DIR.glob("*.txt")):
+        vocab.update(tokenize(path.read_text(encoding="utf-8")))
+    return frozenset(vocab)
+
+
+def topical_tokens(text: str) -> List[str]:
+    """Question tokens that say what is being asked about.
+
+    Drops generic words and place names. A place says where the passenger is
+    travelling, not what they want to know, so it cannot on its own show that
+    a policy section answers the question.
+    """
+    from app import places
+    return [t for t in tokenize(text)
+            if t not in _GENERIC_QUERY_WORDS and t not in places.PLACE_WORDS]

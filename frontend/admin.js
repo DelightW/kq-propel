@@ -192,6 +192,20 @@
       .catch(function () { /* audit is supplementary; never block the view */ });
   }
 
+  // Exact mapping from ledger status to pill style and label. Matching on
+  // substrings styled "unsuccessful" as a success because it contains
+  // "success"; an unknown status must never look like a payment.
+  var STATUS_LOOK = {
+    paid: ["ok", "Paid"],
+    pending: ["warn", "Pending"],
+    failed: ["fail", "Failed"],
+    cancelled: ["muted", "Cancelled"],
+    expired: ["muted", "Expired"],
+    needs_review: ["fail", "Needs review"],
+    simulated: ["muted", "Simulated"],
+    unknown: ["muted", "Unknown"]
+  };
+
   function renderOverview(d) {
     var t = d.rag_triad || {};
     var tx = d.transactions || {};
@@ -205,20 +219,24 @@
       "1 - groundedness"));
     kpis.appendChild(card("Indexed chunks", vs.chunks !== undefined ? vs.chunks : "-",
       (vs.documents !== undefined ? vs.documents : 0) + " policy documents"));
-    var totals = tx.totals_by_currency || {};
-    var rails = tx.counts_by_method || {};
-    var totalLabel = Object.keys(totals).length
-      ? Object.keys(totals).sort().map(function (c) {
-          return c + " " + Number(totals[c]).toLocaleString();
-        }).join("  |  ")
-      : "KES 0";
-    var railLabel = (tx.count || 0) + " transactions"
-      + (Object.keys(rails).length
-          ? " (" + Object.keys(rails).sort().map(function (m) {
-              return rails[m] + " " + (m === "card" ? "card" : "M-Pesa");
-            }).join(", ") + ")"
-          : "");
-    kpis.appendChild(card("Settled value", totalLabel, railLabel));
+    // Settled value counts paid transactions only. Pending money is shown
+    // beneath it and never added in; failed and simulated attempts are counts.
+    var settled = tx.settled_by_currency || {};
+    var pendingMoney = tx.pending_by_currency || {};
+    var byStatus = tx.counts_by_status || {};
+    function moneyLabel(totals) {
+      return Object.keys(totals).sort().map(function (c) {
+        return c + " " + Number(totals[c]).toLocaleString();
+      }).join("  |  ");
+    }
+    var totalLabel = Object.keys(settled).length ? moneyLabel(settled) : "Nothing settled";
+    var parts = [(byStatus.paid || 0) + " paid"];
+    if (Object.keys(pendingMoney).length) {
+      parts.push(moneyLabel(pendingMoney) + " pending");
+    }
+    if (byStatus.failed) { parts.push(byStatus.failed + " failed"); }
+    if (byStatus.simulated) { parts.push(byStatus.simulated + " simulated"); }
+    kpis.appendChild(card("Settled value", totalLabel, parts.join(", ")));
 
     triad.innerHTML = "";
     triad.appendChild(meterRow("Context relevance", t.context_relevance));
@@ -327,9 +345,9 @@
         tr.appendChild(el("td", null, r.amount !== undefined && r.amount !== null
           ? currency + " " + Number(r.amount).toLocaleString() : "-"));
         var st = el("td");
-        var ok = String(r.status || "").toLowerCase().indexOf("success") !== -1 ||
-                 String(r.status || "").toLowerCase().indexOf("accept") !== -1;
-        st.appendChild(el("span", "pill " + (ok ? "ok" : ""), r.status || "unknown"));
+        var look = STATUS_LOOK[r.status] || STATUS_LOOK.unknown;
+        st.appendChild(el("span", "pill " + look[0], look[1]));
+        if (r.status_detail) { st.title = r.status_detail; }
         tr.appendChild(st);
         tr.appendChild(el("td", null, r.checkout_request_id || r.reference || "-"));
         txBody.appendChild(tr);

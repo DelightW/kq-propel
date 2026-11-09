@@ -143,14 +143,76 @@ def create_card_order(amount: float, currency: str, reference: str,
                 ),
             }
         except Exception as exc:
-            # Recorded, not swallowed: a configured-but-failing gateway must be
-            # distinguishable from one that was never configured.
+            # A configured gateway that fails returns a failure. It used to
+            # return a simulated checkout instead, which in production would
+            # have handed a passenger a link that could never take payment.
             last_live_error = str(exc)
-            return _simulated_order(amount, currency, reference, description,
-                                    source="simulated_after_live_error")
+            return {"source": "paypal_sandbox" if config.PAYPAL_SANDBOX else "paypal_live",
+                    "success": False, "amount": amount, "currency": currency,
+                    "reference": reference,
+                    "error": "The card checkout could not be created."}
 
-    return _simulated_order(amount, currency, reference, description,
-                            source="simulated_sandbox")
+    return _simulated_order(amount, currency, reference, description, source="simulated")
+
+
+# PayPal order and capture states -> lifecycle status.
+_CAPTURE_STATUS = {"COMPLETED": "paid", "DECLINED": "failed", "FAILED": "failed",
+                   "VOIDED": "cancelled"}
+
+
+def capture_order(order_id: str) -> Dict:
+    """Captures an approved order and reports the outcome.
+
+    Called when PayPal returns the guest to PAYPAL_RETURN_URL. The return
+    itself proves nothing - anyone can open that URL - so the order is captured
+    server-side and the status, amount and currency PayPal reports are what the
+    ledger records.
+    """
+    if not is_configured():
+        return {"status": None, "detail": "Card gateway is not configured."}
+    try:
+        token = _access_token()
+        resp = requests.post(
+            f"{_base_url()}/v2/checkout/orders/{order_id}/capture",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json",
+                     # Capturing twice must not take money twice.
+                     "PayPal-Request-Id": f"capture-{order_id}"},
+            timeout=12)
+        data = resp.json()
+    except Exception as exc:
+        return {"status": None, "detail": str(exc)}
+    if resp.status_code == 422 and "ORDER_ALREADY_CAPTURED" in str(data):
+        return get_order_outcome(order_id)
+    try:
+        capture = data["purchase_units"][0]["payments"]["captures"][0]
+    except (KeyError, IndexError, TypeError):
+        return {"status": None, "detail": data.get("message") or "Capture not completed."}
+    amount = capture.get("amount") or {}
+    return {"status": _CAPTURE_STATUS.get(capture.get("status"), None),
+            "detail": capture.get("status"), "receipt": capture.get("id"),
+            "amount": amount.get("value"), "currency": amount.get("currency_code")}
+
+
+def get_order_outcome(order_id: str) -> Dict:
+    """Reads an order's current outcome without changing it."""
+    if not is_configured():
+        return {"status": None, "detail": "Card gateway is not configured."}
+    try:
+        token = _access_token()
+        resp = requests.get(f"{_base_url()}/v2/checkout/orders/{order_id}",
+                            headers={"Authorization": f"Bearer {token}"}, timeout=10)
+        data = resp.json()
+    except Exception as exc:
+        return {"status": None, "detail": str(exc)}
+    try:
+        capture = data["purchase_units"][0]["payments"]["captures"][0]
+        amount = capture.get("amount") or {}
+        return {"status": _CAPTURE_STATUS.get(capture.get("status"), None),
+                "detail": capture.get("status"), "receipt": capture.get("id"),
+                "amount": amount.get("value"), "currency": amount.get("currency_code")}
+    except (KeyError, IndexError, TypeError):
+        # Created or approved but not captured yet: still pending.
+        return {"status": None, "detail": data.get("status") or "not captured"}
 
 
 def describe() -> Dict[str, object]:

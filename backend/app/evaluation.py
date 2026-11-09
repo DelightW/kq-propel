@@ -174,6 +174,11 @@ def groundedness(answer: str, context: str) -> float:
     are not grounding claims and are excluded from the denominator. Counting
     them would report conversational courtesy as hallucination.
     """
+    # A "Source:" line is attribution, not a claim. It now carries the policy
+    # edition ("version 1.0, as published 23 Sep 2026"), and scoring those
+    # figures as assertions would report every citation as a fabrication.
+    answer = "\n".join(line for line in (answer or "").splitlines()
+                       if not line.strip().lower().startswith("source:"))
     if not answer.strip():
         return 0.0
     context = context or ""

@@ -26,7 +26,7 @@ from pathlib import Path
 BACKEND = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BACKEND))
 
-from app import agent, config, database, daraja, paypal, sentiment  # noqa: E402
+from app import agent, config, database, daraja, payments, paypal, sentiment  # noqa: E402
 
 POLICY_DIR = BACKEND / "data" / "policies"
 
@@ -164,10 +164,10 @@ def test_transactions_record_which_rail_and_which_currency():
     database.init_db()
     ref = "TEST-LEDGER-1"
     database.log_transaction("test-ledger", "CRQ-1", "254722334455", 9675.0, ref,
-                             "Name change fee", "simulated_sandbox",
+                             "Name change fee", "simulated",
                              method="mpesa", currency="KES")
     database.log_transaction("test-ledger", "ORD-1", "", 75.0, ref,
-                             "Name change fee", "simulated_paypal",
+                             "Name change fee", "simulated",
                              method="card", currency="USD")
     rows = [r for r in database.fetch_transactions(limit=200)
             if r.get("reference") == ref]
@@ -194,8 +194,9 @@ def test_pending_payment_state_holds_the_published_currency():
 def _continue_payment(session_id: str, amount: float, currency: str, message: str) -> str:
     database.init_db()
     database.clear_pending_payment(session_id)
-    database.set_pending_payment(session_id, amount, "Name change fee",
-                                 "awaiting_method", currency=currency)
+    # Offers are created the way the agent creates them: as a quote with an
+    # expiry. An offer without one is treated as expired and never settled.
+    payments.new_quote(session_id, amount, currency, "Name change fee", stage="awaiting_method")
     pending = database.get_pending_payment(session_id)
     sentiment_result = sentiment.classify_frustration(message)
     result = agent._handle_pending_payment(session_id, message, pending, [],
@@ -291,7 +292,7 @@ def test_a_simulated_stk_push_is_labelled_as_simulated():
     if daraja.is_configured():
         return
     result = _LIVE_STK("254712345678", 1, "TEST", "verification")
-    assert result["source"] == "simulated_sandbox", result
+    assert result["source"] == "simulated", result
 
 
 def main() -> int:

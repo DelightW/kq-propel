@@ -168,6 +168,42 @@ def _migrate(conn):
         conn.execute("ALTER TABLE payment_state ADD COLUMN "
                      "currency TEXT NOT NULL DEFAULT 'KES'")
 
+    # --- Payment lifecycle (see payments.py) ---
+    # amount_minor holds the amount in cents so money is never a float;
+    # quote_id ties an attempt to the offer it settles, which is what stops a
+    # retry from charging twice; provider_receipt and status_detail record what
+    # the provider reported when the payment reached its final status.
+    for column, ddl in (
+        ("amount_minor", "INTEGER"),
+        ("quote_id", "TEXT"),
+        ("provider_receipt", "TEXT"),
+        ("status_detail", "TEXT"),
+        ("updated_at", "TEXT"),
+        ("source", "TEXT"),
+    ):
+        if column not in tx_columns:
+            conn.execute(f"ALTER TABLE transactions ADD COLUMN {column} {ddl}")
+    conn.execute("UPDATE transactions SET amount_minor = CAST(ROUND(amount * 100) AS INTEGER) "
+                 "WHERE amount_minor IS NULL AND amount IS NOT NULL")
+    # Statuses written before the lifecycle existed. "initiated" and
+    # "awaiting_approval" were requests still waiting on the customer; the
+    # simulated_* values were demonstrations and never money.
+    conn.execute("UPDATE transactions SET status = 'pending' "
+                 "WHERE status IN ('initiated', 'awaiting_approval')")
+    conn.execute("UPDATE transactions SET status = 'simulated' WHERE status LIKE 'simulated%'")
+    # At most one live attempt per offer. The index only covers pending and
+    # paid rows, so a failed or expired attempt can be retried.
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_open_quote "
+                 "ON transactions(quote_id) WHERE quote_id IS NOT NULL "
+                 "AND status IN ('pending', 'paid')")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_checkout "
+                 "ON transactions(checkout_request_id)")
+
+    state_columns = {r["name"] for r in conn.execute("PRAGMA table_info(payment_state)")}
+    for column in ("quote_id", "expires_at"):
+        if column not in state_columns:
+            conn.execute(f"ALTER TABLE payment_state ADD COLUMN {column} TEXT")
+
 
 # ---------------------------------------------------------------------------
 # Staff sessions and audit
@@ -351,15 +387,31 @@ def fetch_rag_evaluations(limit: int = 100,
 
 
 def set_pending_payment(session_id: str, amount: float, description: str, stage: str,
-                         currency: str = "KES"):
+                         currency: str = "KES", quote_id: Optional[str] = None,
+                         expires_at: Optional[str] = None):
+    """Stores a new payment offer, replacing any earlier one for the session.
+
+    Use payments.new_quote rather than calling this directly: it issues the
+    quote identifier and expiry that make the offer safe to settle.
+    """
     with _connect() as conn:
         conn.execute(
             "INSERT INTO payment_state (session_id, amount, description, stage, updated_at, "
-            "currency) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(session_id) DO UPDATE SET "
+            "currency, quote_id, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(session_id) DO UPDATE SET "
             "amount=excluded.amount, description=excluded.description, "
-            "stage=excluded.stage, updated_at=excluded.updated_at, currency=excluded.currency",
-            (session_id, amount, description, stage, datetime.utcnow().isoformat(), currency),
+            "stage=excluded.stage, updated_at=excluded.updated_at, currency=excluded.currency, "
+            "quote_id=excluded.quote_id, expires_at=excluded.expires_at",
+            (session_id, amount, description, stage, datetime.utcnow().isoformat(), currency,
+             quote_id, expires_at),
         )
+
+
+def update_pending_stage(session_id: str, stage: str):
+    """Advances an existing offer without changing its amount, quote or expiry."""
+    with _connect() as conn:
+        conn.execute("UPDATE payment_state SET stage = ?, updated_at = ? WHERE session_id = ?",
+                     (stage, datetime.utcnow().isoformat(), session_id))
 
 
 def get_pending_payment(session_id: str) -> Optional[Dict]:
@@ -376,8 +428,7 @@ def clear_pending_payment(session_id: str):
 
 
 def update_transaction_status(checkout_request_id: str, status: str):
-    with _connect() as conn:
-        conn.execute(
-            "UPDATE transactions SET status = ? WHERE checkout_request_id = ?",
-            (status, checkout_request_id),
-        )
+    """Superseded by payments.transition, which enforces the allowed state
+    changes. Kept so older tooling keeps importing; it now delegates."""
+    from app import payments
+    payments.transition_by_checkout(checkout_request_id, status)

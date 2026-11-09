@@ -11,7 +11,7 @@ from typing import Optional
 from fastapi import APIRouter, Cookie, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
-from app import auth, config, database
+from app import auth, config, database, payments
 from app.agent import run_agent_turn
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -68,6 +68,31 @@ def chat(req: ChatRequest, request: Request, response: Response,
     result = run_agent_turn(session_id, message)
     result["session_id"] = session_id
     return result
+
+
+@router.get("/payments/{reference}")
+def payment_status(reference: str, kq_session: Optional[str] = Cookie(default=None)):
+    """Current status of a payment this session started.
+
+    Polled by the chat while a payment is pending. The lookup is scoped to the
+    caller's session, so one passenger cannot read another's payment, and a
+    stale pending payment is reconciled with its provider before answering.
+    """
+    if not auth.chat_session_is_valid(kq_session):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No session.")
+    row = payments.for_passenger(kq_session, reference)
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payment not found.")
+    row = payments.reconcile(row)
+    return {
+        "reference": row["reference"],
+        "status": row["status"],
+        "final": row["status"] in payments.FINAL,
+        "method": row["method"],
+        "currency": row["currency"],
+        "amount": payments.from_minor(row["amount_minor"]),
+        "receipt": row.get("provider_receipt"),
+    }
 
 
 @router.post("/reset")

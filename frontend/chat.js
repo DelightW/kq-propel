@@ -183,6 +183,47 @@
     return bubble;
   }
 
+  var PAYMENT_STATUS_TEXT = {
+    pending: "Waiting for confirmation - not paid yet.",
+    paid: "Paid. Thank you - your payment has been confirmed.",
+    failed: "Payment failed. You have not been charged.",
+    cancelled: "Payment cancelled. You have not been charged.",
+    expired: "No confirmation arrived in time. You have not been charged.",
+    needs_review: "We received a payment that needs checking. Our team will follow up.",
+    simulated: "Demonstration only - no money was requested or taken."
+  };
+
+  function showPaymentStatus(line, status) {
+    line.textContent = PAYMENT_STATUS_TEXT[status] || "Payment status unknown.";
+    line.className = "pay-status " + status;
+  }
+
+  function pollPayment(reference, line, card) {
+    var started = Date.now();
+    var LIMIT_MS = 15 * 60 * 1000;
+    function tick() {
+      fetch("/api/chat/payments/" + encodeURIComponent(reference), {
+        credentials: "same-origin"
+      }).then(function (r) {
+        if (!r.ok) { throw new Error("HTTP " + r.status); }
+        return r.json();
+      }).then(function (d) {
+        showPaymentStatus(line, d.status);
+        if (d.status === "failed" || d.status === "needs_review") {
+          card.classList.add("failed");
+        }
+        if (!d.final && Date.now() - started < LIMIT_MS) {
+          setTimeout(tick, 4000);
+        }
+      }).catch(function () {
+        // A network hiccup is not a payment outcome: keep the last known
+        // status and try again a little later.
+        if (Date.now() - started < LIMIT_MS) { setTimeout(tick, 8000); }
+      });
+    }
+    setTimeout(tick, 4000);
+  }
+
   function addPaymentCard(p) {
     var card = document.createElement("div");
     card.className = "pay-card" + (p.success ? "" : " failed");
@@ -273,6 +314,17 @@
           : "Enter your M-Pesa PIN on your phone to authorise this payment.";
       }
       card.appendChild(note);
+
+      // The request being sent is not the payment being made. The status
+      // line follows the ledger until the payment reaches a final state.
+      var statusLine = document.createElement("div");
+      statusLine.className = "pay-status";
+      statusLine.setAttribute("role", "status");
+      card.appendChild(statusLine);
+      showPaymentStatus(statusLine, simulated ? "simulated" : (p.status || "pending"));
+      if (!simulated && p.reference && (p.status || "pending") === "pending") {
+        pollPayment(p.reference, statusLine, card);
+      }
     } else {
       var err = document.createElement("div");
       err.className = "pay-note";

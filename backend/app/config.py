@@ -102,6 +102,29 @@ DARAJA_SANDBOX = os.getenv("DARAJA_SANDBOX", "true").lower() != "false"
 # behaviour on a placeholder, not a failure.
 DARAJA_CALLBACK_URL = os.getenv(
     "DARAJA_CALLBACK_URL", "https://example.com/daraja/callback").strip()
+# Safaricom does not sign STK callbacks, so the callback URL carries a secret:
+# DARAJA_CALLBACK_URL must end in /api/payments/daraja/callback/<this token>.
+# With no token set, every callback is refused - an unauthenticated endpoint
+# that can mark payments as paid is worse than none.
+DARAJA_CALLBACK_TOKEN = os.getenv("DARAJA_CALLBACK_TOKEN", "").strip()
+# Before a success callback marks a payment paid, confirm it with Safaricom's
+# STK Push query API, so a forged or replayed callback cannot settle anything.
+DARAJA_VERIFY_CALLBACKS = os.getenv("DARAJA_VERIFY_CALLBACKS", "true").strip().lower() \
+    not in {"0", "false", "no", "off"}
+# Kenya Airways' collection account may be a paybill or a till.
+#   paybill: CustomerPayBillOnline, PartyB = the paybill number
+#   till:    CustomerBuyGoodsOnline, BusinessShortCode = the store number,
+#            PartyB = the till number
+DARAJA_TRANSACTION_TYPE = os.getenv("DARAJA_TRANSACTION_TYPE", "CustomerPayBillOnline").strip()
+DARAJA_PARTY_B = os.getenv("DARAJA_PARTY_B", "").strip() or DARAJA_SHORTCODE
+
+# --- Payment lifecycle ---
+# How long a quoted fee can be accepted before the passenger must ask again.
+PAYMENT_QUOTE_TTL_MINUTES = int(os.getenv("PAYMENT_QUOTE_TTL_MINUTES", "15"))
+# How long a payment may stay pending before it is reconciled with the
+# provider and, if still unresolved, marked expired. An STK prompt times out on
+# the handset after about a minute; card checkouts take longer.
+PAYMENT_PENDING_TTL_MINUTES = int(os.getenv("PAYMENT_PENDING_TTL_MINUTES", "10"))
 
 # Kenya Airways publishes most ancillary fees in US dollars, but Daraja settles
 # in Kenyan shillings. To let the STK push demonstrate end-to-end settlement on
@@ -128,8 +151,8 @@ PAYPAL_CLIENT_SECRET = os.getenv("PAYPAL_CLIENT_SECRET", "").strip()
 PAYPAL_SANDBOX = os.getenv("PAYPAL_SANDBOX", "true").lower() != "false"
 # Where PayPal returns the guest after they approve or cancel. In a deployed
 # system these are routes on the airline's own site.
-PAYPAL_RETURN_URL = os.getenv("PAYPAL_RETURN_URL", "https://example.com/payment/complete")
-PAYPAL_CANCEL_URL = os.getenv("PAYPAL_CANCEL_URL", "https://example.com/payment/cancelled")
+PAYPAL_RETURN_URL = os.getenv("PAYPAL_RETURN_URL", "http://localhost:8000/payment/return")
+PAYPAL_CANCEL_URL = os.getenv("PAYPAL_CANCEL_URL", "http://localhost:8000/payment/cancel")
 
 # --- MongoDB Atlas Vector Search (production target); falls back to a local
 #     JSON-persisted cosine-similarity index when no connection string is supplied ---
