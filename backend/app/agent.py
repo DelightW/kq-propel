@@ -383,9 +383,19 @@ def _payment_sent_message(amount: float, phone: str, result: Optional[Dict] = No
     if result and result.get("duplicate"):
         return _duplicate_payment_message(result)
     if result and result.get("source") == payments.SIMULATED:
+        reason = (" M-Pesa is in test mode, and test prompts are only sent to registered test "
+                  "numbers." if result.get("sandbox_blocked") else "")
         return (f"Demonstration mode: this is where an M-Pesa prompt for **Ksh {amount:,.0f}** "
                 f"would be sent to {phone}. No real payment request was made, and nothing "
-                "will be charged.")
+                f"will be charged.{reason}")
+    if result and result.get("sandbox_test_fee"):
+        return (
+            f"Test mode: I've sent an M-Pesa prompt for **Ksh {result.get('amount', 1):,.0f}** to "
+            f"{phone}, standing in for the Ksh {amount:,.0f} fee.\n\n"
+            "This is Safaricom's test system, but the shilling is real: entering your PIN pays "
+            "it to Safaricom's test Paybill, and it is not refunded. The status below updates "
+            "once Safaricom confirms the outcome."
+        )
     return (
         f"I've sent an M-Pesa payment prompt for **Ksh {amount:,.0f}** to {phone}.\n\n"
         "Check your phone: the request should appear within a few seconds. Enter your "

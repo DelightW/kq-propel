@@ -8,6 +8,8 @@ end-to-end in a demo environment without real M-Pesa credentials.
 import base64
 import random
 import string
+import threading
+import time
 import uuid
 from datetime import datetime
 from typing import Dict, Optional
@@ -54,14 +56,40 @@ def describe() -> Dict[str, object]:
     }
 
 
+# A Daraja token is valid for an hour. Requesting a new one for every push and
+# every status check made Safaricom's firewall answer 403 after a handful of
+# calls (seen on 5 and 10 November), which failed real payments.
+_token_cache = {"value": None, "expires": 0.0, "host": None}
+_token_lock = threading.Lock()
+
+
 def _get_access_token() -> str:
-    resp = requests.get(
-        _auth_url(),
-        auth=(config.DARAJA_CONSUMER_KEY, config.DARAJA_CONSUMER_SECRET),
-        timeout=8,
-    )
-    resp.raise_for_status()
-    return resp.json()["access_token"]
+    with _token_lock:
+        now = time.monotonic()
+        if (_token_cache["value"] and _token_cache["host"] == _host()
+                and now < _token_cache["expires"]):
+            return _token_cache["value"]
+        resp = requests.get(
+            _auth_url(),
+            auth=(config.DARAJA_CONSUMER_KEY, config.DARAJA_CONSUMER_SECRET),
+            timeout=8,
+        )
+        resp.raise_for_status()
+        body = resp.json()
+        try:
+            lifetime = int(body.get("expires_in", 3599))
+        except (TypeError, ValueError):
+            lifetime = 3599
+        # Renew a minute early so a token never expires mid-request.
+        _token_cache.update(value=body["access_token"], host=_host(),
+                            expires=now + max(lifetime - 60, 30))
+        return _token_cache["value"]
+
+
+def _forget_token() -> None:
+    """Called when Safaricom rejects a token, so the next call fetches a new one."""
+    with _token_lock:
+        _token_cache.update(value=None, expires=0.0)
 
 
 def _password_and_timestamp():
@@ -95,7 +123,19 @@ def initiate_stk_push(phone_number: str, amount: float, reference: str, descript
     for a prompt that was never sent.
     """
     whole_shillings = max(1, int(round(amount)))
-    if is_configured():
+    fee_shillings = whole_shillings
+    sandbox_blocked = False
+    if is_configured() and config.DARAJA_SANDBOX:
+        # The sandbox is not play money. A prompt to a real Safaricom number
+        # takes real money when the PIN is entered (it goes to Safaricom's test
+        # Paybill 174379), and a prompt to someone else's number is unsolicited.
+        # So sandbox prompts go only to numbers the operator has listed, and
+        # always for Ksh 1; every other number gets the labelled demonstration.
+        if normalize_phone(phone_number) in sandbox_test_numbers():
+            whole_shillings = 1
+        else:
+            sandbox_blocked = True
+    if is_configured() and not sandbox_blocked:
         environment = "sandbox" if config.DARAJA_SANDBOX else "production"
         try:
             token = _get_access_token()
@@ -117,6 +157,8 @@ def initiate_stk_push(phone_number: str, amount: float, reference: str, descript
             }
             resp = requests.post(_stk_url(), json=payload,
                                  headers={"Authorization": "Bearer " + token}, timeout=8)
+            if resp.status_code == 401:
+                _forget_token()
             resp.raise_for_status()
             data = resp.json()
         except Exception as exc:
@@ -141,6 +183,9 @@ def initiate_stk_push(phone_number: str, amount: float, reference: str, descript
             "phone_number": phone_number,
             "reference": reference,
             "message": data.get("CustomerMessage", "STK push sent."),
+            # Set for a sandbox test prompt: what the fee was, as against the
+            # Ksh 1 actually requested.
+            "sandbox_test_fee": fee_shillings if config.DARAJA_SANDBOX else None,
         }
 
     # Demonstration only: no request leaves this machine.
@@ -157,7 +202,21 @@ def initiate_stk_push(phone_number: str, amount: float, reference: str, descript
             f"Demonstration only: an M-Pesa prompt for Ksh {whole_shillings:,} would now be "
             f"sent to {phone_number}. No real payment request was made."
         ),
+        "sandbox_blocked": sandbox_blocked,
     }
+
+
+def normalize_phone(phone: str) -> str:
+    digits = "".join(ch for ch in str(phone or "") if ch.isdigit())
+    if digits.startswith("0") and len(digits) == 10:
+        digits = "254" + digits[1:]
+    elif len(digits) == 9 and digits[0] in "17":
+        digits = "254" + digits
+    return digits
+
+
+def sandbox_test_numbers() -> set:
+    return {normalize_phone(n) for n in config.DARAJA_SANDBOX_TEST_NUMBERS.split(",") if n.strip()}
 
 
 # Daraja ResultCode -> lifecycle status. Codes not listed are failures.
@@ -180,6 +239,14 @@ def query_stk_status(checkout_request_id: str) -> Dict:
     """
     if not is_configured():
         return {"status": None, "detail": "Daraja is not configured."}
+    # The chat polls a pending payment every few seconds. Asking Safaricom each
+    # time trips its firewall, so one payment is queried at most once per
+    # STATUS_QUERY_MIN_INTERVAL seconds; in between the answer is "not yet known".
+    now = time.monotonic()
+    last = _last_query.get(checkout_request_id)
+    if last is not None and now - last < STATUS_QUERY_MIN_INTERVAL:
+        return {"status": None, "detail": "checked recently"}
+    _last_query[checkout_request_id] = now
     try:
         token = _get_access_token()
         password, timestamp = _password_and_timestamp()
@@ -188,16 +255,37 @@ def query_stk_status(checkout_request_id: str) -> Dict:
             json={"BusinessShortCode": config.DARAJA_SHORTCODE, "Password": password,
                   "Timestamp": timestamp, "CheckoutRequestID": checkout_request_id},
             headers={"Authorization": "Bearer " + token}, timeout=8)
+        if resp.status_code == 401:
+            _forget_token()
         data = resp.json()
     except Exception as exc:
-        return {"status": None, "detail": _error_detail(exc)}
-    # While the prompt is still open Safaricom answers with an error such as
-    # "The transaction is being processed" and no ResultCode.
-    if "ResultCode" not in data:
-        return {"status": None,
-                "detail": data.get("errorMessage") or data.get("ResponseDescription") or "pending"}
-    return {"status": result_status(data["ResultCode"]),
-            "detail": data.get("ResultDesc") or ""}
+        # Includes the firewall's HTML page, which is not JSON: unknown, not failed.
+        return {"status": None, "detail": _error_detail(exc)[:300]}
+    return interpret_query(data)
+
+
+STATUS_QUERY_MIN_INTERVAL = 15.0
+_last_query: Dict[str, float] = {}
+# Answers that mean "the passenger has not finished yet", not an outcome.
+# Safaricom sends 4999 "The transaction is still under processing" with a
+# ResultCode, which the code used to read as a failure - a payment would have
+# been marked failed for good while the passenger was entering their PIN.
+_STILL_PROCESSING_CODES = {"4999"}
+_STILL_PROCESSING_TEXT = ("under processing", "being processed", "still processing")
+
+
+def interpret_query(data: Dict) -> Dict:
+    """Outcome of an STK status query: paid, cancelled, expired, failed, or
+    None while the passenger has not finished."""
+    if not isinstance(data, dict):
+        return {"status": None, "detail": "unexpected response"}
+    desc = str(data.get("ResultDesc") or data.get("errorMessage")
+               or data.get("ResponseDescription") or "")
+    code = data.get("ResultCode")
+    if code is None or str(code).strip() in _STILL_PROCESSING_CODES \
+            or any(t in desc.lower() for t in _STILL_PROCESSING_TEXT):
+        return {"status": None, "detail": desc or "pending"}
+    return {"status": result_status(code), "detail": desc}
 
 
 def parse_callback(body: Dict) -> Optional[Dict]:

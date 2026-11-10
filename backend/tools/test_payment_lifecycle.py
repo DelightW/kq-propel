@@ -156,9 +156,14 @@ def test_rejected_daraja_response_is_a_failure():
     fresh.is_configured = lambda: True
     fresh._get_access_token = lambda: "token"
     fresh.requests.post = lambda *a, **k: Resp()
+    # Sandbox prompts only go to listed numbers; list this one so the stubbed
+    # rejection is reached. Nothing leaves the machine.
+    saved_numbers = config.DARAJA_SANDBOX_TEST_NUMBERS
+    config.DARAJA_SANDBOX_TEST_NUMBERS = "254712345678"
     try:
         result = fresh.initiate_stk_push("254712345678", 100, "KQREF", "fee")
     finally:
+        config.DARAJA_SANDBOX_TEST_NUMBERS = saved_numbers
         fresh.requests.post = saved[0]
         importlib.reload(daraja)
         daraja.initiate_stk_push = fake_stk

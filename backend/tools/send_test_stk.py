@@ -58,7 +58,8 @@ def main() -> int:
         print("    2. Open 'M-Pesa Express' (Lipa Na M-Pesa Online) for the test")
         print("       shortcode 174379 and copy the Passkey.")
         print("    3. Put all three in .env and run this again.")
-        print("\n  A sandbox push reaches a real handset. No money moves.")
+        print("\n  A sandbox push reaches a real handset, and entering the PIN takes real")
+        print("  money (it is paid to Safaricom's test Paybill 174379 and not refunded).")
         return 2
 
     phone = normalize(args.phone)
@@ -71,6 +72,17 @@ def main() -> int:
         print(f"         Ksh {args.amount} will actually be debited.")
         if input("         Type 'yes' to continue: ").strip().lower() != "yes":
             print("         Aborted.")
+            return 1
+    else:
+        if phone not in daraja.sandbox_test_numbers():
+            print(f"\n{phone} is not in DARAJA_SANDBOX_TEST_NUMBERS, so nothing would be sent.")
+            print("  Add your own number there first. Sandbox prompts are always Ksh 1.")
+            return 2
+        args.amount = 1
+        print("\nSandbox prompt for Ksh 1. If the PIN is entered, Ksh 1 is really paid to")
+        print("Safaricom's test Paybill 174379 and is not refunded.")
+        if input("Type 'yes' to send: ").strip().lower() != "yes":
+            print("Aborted.")
             return 1
 
     print(f"\nSending Ksh {args.amount} prompt to {phone} ...")

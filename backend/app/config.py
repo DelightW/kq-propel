@@ -164,6 +164,12 @@ DARAJA_CONSUMER_SECRET = os.getenv("DARAJA_CONSUMER_SECRET", "").strip()
 DARAJA_SHORTCODE = os.getenv("DARAJA_SHORTCODE", "174379")
 DARAJA_PASSKEY = os.getenv("DARAJA_PASSKEY", "").strip()
 DARAJA_SANDBOX = os.getenv("DARAJA_SANDBOX", "true").lower() != "false"
+# The sandbox takes real money: a prompt to a real Safaricom number debits the
+# phone when the PIN is entered (to Safaricom's test Paybill 174379). In sandbox
+# mode, prompts are therefore sent only to these numbers (comma-separated) and
+# always for Ksh 1; any other number gets the labelled demonstration. Empty
+# means no sandbox prompt leaves this machine.
+DARAJA_SANDBOX_TEST_NUMBERS = os.getenv("DARAJA_SANDBOX_TEST_NUMBERS", "").strip()
 # Safaricom requires a reachable https callback. The sandbox accepts a
 # placeholder and still delivers the prompt to the handset, but no result
 # callback can arrive at one - so a prompt that is never confirmed is expected
