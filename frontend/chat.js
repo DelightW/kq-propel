@@ -163,6 +163,13 @@
     var bubble = document.createElement("div");
     bubble.className = "bubble " + role;
 
+    if (role === "agent") {
+      var who = document.createElement("span");
+      who.className = "who";
+      who.textContent = "Kenya Airways support team";
+      bubble.appendChild(who);
+    }
+
     var split = splitOutSources(text || "");
     appendRichText(bubble, split.body);
 
@@ -222,6 +229,38 @@
       });
     }
     setTimeout(tick, 4000);
+  }
+
+  /* Staff replies arrive while a handover case is open. Polling starts when
+     the assistant opens a case, and once on page load in case a reply came
+     in while the page was closed; it stops when the case is closed. */
+  var handoverPolling = false;
+  var lastAgentMessageId = 0;
+
+  function pollHandover() {
+    if (handoverPolling) { return; }
+    handoverPolling = true;
+    function tick() {
+      fetch("/api/chat/handover?after=" + lastAgentMessageId, {
+        credentials: "same-origin"
+      }).then(function (r) {
+        if (!r.ok) { throw new Error("HTTP " + r.status); }
+        return r.json();
+      }).then(function (d) {
+        (d.messages || []).forEach(function (m) {
+          lastAgentMessageId = Math.max(lastAgentMessageId, m.id);
+          addBubble("agent", m.message);
+        });
+        if (d.handover) {
+          setTimeout(tick, 5000);
+        } else {
+          handoverPolling = false;
+        }
+      }).catch(function () {
+        setTimeout(tick, 10000);
+      });
+    }
+    tick();
   }
 
   function addPaymentCard(p) {
@@ -531,6 +570,9 @@
         if (data.payment) {
           addPaymentCard(data.payment);
         }
+        if (data.handover) {
+          pollHandover();
+        }
 
         renderTrace(data);
         setStatus(true, data.model_used || "Aviation Support Assistant");
@@ -575,9 +617,10 @@
      message can never be sent without one. */
   setBusy(true);
   startSession()
-    .then(function () {
+    .then(function (d) {
       setBusy(false);
       input.focus();
+      if (d && d.resumed) { pollHandover(); }
     })
     .catch(function (err) {
       setBusy(false);

@@ -116,14 +116,8 @@ def _section_label(chunk: Dict) -> str:
     return f"{label} ({edition})" if edition else label
 
 
-def compose_answer(question: str, chunks: List[Dict], max_sentences: int = 3,
-                    verbose: bool = True) -> str:
-    """Builds a concise, fully grounded answer from retrieved chunks."""
-    if not chunks:
-        return ("I could not find that in the official policy documents I have access to. "
-                "I can help with baggage allowances and fees, flight delays and compensation, "
-                "refunds and ticket changes, and check-in or boarding rules.")
-
+def _select(question: str, chunks: List[Dict], max_sentences: int) -> List[Dict]:
+    """The policy sentences that best answer one question, best first."""
     quantities = _query_quantities(question)
     base_q_tokens = set(retrieval.tokenize(question))
     q_tokens = set(retrieval.expand_query(retrieval.tokenize(question)))
@@ -164,12 +158,7 @@ def compose_answer(question: str, chunks: List[Dict], max_sentences: int = 3,
             candidates.append({"sentence": sentence, "score": score, "chunk": chunk})
 
     if not candidates:
-        top = chunks[0]
-        first = next((_clean_sentence(s) for s in _SENTENCE_SPLIT_RE.split(top["text"])
-                       if _clean_sentence(s) and not _is_heading(_clean_sentence(s))), "")
-        label = _section_label(top)
-        return f"{first}\n\nSource: {label}" if first else (
-            "I could not find a specific answer to that in the policy documents.")
+        return []
 
     candidates.sort(key=lambda c: c["score"], reverse=True)
 
@@ -195,6 +184,84 @@ def compose_answer(question: str, chunks: List[Dict], max_sentences: int = 3,
         selected.append(cand)
         if len(selected) >= max_sentences:
             break
+    return selected
+
+
+# A second question joined to the first: "...and what will the board cost?"
+_PART_JOIN_RE = re.compile(
+    r"\s*,?\s+(?:and|also|plus)\s+(?=(?:what|when|how|is|are|can|could|do|does|will|would|"
+    r"where|which|who|why|should|must)\b)", re.IGNORECASE)
+_QUESTION_START_RE = re.compile(
+    r"^(?:what|when|how|is|are|can|could|do|does|will|would|where|which|who|why|should|must)\b",
+    re.IGNORECASE)
+# Most sentences a multi-part answer may use, across all its parts.
+_MULTI_PART_MAX_SENTENCES = 5
+# Subject words a part needs before it is searched on its own.
+_SELF_CONTAINED_PART_TOKENS = 2
+
+
+def split_question(question: str) -> List[str]:
+    """The separate questions inside a message, each carrying the situation
+    the passenger described.
+
+    "I am checking in for an international flight with a surfboard. When must
+    I be at the airport and what will the board cost?" becomes two questions,
+    each prefixed with the first sentence. A message with one question is
+    returned unchanged.
+    """
+    sentences = [x.strip() for x in _SENTENCE_SPLIT_RE.split(question.strip()) if x.strip()]
+    situation, parts = [], []
+    for sentence in sentences:
+        pieces = [x.strip(" ,") for x in _PART_JOIN_RE.split(sentence) if x.strip(" ,")]
+        if sentence.endswith("?") or len(pieces) > 1 or _QUESTION_START_RE.match(sentence):
+            parts.extend(pieces)
+        else:
+            situation.append(sentence)
+    if len(parts) < 2:
+        return [question]
+    # The described situation is attached only to a part too short to name
+    # its own subject ("What am I owed?"). Attached to every part, it pulled
+    # "what will the board cost?" back toward the check-in sentence the
+    # situation was about.
+    context = " ".join(situation)
+    return [part if len(retrieval.topical_tokens(part)) >= _SELF_CONTAINED_PART_TOKENS
+            else f"{context} {part}".strip()
+            for part in parts]
+
+
+def compose_answer(question: str, chunks: List[Dict], max_sentences: int = 3,
+                    verbose: bool = True) -> str:
+    """Builds a concise, fully grounded answer from retrieved chunks.
+
+    A message that asks two things is answered part by part, so the second
+    question is not crowded out by the section that best answers the first.
+    """
+    if not chunks:
+        return ("I could not find that in the official policy documents I have access to. "
+                "I can help with baggage allowances and fees, flight delays and compensation, "
+                "refunds and ticket changes, and check-in or boarding rules.")
+
+    parts = split_question(question) if verbose else [question]
+    if len(parts) > 1:
+        selected, seen = [], set()
+        for part in parts:
+            for cand in _select(part, chunks, max_sentences=2):
+                key = cand["sentence"].lower()
+                if key not in seen:
+                    seen.add(key)
+                    selected.append(cand)
+        selected = selected[:_MULTI_PART_MAX_SENTENCES]
+    else:
+        selected = _select(question, chunks, max_sentences)
+
+    if not selected:
+        top = chunks[0]
+        first = next((_clean_sentence(s) for s in _SENTENCE_SPLIT_RE.split(top["text"])
+                       if _clean_sentence(s) and not _is_heading(_clean_sentence(s))), "")
+        label = _section_label(top)
+        return f"{first}\n\nSource: {label}" if first else (
+            "I could not find a specific answer to that in the policy documents.")
+
 
     if not verbose:
         selected = selected[:1]

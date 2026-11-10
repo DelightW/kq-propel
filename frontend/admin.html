@@ -84,6 +84,42 @@
 
   </section>
 
+  <section class="panel" id="handover-panel">
+    <div class="panel-head">
+      <div>
+        <h2>Passengers Waiting for a Person</h2>
+        <p class="hint" id="handover-hint">Cases opened when a passenger asks for a member of
+          staff. Your reply appears in their chat window.</p>
+      </div>
+      <label class="check"><input type="checkbox" id="handover-closed" /> Show closed</label>
+    </div>
+    <div class="table-scroll">
+      <table id="handover-table">
+        <thead>
+          <tr><th>Case</th><th>Opened</th><th>Status</th><th>Frustration</th><th>Latest passenger message</th><th></th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div id="handover-detail" class="handover-detail" hidden>
+      <div class="panel-head">
+        <h3 id="handover-title"></h3>
+        <button id="handover-hide" class="btn btn-quiet" type="button">Hide</button>
+      </div>
+      <div id="handover-transcript" class="transcript" aria-live="polite"></div>
+      <form id="handover-form" class="handover-form">
+        <label for="handover-reply" class="sr-only">Reply to passenger</label>
+        <textarea id="handover-reply" rows="3" maxlength="2000"
+                  placeholder="Write a reply to the passenger" required></textarea>
+        <div class="handover-actions">
+          <button id="handover-send" class="btn" type="submit">Send reply</button>
+          <button id="handover-close" class="btn btn-quiet" type="button">Close case</button>
+        </div>
+        <p id="handover-error" class="status-line" role="alert"></p>
+      </form>
+    </div>
+  </section>
+
   <section class="panel">
     <h2>M-Pesa Transaction Audit Trail</h2>
     <p class="hint">Every payment the agent initiated, with its policy-grounded amount.</p>

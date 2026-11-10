@@ -6,7 +6,7 @@ RAG pipeline, prompts and evaluation dataset.
 """
 import re
 import time
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import requests
 
@@ -27,7 +27,8 @@ class OpenAILLM(BaseLLM):
     def generate(self, system_prompt: str, user_prompt: str) -> str:
         from openai import OpenAI
 
-        client = OpenAI(api_key=config.OPENAI_API_KEY)
+        client = OpenAI(api_key=config.OPENAI_API_KEY, timeout=config.LLM_TIMEOUT_SECONDS,
+                        max_retries=1)
         resp = client.chat.completions.create(
             model=config.OPENAI_CHAT_MODEL,
             temperature=config.LLM_TEMPERATURE,
@@ -44,18 +45,24 @@ class OllamaLLM(BaseLLM):
     name = config.OPEN_SOURCE_MODEL_NAME
 
     def generate(self, system_prompt: str, user_prompt: str) -> str:
+        # The chat endpoint keeps the system prompt in the system role, as the
+        # OpenAI side does, so both models receive the same instructions in
+        # the same form.
         resp = requests.post(
-            f"{config.OLLAMA_BASE_URL}/api/generate",
+            f"{config.OLLAMA_BASE_URL}/api/chat",
             json={
                 "model": config.OPEN_SOURCE_MODEL_NAME,
-                "prompt": f"{system_prompt}\n\n{user_prompt}",
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
                 "stream": False,
                 "options": {"temperature": config.LLM_TEMPERATURE},
             },
-            timeout=15,
+            timeout=config.LLM_TIMEOUT_SECONDS,
         )
         resp.raise_for_status()
-        return resp.json().get("response", "")
+        return (resp.json().get("message") or {}).get("content", "")
 
 
 class DeterministicExtractiveLLM(BaseLLM):
@@ -129,11 +136,68 @@ def _parse_context_chunks(context: str) -> List[Dict]:
     return chunks
 
 
-def get_primary_llm() -> BaseLLM:
-    if config.OPENAI_API_KEY:
-        return OpenAILLM()
+def _offline_primary() -> BaseLLM:
     return DeterministicExtractiveLLM(
         variant="primary", name="extractive-broad (offline, not an LLM)")
+
+
+def get_primary_llm() -> BaseLLM:
+    """The model that answers passengers, chosen by CHAT_MODEL_PROVIDER."""
+    provider = config.CHAT_MODEL_PROVIDER
+    if provider == "ollama":
+        return OllamaLLM()
+    if provider in ("openai", "auto") and config.OPENAI_API_KEY:
+        return OpenAILLM()
+    return _offline_primary()
+
+
+def check_live_answer(answer: str, user_prompt: str) -> Optional[str]:
+    """Why a live model's answer must not be shown, or None if it may.
+
+    The offline composer can only quote policy text. A live model can write
+    anything, so before its answer reaches a passenger it must state no
+    quantity - a fee, a weight, a deadline - that is absent from the context,
+    the tool observations and the question it was given. This is the same
+    quantity test the groundedness metric applies.
+    """
+    from app import evaluation
+
+    text = (answer or "").strip()
+    if not text:
+        return "empty answer"
+    # Citation lines carry edition dates, which are attribution, not claims.
+    claims = "\n".join(line for line in text.splitlines()
+                       if not line.strip().lower().startswith("source"))
+    invented = evaluation._numeric_atoms(claims) - evaluation._numeric_atoms(user_prompt)
+    if invented:
+        shown = ", ".join(f"{n:g}" for n in sorted(invented)[:3])
+        return f"states figures not in the policy context ({shown})"
+    return None
+
+
+def generate_answer(system_prompt: str, user_prompt: str) -> Dict:
+    """Answers with the configured model, falling back to the offline composer
+    when the model is unreachable, too slow, or states an unsupported figure.
+
+    Returns {"answer", "model", "fallback"}; `fallback` is the reason the live
+    answer was not used, or None.
+    """
+    llm = get_primary_llm()
+    if llm.is_simulated:
+        return {"answer": llm.generate(system_prompt, user_prompt), "model": llm.name,
+                "fallback": None}
+    try:
+        answer = llm.generate(system_prompt, user_prompt)
+    except Exception as exc:  # network failure, timeout, quota, bad model name
+        reason = f"{llm.name} was unavailable ({type(exc).__name__})"
+    else:
+        problem = check_live_answer(answer, user_prompt)
+        if problem is None:
+            return {"answer": answer.strip(), "model": llm.name, "fallback": None}
+        reason = f"{llm.name} answer was withheld: it {problem}"
+    offline = _offline_primary()
+    return {"answer": offline.generate(system_prompt, user_prompt), "model": offline.name,
+            "fallback": reason}
 
 
 def get_alternate_llm() -> BaseLLM:

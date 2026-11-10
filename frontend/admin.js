@@ -54,6 +54,7 @@
     dashboard.hidden = false;
     if (who && username) { who.textContent = "Signed in as " + username; }
     loadOverview();
+    startHandoverPolling();
   }
 
   function checkSession() {
@@ -455,6 +456,153 @@
 
   function fmt(v) {
     return v === undefined || v === null ? "-" : Number(v).toFixed(3);
+  }
+
+  /* --------------------------- handover queue --------------------------- */
+
+  var hoBody = document.querySelector("#handover-table tbody");
+  var hoHint = document.getElementById("handover-hint");
+  var hoClosed = document.getElementById("handover-closed");
+  var hoDetail = document.getElementById("handover-detail");
+  var hoTitle = document.getElementById("handover-title");
+  var hoTranscript = document.getElementById("handover-transcript");
+  var hoForm = document.getElementById("handover-form");
+  var hoReply = document.getElementById("handover-reply");
+  var hoSend = document.getElementById("handover-send");
+  var hoCloseBtn = document.getElementById("handover-close");
+  var hoError = document.getElementById("handover-error");
+  var hoHide = document.getElementById("handover-hide");
+  var openCaseId = null;
+  var hoTimer = null;
+
+  var HANDOVER_LOOK = {
+    open: ["fail", "Waiting"],
+    claimed: ["warn", "In progress"],
+    closed: ["muted", "Closed"]
+  };
+  var ROLE_NAME = { user: "Passenger", assistant: "Assistant", agent: "Staff" };
+
+  function loadHandovers() {
+    return api("/api/admin/handovers" + (hoClosed.checked ? "?include_closed=true" : ""))
+      .then(function (r) { return r.ok ? r.json() : { cases: [] }; })
+      .then(function (d) {
+        if (!d.enabled) {
+          hoHint.textContent = "Handover is switched off (HANDOVER_ENABLED=false), so the " +
+            "assistant gives passengers the airline's contact details instead of opening cases.";
+        }
+        var cases = d.cases || [];
+        hoBody.innerHTML = "";
+        if (!cases.length) {
+          emptyRow(hoBody, 6, "No passengers are waiting.");
+          return;
+        }
+        cases.forEach(function (c) {
+          var tr = el("tr");
+          tr.appendChild(el("td", null, c.reference));
+          tr.appendChild(el("td", null, (c.created_at || "-").replace("T", " ").slice(0, 16)));
+          var look = HANDOVER_LOOK[c.status] || ["muted", c.status];
+          var st = el("td");
+          st.appendChild(el("span", "pill " + look[0], look[1]));
+          tr.appendChild(st);
+          tr.appendChild(el("td", null, c.frustration_score === null ? "-" :
+                                      Number(c.frustration_score).toFixed(2)));
+          tr.appendChild(el("td", null, c.last_passenger_message || "-"));
+          var act = el("td");
+          var btn = el("button", "btn btn-small", "Open");
+          btn.type = "button";
+          btn.addEventListener("click", function () { openCase(c.id); });
+          act.appendChild(btn);
+          tr.appendChild(act);
+          hoBody.appendChild(tr);
+        });
+      })
+      .catch(function () { /* the queue retries on the next tick */ });
+  }
+
+  function openCase(id) {
+    openCaseId = id;
+    hoError.textContent = "";
+    return api("/api/admin/handovers/" + id)
+      .then(function (r) {
+        if (!r.ok) { throw new Error("HTTP " + r.status); }
+        return r.json();
+      })
+      .then(function (c) {
+        hoDetail.hidden = false;
+        hoTitle.textContent = c.reference + " - " + (HANDOVER_LOOK[c.status] || [0, c.status])[1] +
+          (c.claimed_by ? " (" + c.claimed_by + ")" : "");
+        var closed = c.status === "closed";
+        hoSend.disabled = closed;
+        hoCloseBtn.disabled = closed;
+        hoReply.disabled = closed;
+        hoTranscript.innerHTML = "";
+        (c.transcript || []).forEach(function (m) {
+          var b = el("div", "t-msg " + m.role);
+          b.appendChild(el("span", "t-who", (ROLE_NAME[m.role] || m.role) + " - " +
+                                              (m.created_at || "").replace("T", " ").slice(0, 16)));
+          b.appendChild(document.createTextNode(m.message));
+          hoTranscript.appendChild(b);
+        });
+        hoTranscript.scrollTop = hoTranscript.scrollHeight;
+      })
+      .catch(function (err) {
+        if (err.message !== "Not signed in") { hoError.textContent = "Could not open the case: " + err.message; }
+      });
+  }
+
+  function postCase(action, body) {
+    return api("/api/admin/handovers/" + openCaseId + "/" + action, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    }).then(function (r) {
+      return r.json().then(function (d) {
+        if (!r.ok) { throw new Error(d.detail || ("HTTP " + r.status)); }
+        return d;
+      });
+    });
+  }
+
+  hoForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var text = hoReply.value.trim();
+    if (!text || openCaseId === null) { return; }
+    hoSend.disabled = true;
+    postCase("reply", { message: text })
+      .then(function () {
+        hoReply.value = "";
+        return openCase(openCaseId).then(loadHandovers);
+      })
+      .catch(function (err) { hoError.textContent = err.message; })
+      .then(function () { hoSend.disabled = false; });
+  });
+
+  hoCloseBtn.addEventListener("click", function () {
+    if (openCaseId === null) { return; }
+    var note = hoReply.value.trim();
+    hoCloseBtn.disabled = true;
+    postCase("close", { note: note || null })
+      .then(function () {
+        hoReply.value = "";
+        return openCase(openCaseId).then(loadHandovers);
+      })
+      .catch(function (err) { hoError.textContent = err.message; hoCloseBtn.disabled = false; });
+  });
+
+  hoHide.addEventListener("click", function () {
+    hoDetail.hidden = true;
+    openCaseId = null;
+  });
+  hoClosed.addEventListener("change", loadHandovers);
+
+  function startHandoverPolling() {
+    if (hoTimer) { return; }
+    loadHandovers();
+    hoTimer = setInterval(function () {
+      if (dashboard.hidden || document.hidden) { return; }
+      loadHandovers();
+      if (openCaseId !== null && !hoReply.value) { openCase(openCaseId); }
+    }, 15000);
   }
 
   refreshBtn.addEventListener("click", loadOverview);

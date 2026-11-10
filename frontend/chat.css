@@ -187,6 +187,26 @@ body {
   box-shadow: var(--shadow);
 }
 
+/* A reply from a member of staff, so a passenger can always tell a person
+   from the assistant. */
+.bubble.agent {
+  align-self: flex-start;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--red);
+  border-bottom-left-radius: 5px;
+  box-shadow: var(--shadow);
+}
+
+.bubble .who {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--red-dark);
+  letter-spacing: 0.02em;
+}
+
 .bubble .src {
   display: block;
   margin-top: 8px;

@@ -13,12 +13,13 @@ import statistics
 from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from app import auth, config, database, payments, sentiment
+from app import auth, config, database, handover, payments, sentiment
 from app.llm import compare_models, comparison_mode
 from app.vectorstore import get_vector_store
-from app.agent import SYSTEM_PROMPT
+from app import retrieval
+from app.agent import SYSTEM_PROMPT, _serialize_context, retrieve
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -175,9 +176,12 @@ def model_comparison(request: Request, session: Dict = Depends(auth.require_staf
     mode = comparison_mode()
     results = []
     for item in dataset:
-        retrieved = store.similarity_search(item["query"], k=3)
-        context_text = "\n---\n".join(r["text"] for r in retrieved)
-        user_prompt = f"CONTEXT:\n{context_text}\n\nTOOL OBSERVATIONS:\n\nQUESTION:\n{item['query']}"
+        # Exactly what the agent gives a model: the focused request, the same
+        # number of sections, and the [Source | Section] labels it cites from.
+        query = retrieval.focus_query(item["query"])
+        retrieved = retrieve(store, query)
+        user_prompt = (f"CONTEXT:\n{_serialize_context(retrieved)}\n\nTOOL OBSERVATIONS:\n\n"
+                       f"QUESTION:\n{query}")
         model_outputs = compare_models(SYSTEM_PROMPT, user_prompt)
         from app import evaluation
         row = {"query_id": item["id"], "query": item["query"], "models": []}
@@ -201,3 +205,62 @@ def model_comparison(request: Request, session: Dict = Depends(auth.require_staf
         "identical_response_rate": round(identical / len(results), 3) if results else 0.0,
         "results": results,
     }
+
+
+# ---------------------------------------------------------------------------
+# Human handover queue
+# ---------------------------------------------------------------------------
+
+class HandoverReply(BaseModel):
+    message: str = Field(min_length=1, max_length=config.MAX_MESSAGE_CHARS)
+
+
+class HandoverClose(BaseModel):
+    note: Optional[str] = Field(default=None, max_length=config.MAX_MESSAGE_CHARS)
+
+
+@router.get("/handovers")
+def list_handovers(include_closed: bool = False,
+                   session: Dict = Depends(auth.require_staff)):
+    """Passengers waiting for a person, oldest-open first."""
+    return {"enabled": config.HANDOVER_ENABLED,
+            "cases": handover.list_cases(include_closed=include_closed)}
+
+
+@router.get("/handovers/{case_id}")
+def get_handover(case_id: int, request: Request, session: Dict = Depends(auth.require_staff)):
+    """One case with the passenger's conversation. Reading a transcript is
+    recorded in the audit log, as it may contain personal details."""
+    case = handover.get(case_id)
+    if case is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such case.")
+    database.record_admin_audit(session.get("username"), "view_handover",
+                                handover.reference(case), auth.client_ip(request))
+    return {**case, "reference": handover.reference(case),
+            "transcript": handover.transcript(case["session_id"], limit=200)}
+
+
+@router.post("/handovers/{case_id}/reply")
+def reply_handover(case_id: int, body: HandoverReply, request: Request,
+                   session: Dict = Depends(auth.require_staff)):
+    try:
+        case = handover.staff_reply(case_id, session.get("username"), body.message)
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such case.")
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    database.record_admin_audit(session.get("username"), "reply_handover",
+                                handover.reference(case), auth.client_ip(request))
+    return {**case, "reference": handover.reference(case)}
+
+
+@router.post("/handovers/{case_id}/close")
+def close_handover(case_id: int, body: HandoverClose, request: Request,
+                   session: Dict = Depends(auth.require_staff)):
+    try:
+        case = handover.close(case_id, session.get("username"), body.note)
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such case.")
+    database.record_admin_audit(session.get("username"), "close_handover",
+                                handover.reference(case), auth.client_ip(request))
+    return {**case, "reference": handover.reference(case)}

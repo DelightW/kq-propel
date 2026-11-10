@@ -65,6 +65,10 @@ OFF_TOPIC = [
     "What time is it in Dubai?",
     "Translate hello into French",
     "What is the exchange rate of the shilling?",
+    # Found by tools/quality_gate.py: half their subject words occur in the
+    # policies, so only the semantic check refuses them.
+    "Can you book me a taxi from the airport to my hotel?",
+    "What vaccinations do I need to travel to Ghana?",
 ]
 
 print("\n=== Answerable questions pass the guard ===")

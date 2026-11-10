@@ -11,7 +11,7 @@ from typing import Optional
 from fastapi import APIRouter, Cookie, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
-from app import auth, config, database, payments
+from app import auth, config, database, handover, memory, payments
 from app.agent import run_agent_turn
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -95,6 +95,21 @@ def payment_status(reference: str, kq_session: Optional[str] = Cookie(default=No
     }
 
 
+@router.get("/handover")
+def handover_updates(after: int = 0, kq_session: Optional[str] = Cookie(default=None)):
+    """Staff replies posted since message `after`, and the case status.
+
+    Polled by the chat while a handover case is open. Scoped to the caller's
+    session cookie like every other passenger read.
+    """
+    if not auth.chat_session_is_valid(kq_session):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No session.")
+    return {
+        "handover": handover.status_for_passenger(kq_session),
+        "messages": handover.messages_since(kq_session, max(after, 0)),
+    }
+
+
 @router.post("/reset")
 def reset_session(request: Request, response: Response,
                    kq_session: Optional[str] = Cookie(default=None)):
@@ -106,6 +121,10 @@ def reset_session(request: Request, response: Response,
     """
     if kq_session:
         database.clear_pending_payment(kq_session)
+        # The next person on a shared device must not inherit the previous
+        # passenger's topic, flight, or an open conversation with staff.
+        memory.forget(kq_session)
+        handover.withdraw(kq_session)
     session_id = auth.issue_chat_session(auth.client_ip(request))
     response.set_cookie(auth.CHAT_COOKIE, session_id,
                          **auth.cookie_kwargs(max_age=60 * 60 * 12))

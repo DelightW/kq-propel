@@ -115,8 +115,33 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
     ip TEXT
 );
 
+-- What the last answered question was about, so a follow-up such as "what
+-- about Business class?" or "is that flight delayed?" keeps its context.
+CREATE TABLE IF NOT EXISTS conversation_context (
+    session_id TEXT PRIMARY KEY,
+    last_query TEXT,
+    flight_number TEXT,
+    updated_at TEXT NOT NULL
+);
+
+-- A passenger asking for a person. Staff replies are stored in
+-- `conversations` with role 'agent', so the transcript stays in one place.
+CREATE TABLE IF NOT EXISTS handovers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    status TEXT NOT NULL,            -- open | claimed | closed
+    reason TEXT,
+    frustration_score REAL,
+    claimed_by TEXT,
+    forwarded TEXT,                  -- result of the contact-centre webhook
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_conversations_session
     ON conversations(session_id);
+CREATE INDEX IF NOT EXISTS idx_handovers_status
+    ON handovers(status, created_at);
 CREATE INDEX IF NOT EXISTS idx_transactions_session
     ON transactions(session_id);
 CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires

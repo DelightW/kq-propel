@@ -86,8 +86,40 @@ LLM_TEMPERATURE = 0.0
 # Second, open-source model used for the comparative evaluation introduced in the
 # corrections document (e.g. Llama 3 / Mistral served locally via Ollama, or a
 # HuggingFace inference endpoint).
-OPEN_SOURCE_MODEL_NAME = os.getenv("OPEN_SOURCE_MODEL_NAME", "llama3-8b-instruct")
+# The default is a tag Ollama actually publishes ("ollama pull llama3.1:8b");
+# the earlier "llama3-8b-instruct" is not one, so a live run always failed.
+OPEN_SOURCE_MODEL_NAME = os.getenv("OPEN_SOURCE_MODEL_NAME", "llama3.1:8b")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+# Longest the agent waits for a live model before answering from the offline
+# composer instead. A local 8B model on a laptop CPU needs most of this.
+LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "45"))
+# Which model answers passengers: "auto" (OpenAI when a key is set, otherwise
+# the offline composer), "openai", "ollama" or "offline". Set it to the winner
+# of tools/compare_models.py.
+CHAT_MODEL_PROVIDER = os.getenv("CHAT_MODEL_PROVIDER", "auto").strip().lower() or "auto"
+
+# --- Conversation memory ---
+# How long the topic, cabin, route and flight of the last question are kept
+# for follow-ups such as "what about Business class?".
+CONVERSATION_MEMORY_MINUTES = int(os.getenv("CONVERSATION_MEMORY_MINUTES", "30"))
+
+# --- Human handover ---
+# When enabled, "speak to a person" opens a case in the staff dashboard's
+# handover queue and staff reply into the same chat. Leave it off unless
+# someone is actually watching the queue: the assistant then gives the
+# contact route below instead of promising a person.
+HANDOVER_ENABLED = os.getenv("HANDOVER_ENABLED", "false").strip().lower() \
+    in {"1", "true", "yes", "on"}
+# Optional: each new case is also POSTed here as JSON, for forwarding into the
+# airline's contact-centre system (Zendesk, Salesforce, a WhatsApp desk...).
+HANDOVER_WEBHOOK_URL = os.getenv("HANDOVER_WEBHOOK_URL", "").strip()
+HANDOVER_WEBHOOK_TOKEN = os.getenv("HANDOVER_WEBHOOK_TOKEN", "").strip()
+# What the assistant tells a passenger when no one is available. Set it to the
+# contact details Kenya Airways wants passengers to use.
+HANDOVER_FALLBACK_CONTACT = os.getenv(
+    "HANDOVER_FALLBACK_CONTACT",
+    "the Kenya Airways customer service contacts listed on kenya-airways.com",
+).strip()
 
 # --- External API integrations ---
 AVIATIONSTACK_API_KEY = os.getenv("AVIATIONSTACK_API_KEY", "").strip()

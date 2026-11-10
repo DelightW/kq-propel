@@ -14,8 +14,8 @@ import uuid
 from typing import Dict, List, Optional, Tuple
 
 from app import (aviationstack, composer, config, daraja, database, evaluation,
-                  payments, paypal, retrieval, sentiment)
-from app.llm import get_primary_llm
+                  handover, memory, payments, paypal, retrieval, sentiment)
+from app.llm import generate_answer
 from app.vectorstore import get_vector_store
 
 _FLIGHT_RE = re.compile(r"\bKQ\s?-?\s?(\d{2,4})\b", re.IGNORECASE)
@@ -60,6 +60,11 @@ EMPATHY_THRESHOLD = 0.55
 # tools/test_grounding_guard.py against the evaluation set (every question must
 # pass) and off-topic probes (every probe must be refused).
 GROUNDING_MIN_COVERAGE = 0.5
+# Cosine similarity the best retrieved section needs when only half a
+# question's subject words occur in the policies. Every off-topic probe in
+# tools/test_grounding_guard.py scores below 0.30 with all-MiniLM-L6-v2; the
+# answerable borderline questions score above 0.40.
+GROUNDING_BORDERLINE_MIN_SIMILARITY = 0.33
 
 _PAYMENT_TOPIC_RE = re.compile(r"\b(pay|payment|m-?pesa|mpesa|stk|till|settle|card|visa)\b",
                                 re.IGNORECASE)
@@ -228,8 +233,21 @@ def _is_grounded_in_context(message: str, chunks: List[Dict]) -> bool:
     # A question mostly about things the policies never mention ("exchange
     # rate of the shilling", "translate hello") is off-topic even when one of
     # its words happens to appear somewhere in the corpus.
-    if not evidence or len(evidence) / len(topical) < GROUNDING_MIN_COVERAGE:
+    # More than half, not half: "book me a taxi to my hotel" and "vaccinations
+    # to travel to Ghana" each had exactly half their subject words in the
+    # corpus ("airport", "hotel"; "travel") and were answered from unrelated
+    # sections.
+    share = len(evidence) / len(topical) if evidence else 0.0
+    if share < GROUNDING_MIN_COVERAGE:
         return False
+    # At exactly the threshold the words alone cannot tell "how do I trace a
+    # bag and who do I call?" (answerable) from "book me a taxi to my hotel"
+    # (not): each has half its subject words in the policies. The semantic
+    # similarity of the best section decides those borderline cases.
+    if share <= GROUNDING_MIN_COVERAGE and len(topical) > 1:
+        best = max((c.get("dense_score") or 0.0 for c in chunks), default=0.0)
+        if best < GROUNDING_BORDERLINE_MIN_SIMILARITY:
+            return False
     # Coverage is judged across all retrieved sections together: a multi-part
     # question ("when must I be at the airport and what will the surfboard
     # cost?") is answered by two documents, neither of which covers it alone.
@@ -671,10 +689,68 @@ def _apply_empathy(answer: str, sentiment_result: Dict) -> str:
         return answer
     return (
         "I'm really sorry for the trouble - I understand how frustrating this is, "
-        "and I'll help you sort it out right away.\n\n" + answer +
-        "\n\nIf this doesn't fully resolve things, I can escalate you to a human "
-        "support agent straight away - just say \"escalate\"."
+        "and I'll help you sort it out right away.\n\n" + answer + "\n\n" + _escalation_offer()
     )
+
+
+def _escalation_offer() -> str:
+    """Offers a person only when someone is actually watching the handover
+    queue; otherwise points to the airline's own contact route."""
+    if config.HANDOVER_ENABLED:
+        return ("If this doesn't fully resolve things, I can pass you to a member of our "
+                "support team - just say \"speak to a person\".")
+    return ("If this doesn't fully resolve things, you can reach a member of staff through "
+            f"{config.HANDOVER_FALLBACK_CONTACT}.")
+
+
+def _handover_turn(session_id: str, message: str, trace: List[Dict],
+                   sentiment_result: Dict) -> Optional[Dict]:
+    """Handles a request for a person, and messages sent while a person is
+    handling the conversation. None when neither applies."""
+    case = handover.active(session_id)
+    if case:
+        ref = handover.reference(case)
+        if handover.CANCEL_RE.search(message):
+            handover.withdraw(session_id)
+            trace.append({"step": "thought",
+                          "content": f"Passenger withdrew handover case {ref}."})
+            return _finalize_direct(
+                session_id, message,
+                f"No problem - I've closed case {ref} and I'm back with you. "
+                "What can I help you with?", trace, sentiment_result)
+        # A member of staff owns the conversation now. Answering from policy
+        # as well would give the passenger two voices that may disagree.
+        trace.append({"step": "thought",
+                      "content": (f"Handover case {ref} is {case['status']}; adding the "
+                                  f"message to the case instead of answering it.")})
+        reply = (f"Thanks - I've added that to your case {ref}. A member of our support team "
+                 "will reply here. If you'd rather carry on with me, say \"back to assistant\".")
+        return _finalize_direct(session_id, message, reply, trace, sentiment_result,
+                                handover_case=handover.status_for_passenger(session_id))
+
+    if not handover.is_request(message):
+        return None
+
+    if not config.HANDOVER_ENABLED:
+        trace.append({"step": "thought",
+                      "content": "Passenger asked for a person; handover is not enabled, so "
+                                 "giving the airline's contact route instead of promising one."})
+        reply = ("I'm not able to connect you to a person from this chat. You can reach a "
+                 f"member of staff through {config.HANDOVER_FALLBACK_CONTACT}.\n\n"
+                 "I'm happy to keep helping here in the meantime.")
+        return _finalize_direct(session_id, message, reply, trace, sentiment_result)
+
+    case = handover.open_case(session_id, reason=message,
+                              frustration_score=sentiment_result.get("frustration_score"))
+    ref = handover.reference(case)
+    trace.append({"step": "action", "tool": "open_handover_case", "input": message,
+                  "observation": {"reference": ref, "status": case["status"],
+                                  "forwarded": case.get("forwarded")}})
+    reply = (f"I've passed this conversation to our support team (case {ref}). A member of "
+             "staff will reply here in this chat, so please keep this window open.\n\n"
+             "If you'd rather carry on with me, say \"back to assistant\".")
+    return _finalize_direct(session_id, message, reply, trace, sentiment_result,
+                            handover_case=handover.status_for_passenger(session_id))
 
 
 def _small_talk_reply(message: str) -> Optional[str]:
@@ -687,6 +763,23 @@ def _small_talk_reply(message: str) -> Optional[str]:
     if _HELP_RE.search(message):
         return CAPABILITY_REPLY
     return None
+
+
+# How many policy sections the agent retrieves for a question.
+RETRIEVAL_K = 4
+
+
+def retrieve(store, query: str, k: int = RETRIEVAL_K) -> List[Dict]:
+    """The policy sections for a question. Every tool that measures the agent
+    calls this too, so evaluation sees exactly what passengers get.
+
+    Searching each part of a multi-part question separately was tried and
+    rejected: retrieval already finds every expected document for 29 of the
+    30 evaluation questions at k=4, and per-part search left answer relevance
+    unchanged (0.633) while lowering context relevance (0.405 to 0.400). The
+    gain came from composing each part separately (composer.split_question).
+    """
+    return store.similarity_search(query, k=k)
 
 
 def _serialize_context(chunks: List[Dict]) -> str:
@@ -713,7 +806,8 @@ def _extract_fee_from_context(chunks: List[Dict], message: str) -> Optional[Tupl
 
 def _finalize_direct(session_id: str, message: str, answer: str, trace: List[Dict],
                       sentiment_result: Dict, model_name: str = "rule-based",
-                      payment: Optional[Dict] = None) -> Dict:
+                      payment: Optional[Dict] = None,
+                      handover_case: Optional[Dict] = None) -> Dict:
     """Logs and returns a turn that was answered without document grounding
     (small talk, a schedule request, a payment step, or an out-of-scope
     question)."""
@@ -725,7 +819,7 @@ def _finalize_direct(session_id: str, message: str, answer: str, trace: List[Dic
     return {
         "answer": answer, "model_used": model_name,
         "sentiment": sentiment_result, "sources": [], "trace": trace,
-        "rag_metrics": {}, "payment": payment,
+        "rag_metrics": {}, "payment": payment, "handover": handover_case,
     }
 
 
@@ -738,7 +832,7 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
             "answer": "Please type a question and I'll help you out.",
             "model_used": "rule-based", "sentiment": {"label": "calm", "confidence": 1.0,
                                                        "frustration_score": 0.0},
-            "sources": [], "trace": [], "rag_metrics": {}, "payment": None,
+            "sources": [], "trace": [], "rag_metrics": {}, "payment": None, "handover": None,
         }
 
     # --- Thought 1: classify passenger tone (custom-trained ML model) ---
@@ -749,7 +843,12 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
                     f"{sentiment_result['label']} (score={sentiment_result['frustration_score']})"),
     })
 
-    # --- Thought 2: continue an in-progress payment conversation ---
+    # --- Thought 2: a request for a person, or a person already on the case ---
+    handed_over = _handover_turn(session_id, message, trace, sentiment_result)
+    if handed_over:
+        return handed_over
+
+    # --- Thought 2b: continue an in-progress payment conversation ---
     pending = database.get_pending_payment(session_id)
     if pending:
         resumed = _handle_pending_payment(session_id, message, pending, trace, sentiment_result)
@@ -767,6 +866,12 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
     # tool is keyed on a flight number. Ask for it instead of falling back to
     # an unrelated policy section. ---
     flight_number = _detect_flight_number(message)
+    if flight_number is None:
+        flight_number = memory.resolve_flight(session_id, message)
+        if flight_number:
+            trace.append({"step": "thought",
+                          "content": (f"\"That flight\" refers to {flight_number}, named "
+                                      f"earlier in the conversation.")})
     if _SCHEDULE_RE.search(message) and not flight_number:
         trace.append({
             "step": "thought",
@@ -781,12 +886,22 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
     # --- Action: hybrid semantic + lexical retrieval over policy documents ---
     # The emotional framing a passenger wraps around a question is signal for
     # the frustration classifier, not for retrieval, so search on the request.
-    query = retrieval.focus_query(message)
-    if query != message:
+    #
+    # A follow-up ("what about Business class?") is first rewritten into the
+    # complete question it stands for, using the previous answered question.
+    search_text = message
+    resolved = memory.resolve_query(session_id, message)
+    if resolved:
+        search_text = resolved
+        trace.append({"step": "thought",
+                       "content": (f"Follow-up to the previous question. Searching for "
+                                   f"\"{resolved}\".")})
+    query = retrieval.focus_query(search_text)
+    if query != search_text:
         trace.append({"step": "thought",
                        "content": f"Isolated the actual request from the message: \"{query}\""})
     store = get_vector_store()
-    retrieved = store.similarity_search(query, k=4)
+    retrieved = retrieve(store, query)
     trace.append({
         "step": "action",
         "tool": "retrieve_policy_documents",
@@ -804,7 +919,7 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
     # can I claim?"), so the whole message is consulted as well. Filler and
     # place words are ignored either way, so venting cannot ground an answer.
     grounded = _is_grounded_in_context(query, retrieved) or (
-        query != message and _is_grounded_in_context(message, retrieved))
+        query != search_text and _is_grounded_in_context(search_text, retrieved))
     if not grounded and not flight_number \
             and not _PAYMENT_TOPIC_RE.search(message):
         trace.append({
@@ -820,6 +935,7 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
 
     # --- Action: live flight telemetry tool (AviationStack) ---
     if flight_number:
+        memory.remember(session_id, flight_number=flight_number)
         flight_status = aviationstack.get_flight_status(flight_number)
         trace.append({"step": "action", "tool": "get_flight_status",
                        "input": flight_number, "observation": flight_status})
@@ -903,8 +1019,12 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
             "the inconvenience, and offer a clear escalation path to a human agent."
         )
 
-    llm = get_primary_llm()
-    answer = llm.generate(SYSTEM_PROMPT, user_prompt)
+    generated = generate_answer(SYSTEM_PROMPT, user_prompt)
+    answer, model_name = generated["answer"], generated["model"]
+    if generated["fallback"]:
+        trace.append({"step": "thought",
+                       "content": (f"{generated['fallback']}. Answered from the offline "
+                                   f"composer instead, which only quotes the policy text.")})
 
     if flight_number and tool_observations:
         answer = tool_observations[0] + "\n\n" + answer
@@ -957,7 +1077,8 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
         if cited_synthetic:
             answer += "\n\n" + composer.SYNTHETIC_SOURCE_NOTE
 
-    trace.append({"step": "final_answer", "model": llm.name, "content": answer})
+    trace.append({"step": "final_answer", "model": model_name, "content": answer})
+    memory.remember(session_id, query=query)
 
     metrics = evaluation.evaluate_response(message, answer, retrieved)
     sources = []
@@ -973,11 +1094,12 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
     database.log_rag_evaluation(query_id=str(uuid.uuid4()), query=message,
                                  context_relevance=metrics["context_relevance"],
                                  groundedness=metrics["groundedness"],
-                                 answer_relevance=metrics["answer_relevance"], model=llm.name)
+                                 answer_relevance=metrics["answer_relevance"], model=model_name)
 
     return {
         "answer": answer,
-        "model_used": llm.name,
+        "model_used": model_name,
+        "handover": None,
         "sentiment": sentiment_result,
         "sources": sources,
         "trace": trace,
