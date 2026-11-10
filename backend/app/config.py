@@ -45,9 +45,14 @@ _load_env_file()
 POLICY_DIR = DATA_DIR / "policies"
 EVAL_DATASET_PATH = DATA_DIR / "eval" / "evaluation_dataset.json"
 SENTIMENT_DATASET_PATH = DATA_DIR / "sentiment_dataset" / "frustration_dataset.csv"
-SENTIMENT_MODEL_PATH = DATA_DIR / "sentiment_dataset" / "frustration_model.joblib"
-VECTOR_STORE_PATH = DATA_DIR / "vector_store.json"
-APP_DB_PATH = DATA_DIR / "kq_propel.db"
+# Files the app writes while running (database, search index, trained model).
+# In the repository by default; a hosted copy points KQ_RUNTIME_DIR at a
+# writable or persistent folder so the code checkout can stay read-only.
+RUNTIME_DIR = Path(os.getenv("KQ_RUNTIME_DIR", "").strip() or DATA_DIR)
+SENTIMENT_MODEL_PATH = (RUNTIME_DIR / "frustration_model.joblib" if os.getenv("KQ_RUNTIME_DIR", "").strip()
+                        else DATA_DIR / "sentiment_dataset" / "frustration_model.joblib")
+VECTOR_STORE_PATH = RUNTIME_DIR / "vector_store.json"
+APP_DB_PATH = RUNTIME_DIR / "kq_propel.db"
 
 # --- RAG chunking parameters (per proposal: 500 token chunks, 50 token overlap) ---
 CHUNK_SIZE_TOKENS = 500
