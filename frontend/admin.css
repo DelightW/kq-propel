@@ -473,3 +473,10 @@ td.empty {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
 }
+
+/* data protection panel */
+.erase-fields { display: flex; flex-wrap: wrap; gap: 12px; }
+.erase-fields label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 600;
+                      color: var(--ink-soft); flex: 1 1 200px; }
+.erase-fields input { font: inherit; font-size: 14px; padding: 9px 10px; border: 1px solid var(--border);
+                      border-radius: 10px; }

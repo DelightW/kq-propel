@@ -25,7 +25,8 @@ import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
+from sklearn.metrics import (accuracy_score, confusion_matrix, f1_score, precision_recall_fscore_support,
+                             precision_score, recall_score)
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import FeatureUnion, Pipeline
 from sklearn.preprocessing import StandardScaler
@@ -37,7 +38,7 @@ _CHALLENGE_PATH = config.SENTIMENT_DATASET_PATH.with_name("frustration_challenge
 
 # Bumped whenever the feature space or dataset changes, so a stale cached
 # model is retrained instead of silently reused.
-MODEL_VERSION = 3
+MODEL_VERSION = 4  # 4: metrics report each class and the confusion counts
 
 _CAPS_WORD_RE = re.compile(r"\b[A-Z]{3,}\b")
 _ELONGATED_RE = re.compile(r"([a-zA-Z])\1{2,}")
@@ -128,7 +129,24 @@ def _score(pipeline, texts, labels) -> Dict:
         "f1_score": round(float(f1_score(labels, pred, pos_label="frustrated",
                                           zero_division=0)), 4),
         "size": len(texts),
+        # The headline figures above are for the frustrated class only. A
+        # model can score well there while misreading calm passengers, so
+        # both classes and the two kinds of error are reported.
+        "per_class": _per_class(labels, pred),
     }
+
+
+CLASSES = ("calm", "frustrated")
+
+
+def _per_class(labels, pred) -> Dict:
+    p, r, f, n = precision_recall_fscore_support(labels, pred, labels=list(CLASSES), zero_division=0)
+    out = {c: {"precision": round(float(p[i]), 4), "recall": round(float(r[i]), 4),
+               "f1_score": round(float(f[i]), 4), "support": int(n[i])} for i, c in enumerate(CLASSES)}
+    cm = confusion_matrix(labels, pred, labels=list(CLASSES))
+    out["errors"] = {"calm_read_as_frustrated": int(cm[0][1]),
+                     "frustrated_read_as_calm": int(cm[1][0])}
+    return out
 
 
 def train_frustration_classifier(force: bool = False) -> Dict:

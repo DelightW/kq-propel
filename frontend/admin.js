@@ -55,6 +55,7 @@
     if (who && username) { who.textContent = "Signed in as " + username; }
     loadOverview();
     startHandoverPolling();
+    loadPrivacy();
   }
 
   function checkSession() {
@@ -274,6 +275,13 @@
         sentimentMetrics.appendChild(el("p", "hint",
           "In-distribution: trained on " + sm.train_size + " labelled samples, evaluated on a held-out " +
           (sm.test_size !== undefined ? sm.test_size : "?") + "-sample split of the same file."));
+      }
+      var pc = sm.per_class;
+      if (pc && pc.calm && pc.errors) {
+        sentimentMetrics.appendChild(el("p", "hint",
+          "Calm passengers: precision " + pc.calm.precision.toFixed(3) + ", recall " +
+          pc.calm.recall.toFixed(3) + ". Errors: " + pc.errors.calm_read_as_frustrated +
+          " calm read as frustrated, " + pc.errors.frustrated_read_as_calm + " frustrated read as calm."));
       }
       // Reported alongside the figures above because a held-out split of one
       // synthetic file cannot detect an artifact in that file - an earlier
@@ -604,6 +612,70 @@
       if (openCaseId !== null && !hoReply.value) { openCase(openCaseId); }
     }, 15000);
   }
+
+  /* --------------------------- data protection --------------------------- */
+
+  var eraseForm = document.getElementById("erase-form");
+  var eraseCase = document.getElementById("erase-case");
+  var erasePhone = document.getElementById("erase-phone");
+  var eraseConfirm = document.getElementById("erase-confirm");
+  var eraseStatus = document.getElementById("erase-status");
+  var retentionLine = document.getElementById("privacy-retention");
+
+  function loadPrivacy() {
+    api("/api/admin/privacy").then(function (r) { return r.json(); }).then(function (d) {
+      var p = d.retention || {};
+      var last = d.last_purge && d.last_purge.at ? " Last automatic purge: " + d.last_purge.at + " UTC." : "";
+      if (!p.enabled) {
+        retentionLine.textContent = "Automatic deletion is switched off (PRIVACY_RETENTION_ENABLED). " +
+          "Personal data is kept until it is erased on request. When switched on, conversations are " +
+          "erased " + p.conversation_days + " days after the last message.";
+        return;
+      }
+      retentionLine.textContent = "Conversations are erased " + p.conversation_days +
+        " days after the last message; payment records lose their phone number after " +
+        p.payment_contact_days + " days; this access log is kept for " + p.audit_days + " days." + last;
+    }).catch(function () {});
+  }
+
+  function eraseRequest(confirm) {
+    return api("/api/admin/privacy/erase", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ case_reference: eraseCase.value.trim() || null,
+                             phone: erasePhone.value.trim() || null, confirm: confirm })
+    }).then(function (r) {
+      return r.json().then(function (d) {
+        if (!r.ok) { throw new Error(typeof d.detail === "string" ? d.detail : "Check the details entered."); }
+        return d;
+      });
+    });
+  }
+
+  function resetErase() { eraseConfirm.disabled = true; }
+  eraseCase.addEventListener("input", resetErase);
+  erasePhone.addEventListener("input", resetErase);
+
+  eraseForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+    eraseRequest(false).then(function (d) {
+      eraseStatus.textContent = d.sessions_found
+        ? d.sessions_found + " conversation(s) found. Press Erase to delete them."
+        : "No conversations found for those details.";
+      eraseConfirm.disabled = !d.sessions_found;
+    }).catch(function (err) { eraseStatus.textContent = err.message; resetErase(); });
+  });
+
+  eraseConfirm.addEventListener("click", function () {
+    if (!window.confirm("Erase this passenger's conversations? This cannot be undone.")) { return; }
+    eraseRequest(true).then(function (d) {
+      var c = d.erased || {};
+      eraseStatus.textContent = "Erased " + (c.messages || 0) + " message(s) in " + (c.sessions || 0) +
+        " conversation(s); " + (c.payment_contacts || 0) + " payment record(s) no longer hold a phone number.";
+      eraseCase.value = ""; erasePhone.value = ""; resetErase();
+      loadHandovers();
+    }).catch(function (err) { eraseStatus.textContent = err.message; });
+  });
 
   refreshBtn.addEventListener("click", loadOverview);
   runCmpBtn.addEventListener("click", runComparison);

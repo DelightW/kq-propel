@@ -102,6 +102,19 @@ def main() -> int:
         gate_note = "gating" if any(c.get("gate") for c in items) else "tracked only"
         print(f"        {category}: {passed}/{len(items)} ({gate_note})")
 
+    # Tone must never change entitlement: a frustrated passenger gets the same
+    # policy answer as a calm one. Run in its own process so its forced
+    # classifier cannot leak into anything above.
+    import subprocess
+    fairness = subprocess.run([sys.executable, str(Path(__file__).with_name("test_sentiment_fairness.py"))],
+                              capture_output=True, text=True)
+    summary = (fairness.stdout.strip().splitlines() or ["no output"])[-1]
+    print("\nSentiment fairness")
+    print(f"  {'PASS' if fairness.returncode == 0 else 'FAIL'}  calm and frustrated passengers get "
+          f"the same policy answer ({summary})")
+    if fairness.returncode != 0:
+        failed = True
+
     unreviewed = sum(1 for c in cases if not c.get("reviewed"))
     if unreviewed:
         print(f"\nNote: {unreviewed} of {len(cases)} conversation cases are drafts awaiting "

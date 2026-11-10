@@ -26,7 +26,7 @@ from typing import Dict, List, Optional
 
 import requests
 
-from app import config, database
+from app import config, database, privacy
 
 OPEN, CLAIMED, CLOSED = "open", "claimed", "closed"
 ACTIVE = (OPEN, CLAIMED)
@@ -131,7 +131,10 @@ def _forward(case: Dict) -> None:
         "created_at": case["created_at"],
         "reason": case["reason"],
         "frustration_score": case["frustration_score"],
-        "transcript": [{"role": m["role"], "message": m["message"], "at": m["created_at"]}
+        # Phone numbers are masked: the contact centre can ask the passenger
+        # for anything it needs, and the transcript leaves this system.
+        "transcript": [{"role": m["role"], "message": privacy.mask_text(m["message"]),
+                        "at": m["created_at"]}
                        for m in transcript(case["session_id"])],
     }
     headers = {"Content-Type": "application/json"}

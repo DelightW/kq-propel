@@ -121,6 +121,28 @@ HANDOVER_FALLBACK_CONTACT = os.getenv(
     "the Kenya Airways customer service contacts listed on kenya-airways.com",
 ).strip()
 
+# --- Data protection (see app/privacy.py and docs/DPIA_draft.md) ---
+# Placeholders until Kenya Airways' data protection impact assessment sets the
+# real periods. Conversations, IP addresses, handover cases and the question
+# text kept with evaluation scores are erased after CONVERSATION_RETENTION_DAYS
+# of inactivity; payment records are kept but lose the phone number after
+# PAYMENT_CONTACT_RETENTION_DAYS; the staff access log is kept for
+# AUDIT_RETENTION_DAYS because it is the accountability record.
+# Off until the DPIA has set the periods: switching it on deletes everything
+# older than the periods below, including development history.
+PRIVACY_RETENTION_ENABLED = os.getenv("PRIVACY_RETENTION_ENABLED", "false").strip().lower() in {
+    "1", "true", "yes", "on"}
+CONVERSATION_RETENTION_DAYS = int(os.getenv("CONVERSATION_RETENTION_DAYS", "30"))
+PAYMENT_CONTACT_RETENTION_DAYS = int(os.getenv("PAYMENT_CONTACT_RETENTION_DAYS", "90"))
+AUDIT_RETENTION_DAYS = int(os.getenv("AUDIT_RETENTION_DAYS", "365"))
+PRIVACY_PURGE_INTERVAL_MINUTES = int(os.getenv("PRIVACY_PURGE_INTERVAL_MINUTES", "60"))
+# Shown in the chat's privacy notice; set it to the airline's data protection
+# officer's address before going live.
+PRIVACY_CONTACT = os.getenv(
+    "PRIVACY_CONTACT",
+    "the Kenya Airways Data Protection Officer (contact details on kenya-airways.com)",
+).strip()
+
 # --- External API integrations ---
 AVIATIONSTACK_API_KEY = os.getenv("AVIATIONSTACK_API_KEY", "").strip()
 DARAJA_CONSUMER_KEY = os.getenv("DARAJA_CONSUMER_KEY", "").strip()

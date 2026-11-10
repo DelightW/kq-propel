@@ -1012,12 +1012,13 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
     tool_context = "\n".join(tool_observations)
     user_prompt = f"CONTEXT:\n{context_text}\n\nTOOL OBSERVATIONS:\n{tool_context}\n\nQUESTION:\n{query}"
 
-    if (sentiment_result["label"] == "frustrated"
-            and sentiment_result["frustration_score"] >= EMPATHY_THRESHOLD):
-        user_prompt += (
-            "\n\nNOTE: The passenger appears frustrated. Prioritize empathy, acknowledge "
-            "the inconvenience, and offer a clear escalation path to a human agent."
-        )
+    # Sentiment changes tone, never content. A note about the passenger's
+    # frustration used to be appended here; the composer read its words
+    # ("inconvenience", "escalation", "agent") as part of the question, so a
+    # frustrated passenger was given different policy text from a calm one for
+    # 6 of 30 evaluation questions and for everyday questions such as the
+    # name-correction fee (tools/test_sentiment_fairness.py). Empathy
+    # is added by _apply_empathy() after generation, outside the policy answer.
 
     generated = generate_answer(SYSTEM_PROMPT, user_prompt)
     answer, model_name = generated["answer"], generated["model"]

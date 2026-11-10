@@ -605,6 +605,45 @@
     send(btn.getAttribute("data-q"));
   });
 
+  /* --------------------------- data erasure ---------------------------- */
+
+  /* Deletes this conversation on the server (messages, memory, any payment
+     offer or handover case; payment records keep their amounts but lose the
+     phone number) and starts afresh. */
+  var forgetBtn = document.getElementById("forget-btn");
+  forgetBtn.addEventListener("click", function () {
+    if (busy) { return; }
+    if (!window.confirm("Delete this conversation and everything linked to it? " +
+                        "This cannot be undone.")) { return; }
+    setBusy(true);
+    fetch(API + "/forget", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirm: true })
+    })
+      .then(function (r) {
+        if (!r.ok) { throw new Error("HTTP " + r.status); }
+        return r.json();
+      })
+      .then(function (d) {
+        sessionId = d.session_id;
+        lastAgentMessageId = 0;
+        chatWindow.innerHTML = "";
+        traceBody.innerHTML = "";
+        addBubble("bot",
+          "Your conversation has been deleted. Any payment record keeps its amount and " +
+          "reference, as the airline must, but no longer holds your phone number.\n\n" +
+          "You can start a new question whenever you like.");
+        setBusy(false);
+      })
+      .catch(function (err) {
+        addBubble("bot", "I couldn't delete the conversation just now (" + err.message +
+                         "). Please try again.");
+        setBusy(false);
+      });
+  });
+
   /* ------------------------------ greeting ------------------------------ */
 
   addBubble("bot",

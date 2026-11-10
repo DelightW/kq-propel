@@ -15,7 +15,7 @@ from typing import Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
-from app import auth, config, database, handover, payments, sentiment
+from app import auth, config, database, handover, payments, privacy, sentiment
 from app.llm import compare_models, comparison_mode
 from app.vectorstore import get_vector_store
 from app import retrieval
@@ -140,7 +140,7 @@ def overview(request: Request, session: Dict = Depends(auth.require_staff)):
             "pending_by_currency": {k: round(v, 2) for k, v in ledger["pending_by_currency"].items()},
             "counts_by_status": ledger["counts_by_status"],
             "counts_by_method": ledger["counts_by_method"],
-            "recent": ledger["recent"],
+            "recent": privacy.mask_rows(ledger["recent"]),
         },
         "sentiment_model_metrics": sentiment.get_metrics(),
     }
@@ -150,7 +150,9 @@ def overview(request: Request, session: Dict = Depends(auth.require_staff)):
 def transactions(request: Request, session: Dict = Depends(auth.require_staff)):
     database.record_admin_audit(session.get("username"), "view_transactions",
                                  None, auth.client_ip(request))
-    return database.fetch_transactions(limit=100)
+    # Staff see the last digits only; the full number stays with the payment
+    # code that needs it to send the STK push.
+    return privacy.mask_rows(database.fetch_transactions(limit=100))
 
 
 @router.get("/audit")
@@ -224,7 +226,7 @@ def list_handovers(include_closed: bool = False,
                    session: Dict = Depends(auth.require_staff)):
     """Passengers waiting for a person, oldest-open first."""
     return {"enabled": config.HANDOVER_ENABLED,
-            "cases": handover.list_cases(include_closed=include_closed)}
+            "cases": privacy.mask_rows(handover.list_cases(include_closed=include_closed))}
 
 
 @router.get("/handovers/{case_id}")
@@ -237,7 +239,7 @@ def get_handover(case_id: int, request: Request, session: Dict = Depends(auth.re
     database.record_admin_audit(session.get("username"), "view_handover",
                                 handover.reference(case), auth.client_ip(request))
     return {**case, "reference": handover.reference(case),
-            "transcript": handover.transcript(case["session_id"], limit=200)}
+            "transcript": privacy.mask_rows(handover.transcript(case["session_id"], limit=200))}
 
 
 @router.post("/handovers/{case_id}/reply")
@@ -264,3 +266,54 @@ def close_handover(case_id: int, body: HandoverClose, request: Request,
     database.record_admin_audit(session.get("username"), "close_handover",
                                 handover.reference(case), auth.client_ip(request))
     return {**case, "reference": handover.reference(case)}
+
+
+# ---------------------------------------------------------------------------
+# Data protection
+# ---------------------------------------------------------------------------
+
+class ErasureRequest(BaseModel):
+    """A passenger's erasure request received outside the chat (by phone,
+    email or at a desk). Identify them by the case reference of a handover
+    they opened, or by the phone number they used."""
+    case_reference: Optional[str] = Field(default=None, max_length=20)
+    phone: Optional[str] = Field(default=None, max_length=20)
+    confirm: bool = False
+
+
+@router.get("/privacy")
+def privacy_status(session: Dict = Depends(auth.require_staff)):
+    return {"retention": privacy.retention_policy(), "last_purge": privacy.last_purge(),
+            "contact": config.PRIVACY_CONTACT}
+
+
+@router.post("/privacy/erase")
+def erase_passenger(body: ErasureRequest, request: Request,
+                    session: Dict = Depends(auth.require_staff)):
+    """Finds the passenger's sessions and, when `confirm` is true, erases them.
+    Without `confirm` it only reports what would be erased, so staff can check
+    they have the right person first. Both are recorded in the audit log, with
+    the phone number masked."""
+    sessions = []
+    if body.case_reference:
+        ref = body.case_reference.strip().upper()
+        if not ref.startswith("H-") or not ref[2:].isdigit():
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                detail="Case references look like H-00012.")
+        case = handover.get(int(ref[2:]))
+        if case:
+            sessions.append(case["session_id"])
+    if body.phone:
+        sessions += privacy.sessions_for_phone(body.phone)
+    if not body.case_reference and not body.phone:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail="Give a case reference or a phone number.")
+    who = body.case_reference or privacy.mask_phone(body.phone)
+    if not body.confirm:
+        database.record_admin_audit(session.get("username"), "preview_erasure",
+                                    f"{who}: {len(set(sessions))} session(s)", auth.client_ip(request))
+        return {"confirmed": False, "sessions_found": len(set(sessions))}
+    counts = privacy.erase_sessions(sessions)
+    database.record_admin_audit(session.get("username"), "erase_passenger_data",
+                                f"{who}: {counts}", auth.client_ip(request))
+    return {"confirmed": True, "erased": counts}

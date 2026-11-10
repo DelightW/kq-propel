@@ -345,6 +345,27 @@ body {
 
 .input-row { display: flex; gap: 9px; align-items: flex-end; }
 
+.privacy-line {
+  margin: 7px 0 0;
+  font-size: 12px;
+  color: var(--ink-soft);
+  text-align: center;
+}
+.privacy-line a, .link-btn {
+  color: var(--ink-soft);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.link-btn {
+  background: none;
+  border: 0;
+  padding: 2px 0;
+  font: inherit;
+  cursor: pointer;
+}
+.privacy-line a:hover, .link-btn:hover { color: var(--red-dark); }
+.privacy-line a:focus-visible, .link-btn:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+
 #chat-input {
   flex: 1 1 auto;
   min-width: 0;

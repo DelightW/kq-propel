@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#c8102e" />
+<title>Privacy Notice | KQ-Propel</title>
+<style>
+  :root { --red: #c8102e; --red-dark: #8f0c20; --ink: #2b0d12; --ink-soft: #6b5457;
+          --paper: #f7f2f3; --border: #eccfd4; --white: #ffffff; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink);
+         font: 16px/1.6 "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif; }
+  header { background: linear-gradient(90deg, var(--red-dark), var(--red)); color: var(--white);
+           padding: 18px 16px; }
+  header h1 { margin: 0; font-size: 22px; }
+  header p { margin: 2px 0 0; opacity: 0.9; font-size: 14px; }
+  main { max-width: 760px; margin: 0 auto; padding: 20px 16px 48px; }
+  .draft { background: #fff7e0; border: 1px solid #e8c766; border-radius: 10px; padding: 12px 14px;
+           font-size: 14px; }
+  section { background: var(--white); border: 1px solid var(--border); border-radius: 12px;
+            padding: 4px 18px 10px; margin-top: 16px; }
+  h2 { font-size: 17px; color: var(--red-dark); margin: 14px 0 6px; }
+  ul { padding-left: 20px; margin: 6px 0; }
+  li { margin: 4px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 6px 0 10px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--ink-soft); font-weight: 600; }
+  a { color: var(--red-dark); }
+  .v { font-weight: 600; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Privacy Notice</h1>
+  <p>KQ-Propel aviation support assistant</p>
+</header>
+<main>
+  <p class="draft"><strong>Draft for review.</strong> This notice describes what the assistant does with your
+    information as it is built today. It must be reviewed and approved by Kenya Airways, as the data controller,
+    before the assistant is offered to the public.</p>
+
+  <section>
+    <h2>Who is responsible for your information</h2>
+    <p>Kenya Airways is the data controller for information you give this assistant. Questions about your data,
+      or requests to see, correct or delete it, can be sent to <span class="v" id="contact">the Kenya Airways
+      Data Protection Officer</span>.</p>
+  </section>
+
+  <section>
+    <h2>What we collect and why</h2>
+    <table>
+      <tr><th>Information</th><th>Why it is used</th></tr>
+      <tr><td>Your messages and the assistant's replies</td><td>To answer your question, to let a member of staff
+        continue the conversation if you ask for a person, and to check the quality of answers.</td></tr>
+      <tr><td>An estimate of whether a message sounds frustrated</td><td>To acknowledge a difficult situation and
+        offer you a person. It never changes the policy answer you receive.</td></tr>
+      <tr><td>Your last question and any flight number, for <span class="v" id="memory">30</span> minutes</td>
+        <td>So that a follow-up such as "what about Business class?" makes sense.</td></tr>
+      <tr><td>Your M-Pesa phone number, if you choose to pay by M-Pesa</td><td>To send the payment request to your
+        phone and match the result to your payment.</td></tr>
+      <tr><td>Your IP address and a session cookie</td><td>To keep your conversation private to your browser and to
+        protect the service from misuse.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>Who else receives information</h2>
+    <ul>
+      <li><strong>Safaricom</strong> receives your phone number and the amount when you pay by M-Pesa.</li>
+      <li><strong>PayPal</strong> handles card payments on its own checkout page; the assistant never sees your card
+        details.</li>
+      <li><strong>The flight data provider</strong> receives only the flight number you ask about.</li>
+      <li><strong>Kenya Airways support staff</strong> see the conversation if you ask for a person. Phone numbers are
+        shown to them with most digits hidden.</li>
+      <li>If Kenya Airways turns on a cloud language model, your question and the policy text used to answer it are
+        sent to that model's provider, which may be outside Kenya. This will be stated here before it happens.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>How long it is kept</h2>
+    <p class="draft" id="retention-off" hidden>Automatic deletion is not yet switched on in this prototype; the
+      periods below will apply once Kenya Airways has approved them. You can delete your conversation yourself
+      at any time.</p>
+    <ul>
+      <li>Conversations, handover cases and your IP address are deleted <span class="v" id="conv">30</span> days after
+        your last message.</li>
+      <li>Payment records are kept as financial records, but the phone number is removed after
+        <span class="v" id="pay">90</span> days.</li>
+      <li>The record of which staff member looked at passenger data is kept for <span class="v" id="audit">365</span>
+        days.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Your rights</h2>
+    <p>Under Kenya's Data Protection Act, 2019 you may ask to see the information held about you, to have it
+      corrected or deleted, and to object to its use. You can delete your conversation at any time with
+      <strong>Delete my conversation</strong> under the message box. If you no longer have the chat open, contact
+      the address above with the phone number you used or your case reference (for example H-00012).</p>
+    <p>If you are not satisfied with how your request is handled, you may complain to the Office of the Data
+      Protection Commissioner.</p>
+  </section>
+
+  <p><a href="/">Back to the assistant</a></p>
+</main>
+<script>
+  fetch("/api/chat/privacy").then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+    if (!d) { return; }
+    var set = function (id, v) { var el = document.getElementById(id); if (el && v !== undefined) { el.textContent = v; } };
+    set("contact", d.contact);
+    set("memory", d.memory_minutes);
+    set("conv", d.conversation_days);
+    set("pay", d.payment_contact_days);
+    set("audit", d.audit_days);
+    if (d.enabled === false) {
+      var note = document.getElementById("retention-off");
+      if (note) { note.hidden = false; }
+    }
+  }).catch(function () { /* the defaults written above remain */ });
+</script>
+</body>
+</html>

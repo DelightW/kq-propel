@@ -11,7 +11,7 @@ from typing import Optional
 from fastapi import APIRouter, Cookie, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
-from app import auth, config, database, handover, memory, payments
+from app import auth, config, database, handover, memory, payments, privacy
 from app.agent import run_agent_turn
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -108,6 +108,38 @@ def handover_updates(after: int = 0, kq_session: Optional[str] = Cookie(default=
         "handover": handover.status_for_passenger(kq_session),
         "messages": handover.messages_since(kq_session, max(after, 0)),
     }
+
+
+class ForgetRequest(BaseModel):
+    # A JSON body (rather than a bare POST) means a cross-site form cannot
+    # trigger erasure: the browser must send a CORS preflight first.
+    confirm: bool
+
+
+@router.post("/forget")
+def forget_me(req: ForgetRequest, request: Request, response: Response,
+              kq_session: Optional[str] = Cookie(default=None)):
+    """Erases the caller's conversation and everything linked to it, then
+    starts a fresh session. Payment records are kept as financial records but
+    lose the phone number (see app/privacy.py)."""
+    if not req.confirm:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Erasure must be confirmed.")
+    if not auth.chat_session_is_valid(kq_session):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No session.")
+    counts = privacy.erase_sessions([kq_session])
+    session_id = auth.issue_chat_session(auth.client_ip(request))
+    response.set_cookie(auth.CHAT_COOKIE, session_id,
+                         **auth.cookie_kwargs(max_age=60 * 60 * 12))
+    return {"erased": counts, "session_id": session_id}
+
+
+@router.get("/privacy")
+def privacy_notice_settings():
+    """The retention periods and contact the privacy notice shows, so the
+    notice can never state a period the server does not actually apply."""
+    return {**privacy.retention_policy(), "contact": config.PRIVACY_CONTACT,
+            "memory_minutes": config.CONVERSATION_MEMORY_MINUTES}
 
 
 @router.post("/reset")

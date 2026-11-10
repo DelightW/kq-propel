@@ -167,6 +167,24 @@
     </div>
   </section>
 
+  <section class="panel" id="privacy-panel">
+    <h2>Data Protection</h2>
+    <p class="hint" id="privacy-retention">Retention settings are loading.</p>
+    <form id="erase-form" class="erase-form">
+      <p class="hint">Erase a passenger's data when they ask by phone, email or at a desk. Find them by a
+        handover case reference or the phone number they used; check the count before erasing.</p>
+      <div class="erase-fields">
+        <label>Case reference <input id="erase-case" type="text" maxlength="20" placeholder="H-00012" /></label>
+        <label>Phone number <input id="erase-phone" type="tel" maxlength="20" placeholder="0712 345 678" /></label>
+      </div>
+      <div class="handover-actions">
+        <button id="erase-find" class="btn btn-quiet" type="submit">Find</button>
+        <button id="erase-confirm" class="btn" type="button" disabled>Erase</button>
+      </div>
+      <p id="erase-status" class="status-line" role="status"></p>
+    </form>
+  </section>
+
 </main>
 
 </div>
