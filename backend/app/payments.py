@@ -172,6 +172,17 @@ def apply_mpesa_outcome(outcome: Dict) -> Tuple[bool, Optional[Dict]]:
     reconciliation rather than marking it paid on the callback's word alone.
     """
     row = find_by_checkout("mpesa", outcome["checkout_request_id"])
+    if (row is not None and row["status"] == PAID and not row.get("provider_receipt")
+            and outcome["status"] == PAID and outcome.get("receipt")
+            and outcome.get("amount") is not None
+            and to_minor(outcome["amount"]) == row["amount_minor"]):
+        # The status query often confirms a payment before the callback
+        # arrives, and only the callback carries the M-Pesa receipt number
+        # finance needs. The receipt is added; the status is never changed.
+        with database._connect() as conn:
+            conn.execute("UPDATE transactions SET provider_receipt = ? WHERE id = ?",
+                         (str(outcome["receipt"])[:40], row["id"]))
+        return False, find_by_checkout("mpesa", outcome["checkout_request_id"])
     if row is None or row["status"] != PENDING:
         return False, row
 

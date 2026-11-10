@@ -89,6 +89,22 @@ def test_success_callback_with_matching_amount_settles_once():
     assert not again and not late and row["status"] == payments.PAID
 
 
+def test_late_callback_adds_the_receipt_to_a_query_settled_payment():
+    # Seen in the real sandbox test on 10 November: the status query settled
+    # the payment first, and the callback carrying the receipt was ignored.
+    _, row = pending_attempt("s-receipt")
+    payments.reconcile(row)
+    row = payments.for_passenger("s-receipt", row["reference"])
+    assert row["status"] == payments.PAID and not row["provider_receipt"], row
+    _, row = payments.apply_mpesa_outcome(daraja.parse_callback(
+        callback(row["checkout_request_id"], 0, 9675, receipt="SKA1B2C3D4")))
+    assert row["status"] == payments.PAID and row["provider_receipt"] == "SKA1B2C3D4", row
+    # A callback for a different amount, or a failure, never touches it.
+    _, row = payments.apply_mpesa_outcome(daraja.parse_callback(
+        callback(row["checkout_request_id"], 1, 9675, receipt="OTHER")))
+    assert row["provider_receipt"] == "SKA1B2C3D4"
+
+
 def test_wrong_amount_is_flagged_for_review_not_paid():
     _, row = pending_attempt("s-amount")
     _, row = payments.apply_mpesa_outcome(daraja.parse_callback(

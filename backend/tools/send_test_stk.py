@@ -59,7 +59,7 @@ def main() -> int:
         print("       shortcode 174379 and copy the Passkey.")
         print("    3. Put all three in .env and run this again.")
         print("\n  A sandbox push reaches a real handset, and entering the PIN takes real")
-        print("  money (it is paid to Safaricom's test Paybill 174379 and not refunded).")
+        print("  money (paid to Safaricom's test Paybill 174379; a reversal is not guaranteed).")
         return 2
 
     phone = normalize(args.phone)
@@ -80,7 +80,7 @@ def main() -> int:
             return 2
         args.amount = 1
         print("\nSandbox prompt for Ksh 1. If the PIN is entered, Ksh 1 is really paid to")
-        print("Safaricom's test Paybill 174379 and is not refunded.")
+        print("Safaricom's test Paybill 174379; a reversal is not guaranteed.")
         if input("Type 'yes' to send: ").strip().lower() != "yes":
             print("Aborted.")
             return 1

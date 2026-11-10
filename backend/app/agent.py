@@ -393,7 +393,7 @@ def _payment_sent_message(amount: float, phone: str, result: Optional[Dict] = No
             f"Test mode: I've sent an M-Pesa prompt for **Ksh {result.get('amount', 1):,.0f}** to "
             f"{phone}, standing in for the Ksh {amount:,.0f} fee.\n\n"
             "This is Safaricom's test system, but the shilling is real: entering your PIN pays "
-            "it to Safaricom's test Paybill, and it is not refunded. The status below updates "
+            "it to Safaricom's test Paybill. Safaricom may reverse it, but that is not guaranteed. The status below updates "
             "once Safaricom confirms the outcome."
         )
     return (
