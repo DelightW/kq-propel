@@ -16,6 +16,7 @@ a single self-contained policy rule, which is what makes precise, grounded
 answers possible (a whole-document chunk forces the model to dump the entire
 manual back at the passenger).
 """
+import hashlib
 import json
 import os
 import re
@@ -508,6 +509,24 @@ def load_provenance(directory: Optional[Path] = None) -> Dict[str, str]:
     }
 
 
+def corpus_fingerprint(directory: Path) -> str:
+    """Identifies everything a saved index was built from: the policy text,
+    the provenance manifest (editions appear in citations), the chunking
+    settings and the embedding model."""
+    h = hashlib.sha256()
+    for path in sorted(directory.glob("*.txt")) + sorted(directory.glob("provenance.json")):
+        h.update(path.name.encode())
+        h.update(path.read_bytes())
+    h.update(f"{config.CHUNK_SIZE_TOKENS}/{config.CHUNK_OVERLAP_TOKENS}".encode())
+    h.update(f"{config.LOCAL_EMBEDDING_ENABLED}/{config.LOCAL_EMBEDDING_MODEL}/"
+             f"{bool(config.OPENAI_API_KEY)}/{config.OPENAI_EMBEDDING_MODEL}".encode())
+    return h.hexdigest()[:16]
+
+
+def _fingerprint_path() -> Path:
+    return config.VECTOR_STORE_PATH.with_name("corpus_fingerprint.txt")
+
+
 def ingest_policy_directory(directory: Optional[Path] = None, rebuild: bool = False):
     directory = directory or config.POLICY_DIR
     store = get_vector_store()
@@ -516,6 +535,14 @@ def ingest_policy_directory(directory: Optional[Path] = None, rebuild: bool = Fa
     # hashed floor) changes the vector width, so rebuild rather than serve a
     # dense stage that scores zero on every chunk.
     if not rebuild and getattr(store, "is_stale", lambda: False)():
+        rebuild = True
+    # Nor is it reusable once the policies change. Only the vector width used
+    # to be checked, so an edited policy, a new section or a new edition kept
+    # being answered from the old index until it was deleted by hand.
+    fingerprint = corpus_fingerprint(directory)
+    marker = _fingerprint_path()
+    previous = marker.read_text(encoding="utf-8").strip() if marker.exists() else None
+    if not rebuild and previous != fingerprint:
         rebuild = True
     if rebuild:
         store.clear()
@@ -527,4 +554,6 @@ def ingest_policy_directory(directory: Optional[Path] = None, rebuild: bool = Fa
         store.add_document(doc_id=file_path.stem, source=file_path.name,
                             text=file_path.read_text(encoding="utf-8"),
                             provenance=provenance.get(file_path.name, "undeclared"))
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text(fingerprint, encoding="utf-8")
     return store.stats()
