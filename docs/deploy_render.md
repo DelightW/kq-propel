@@ -1,0 +1,52 @@
+# Deploying KQ-Propel to Render (free)
+
+The free web service has 512 MB of memory. The app runs its embedding model on ONNX Runtime
+(`backend/requirements-server.txt`) and uses about 285 MB, measured in a container capped at 512 MB while it
+answered all 30 evaluation questions. The ONNX vectors match the PyTorch ones to 1e-7 and the quality gate gives
+the same scores.
+
+**Limits of the free plan.** The service sleeps after about 15 minutes without visitors; the next visit wakes it
+in about a minute. Files are not kept between restarts, so conversations and payment records are lost on every
+restart or redeploy (the search index and classifier are rebuilt automatically). Fine for demonstrations, not
+for real payment records.
+
+## 1. Create the service
+
+1. Sign up at https://render.com with **GitHub** (no card needed for free services) and allow Render to see the
+   `kq-propel` repository.
+2. In the Render dashboard: **New → Blueprint**, choose the `kq-propel` repository. Render reads `render.yaml`
+   (service `kq-propel`, free plan, branch `priority-1-hardening`).
+3. Render asks for the values marked `sync: false`. Your address will be `https://kq-propel.onrender.com` if that
+   name is free (Render shows the actual address after creation; if it differs, update the two values that
+   contain it).
+
+| Name | Value |
+|---|---|
+| `ADMIN_PASSWORD_HASH` | the same value as in your local `.env` |
+| `ALLOWED_ORIGINS` | `https://kq-propel.onrender.com` |
+| `DARAJA_SANDBOX_TEST_NUMBERS` | `0704136123` |
+| `DARAJA_CONSUMER_KEY`, `DARAJA_CONSUMER_SECRET`, `DARAJA_PASSKEY` | from your local `.env` |
+| `DARAJA_CALLBACK_TOKEN` | a new long random string |
+| `DARAJA_CALLBACK_URL` | `https://kq-propel.onrender.com/api/payments/daraja/callback/<the token above>` |
+| `AVIATIONSTACK_API_KEY` | from your local `.env` (optional) |
+
+4. **Apply**. The first build takes several minutes; the log ends with `Uvicorn running on http://0.0.0.0:...`.
+
+## 2. Check
+
+1. `https://kq-propel.onrender.com/api/health` shows `{"status":"ok","app":"KQ-Propel"}`.
+2. Ask a question in the chat; sign in at `/admin` with your usual staff password.
+3. M-Pesa: ask what a name correction costs, say yes, choose M-Pesa, give 0704136123, enter the PIN. It should
+   show as paid (Ksh 1, real money to Safaricom's test Paybill).
+
+## 3. Updating
+
+Every push to the `priority-1-hardening` branch redeploys automatically.
+
+## Security notes
+
+- The chat is public. Sandbox payment prompts reach only `DARAJA_SANDBOX_TEST_NUMBERS`.
+- Do not set `DARAJA_VERIFY_CALLBACKS=false`. Leave `HANDOVER_ENABLED` and `PRIVACY_RETENTION_ENABLED` off until
+  Kenya Airways decides.
+- Rate limits per session and IP address are not built yet (Priority 5); public use consumes the AviationStack
+  quota.

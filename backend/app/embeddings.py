@@ -73,31 +73,105 @@ def _hashed_embedding(text: str,
 # Tier 2 - local sentence-transformer
 # --------------------------------------------------------------------------
 
-def _load_local_model():
-    """Loads the sentence-transformer once, under a lock.
+def _load_torch_model():
+    """The sentence-transformers (PyTorch) runtime, or None with the reason
+    recorded. Imported lazily: importing torch costs seconds, and a marking
+    machine or CI runner may have neither the package nor the cached weights."""
+    global last_error
+    try:
+        from sentence_transformers import SentenceTransformer
+    except Exception as exc:
+        last_error = f"sentence-transformers unavailable: {exc}"
+        return None
+    try:
+        return SentenceTransformer(config.LOCAL_EMBEDDING_MODEL)
+    except Exception as exc:
+        last_error = (f"could not load {config.LOCAL_EMBEDDING_MODEL}: {exc} "
+                      "(the first run needs network access to fetch the weights)")
+        return None
 
-    Import and weight-loading are both deferred to first use: importing torch
-    costs seconds, and a marking machine or CI runner may have neither the
-    package nor the cached weights. A failure here is recorded, and the caller
-    falls through to the hashed tier.
-    """
-    global _model, _model_load_attempted, last_error
+
+def _load_local_model():
+    """Loads the local encoder once, under a lock, trying the runtimes in
+    order (see _runtime_order). A failure is recorded, and the caller falls
+    through to the hashed tier."""
+    global _model, _model_load_attempted, _runtime
     with _model_lock:
         if _model is not None or _model_load_attempted:
             return _model
         _model_load_attempted = True
-        try:
-            from sentence_transformers import SentenceTransformer
-        except Exception as exc:
-            last_error = f"sentence-transformers unavailable: {exc}"
-            return None
-        try:
-            _model = SentenceTransformer(config.LOCAL_EMBEDDING_MODEL)
-        except Exception as exc:
-            last_error = (f"could not load {config.LOCAL_EMBEDDING_MODEL}: {exc} "
-                          "(the first run needs network access to fetch the weights)")
-            _model = None
+        for runtime in _runtime_order():
+            _model = _load_onnx_model() if runtime == "onnx" else _load_torch_model()
+            if _model is not None:
+                _runtime = runtime
+                break
         return _model
+
+
+class _OnnxEncoder:
+    """The same all-MiniLM-L6-v2 weights, run with ONNX Runtime instead of PyTorch.
+
+    PyTorch made the server need about 616 MB, more than the 512 MB of free
+    hosting plans; ONNX Runtime and the tokenizer need a fraction of that. The
+    model repository publishes the ONNX export (onnx/model.onnx), and the
+    sentence-transformers pipeline for this model is reproduced exactly: the
+    tokenizer truncates at 256 tokens, token vectors are mean-pooled over the
+    attention mask, and the result is L2-normalised.
+    """
+
+    MAX_TOKENS = 256
+
+    def __init__(self, repo: str):
+        import numpy as np
+        import onnxruntime as ort
+        from huggingface_hub import hf_hub_download
+        from tokenizers import Tokenizer
+
+        self._np = np
+        self.tokenizer = Tokenizer.from_file(hf_hub_download(repo, "tokenizer.json"))
+        self.tokenizer.enable_truncation(max_length=self.MAX_TOKENS)
+        self.tokenizer.enable_padding(pad_id=0, pad_token="[PAD]")
+        options = ort.SessionOptions()
+        options.intra_op_num_threads = 1      # small, predictable memory on shared CPUs
+        self.session = ort.InferenceSession(hf_hub_download(repo, "onnx/model.onnx"), options,
+                                            providers=["CPUExecutionProvider"])
+        self.inputs = {i.name for i in self.session.get_inputs()}
+
+    def encode(self, texts: List[str], batch_size: int = 32):
+        np = self._np
+        out = []
+        for start in range(0, len(texts), batch_size):
+            batch = self.tokenizer.encode_batch(texts[start:start + batch_size])
+            ids = np.array([e.ids for e in batch], dtype=np.int64)
+            mask = np.array([e.attention_mask for e in batch], dtype=np.int64)
+            feed = {"input_ids": ids, "attention_mask": mask}
+            if "token_type_ids" in self.inputs:
+                feed["token_type_ids"] = np.zeros_like(ids)
+            tokens = self.session.run(None, feed)[0]                 # (batch, seq, 384)
+            weights = mask[:, :, None].astype(np.float32)
+            pooled = (tokens * weights).sum(axis=1) / np.clip(weights.sum(axis=1), 1e-9, None)
+            pooled /= np.clip(np.linalg.norm(pooled, axis=1, keepdims=True), 1e-12, None)
+            out.extend(pooled.tolist())
+        return out
+
+
+def _runtime_order() -> List[str]:
+    choice = config.LOCAL_EMBEDDING_RUNTIME
+    if choice in ("onnx", "torch"):
+        return [choice]
+    return ["onnx", "torch"]       # auto: the lighter runtime when it is installed
+
+
+def _load_onnx_model():
+    global last_error
+    try:
+        return _OnnxEncoder(config.LOCAL_EMBEDDING_MODEL)
+    except Exception as exc:
+        last_error = f"ONNX runtime unavailable for {config.LOCAL_EMBEDDING_MODEL}: {exc}"
+        return None
+
+
+_runtime: Optional[str] = None
 
 
 def _local_embeddings(texts: List[str]) -> Optional[List[List[float]]]:
@@ -105,6 +179,12 @@ def _local_embeddings(texts: List[str]) -> Optional[List[List[float]]]:
     model = _load_local_model()
     if model is None:
         return None
+    if _runtime == "onnx":
+        try:
+            return model.encode(texts)
+        except Exception as exc:
+            last_error = f"local encode failed: {exc}"
+            return None
     try:
         vectors = model.encode(texts, normalize_embeddings=True,
                                convert_to_numpy=True, show_progress_bar=False)
@@ -189,6 +269,12 @@ def dimension() -> int:
     return _active_dimension or config.HASHED_EMBEDDING_DIMENSIONS
 
 
+def runtime() -> Optional[str]:
+    """"onnx" or "torch" for the local model; None for the other backends."""
+    provider_name()
+    return _runtime if _active_backend == config.LOCAL_EMBEDDING_MODEL else None
+
+
 def is_semantic() -> bool:
     return "hashed" not in provider_name()
 
@@ -206,6 +292,7 @@ def describe() -> Dict[str, object]:
         "dimension": dimension(),
         "semantic": is_semantic(),
         "configured_preference": preference,
+        "runtime": runtime(),
     }
     if last_error:
         info["degraded_reason"] = last_error

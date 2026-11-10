@@ -70,6 +70,9 @@ EMBEDDING_DIMENSIONS = HASHED_EMBEDDING_DIMENSIONS  # backwards-compatible alias
 # embedding, and the degradation is reported rather than hidden.
 LOCAL_EMBEDDING_MODEL = os.getenv("LOCAL_EMBEDDING_MODEL",
                                   "sentence-transformers/all-MiniLM-L6-v2").strip()
+# How the local model runs: "onnx" (ONNX Runtime, light enough for 512 MB free
+# hosting), "torch" (sentence-transformers), or "auto" - ONNX when installed.
+LOCAL_EMBEDDING_RUNTIME = os.getenv("LOCAL_EMBEDDING_RUNTIME", "auto").strip().lower() or "auto"
 LOCAL_EMBEDDING_ENABLED = os.getenv("LOCAL_EMBEDDING_ENABLED", "true").strip().lower() \
     not in {"0", "false", "no", "off"}
 

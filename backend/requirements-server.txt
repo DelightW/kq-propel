@@ -1,0 +1,19 @@
+# Packages for a hosted server (Render free plan, 512 MB).
+#
+# Same app and same embedding model as requirements.txt, but the model runs
+# on ONNX Runtime instead of PyTorch (app/embeddings.py). The vectors are
+# identical to 1e-7 and the quality gate gives the same scores, while the
+# server fits in far less memory. Install with:
+#   pip install -r backend/requirements-server.txt
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.6
+pydantic>=2.9.2
+requests>=2.32.3
+python-dotenv>=1.0.1
+python-multipart>=0.0.9
+scikit-learn>=1.5.2
+joblib>=1.4.2
+numpy>=2.1.1
+onnxruntime>=1.20
+tokenizers>=0.20
+huggingface_hub>=0.25

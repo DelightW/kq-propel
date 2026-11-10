@@ -1,0 +1,54 @@
+# Render Blueprint for KQ-Propel (free web service). See docs/deploy_render.md.
+#
+# The app runs its embedding model on ONNX Runtime (requirements-server.txt),
+# which keeps it at about 285 MB - inside the free plan's 512 MB. The free plan
+# sleeps after about 15 minutes without visitors and does not keep files
+# between restarts: the database and search index are rebuilt at start-up.
+services:
+  - type: web
+    name: kq-propel
+    runtime: python
+    plan: free
+    region: frankfurt            # the nearest Render region to Kenya
+    branch: priority-1-hardening
+    buildCommand: >-
+      pip install -r backend/requirements-server.txt &&
+      python -c "from huggingface_hub import hf_hub_download as d; r='sentence-transformers/all-MiniLM-L6-v2'; d(r,'tokenizer.json'); d(r,'onnx/model.onnx')"
+    startCommand: >-
+      cd backend && python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
+      --proxy-headers --forwarded-allow-ips='*'
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      # Model files downloaded during the build are kept with the build.
+      - key: HF_HOME
+        value: /opt/render/project/src/.hf-cache
+      - key: LOCAL_EMBEDDING_RUNTIME
+        value: onnx
+      - key: KQ_RUNTIME_DIR
+        value: /tmp/kq-propel
+      - key: SECURE_COOKIES
+        value: "true"
+      - key: DARAJA_SANDBOX
+        value: "true"
+      # Entered in the Render dashboard when the Blueprint is created (sync: false
+      # means the value is never stored in this file).
+      - key: ADMIN_PASSWORD_HASH
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: DARAJA_SANDBOX_TEST_NUMBERS
+        sync: false
+      - key: DARAJA_CONSUMER_KEY
+        sync: false
+      - key: DARAJA_CONSUMER_SECRET
+        sync: false
+      - key: DARAJA_PASSKEY
+        sync: false
+      - key: DARAJA_CALLBACK_TOKEN
+        sync: false
+      - key: DARAJA_CALLBACK_URL
+        sync: false
+      - key: AVIATIONSTACK_API_KEY
+        sync: false

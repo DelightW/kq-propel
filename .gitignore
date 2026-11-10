@@ -25,3 +25,4 @@ backend/tools/retrieval_sweep.json
 .idea/
 .DS_Store
 Thumbs.db
+backend/data/corpus_fingerprint.txt

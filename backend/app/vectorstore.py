@@ -519,7 +519,8 @@ def corpus_fingerprint(directory: Path) -> str:
         h.update(path.read_bytes())
     h.update(f"{config.CHUNK_SIZE_TOKENS}/{config.CHUNK_OVERLAP_TOKENS}".encode())
     h.update(f"{config.LOCAL_EMBEDDING_ENABLED}/{config.LOCAL_EMBEDDING_MODEL}/"
-             f"{bool(config.OPENAI_API_KEY)}/{config.OPENAI_EMBEDDING_MODEL}".encode())
+             f"{bool(config.OPENAI_API_KEY)}/{config.OPENAI_EMBEDDING_MODEL}/"
+             f"{embeddings_module.provider_name()}/{embeddings_module.runtime()}".encode())
     return h.hexdigest()[:16]
 
 
