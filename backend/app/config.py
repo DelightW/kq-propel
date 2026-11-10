@@ -143,6 +143,20 @@ PRIVACY_CONTACT = os.getenv(
     "the Kenya Airways Data Protection Officer (contact details on kenya-airways.com)",
 ).strip()
 
+# --- Kenya Airways systems (docs/kq_integration_spec.md) ---
+# Booking lookup by booking reference (PNR) and surname. Without a URL the
+# assistant offers two labelled demonstration bookings instead.
+KQ_BOOKING_API_URL = os.getenv("KQ_BOOKING_API_URL", "").strip().rstrip("/")
+KQ_BOOKING_API_TOKEN = os.getenv("KQ_BOOKING_API_TOKEN", "").strip()
+# A session that fails this many lookups in an hour is refused further
+# lookups, so booking references cannot be guessed by trial and error.
+BOOKING_LOOKUP_MAX_FAILURES = int(os.getenv("BOOKING_LOOKUP_MAX_FAILURES", "5"))
+# Kenya Airways' own flight-status feed. When set it is used first, so the
+# assistant agrees with the airport screens; AviationStack becomes the backup.
+KQ_FLIGHT_API_URL = os.getenv("KQ_FLIGHT_API_URL", "").strip().rstrip("/")
+KQ_FLIGHT_API_TOKEN = os.getenv("KQ_FLIGHT_API_TOKEN", "").strip()
+KQ_API_TIMEOUT_SECONDS = float(os.getenv("KQ_API_TIMEOUT_SECONDS", "8"))
+
 # --- External API integrations ---
 AVIATIONSTACK_API_KEY = os.getenv("AVIATIONSTACK_API_KEY", "").strip()
 DARAJA_CONSUMER_KEY = os.getenv("DARAJA_CONSUMER_KEY", "").strip()

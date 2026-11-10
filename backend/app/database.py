@@ -121,7 +121,17 @@ CREATE TABLE IF NOT EXISTS conversation_context (
     session_id TEXT PRIMARY KEY,
     last_query TEXT,
     flight_number TEXT,
+    booking TEXT,                    -- JSON trip segments, never names
     updated_at TEXT NOT NULL
+);
+
+-- Booking lookups per session, so references cannot be guessed by trial and
+-- error (app/booking.py). Holds no reference or name.
+CREATE TABLE IF NOT EXISTS booking_lookups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    found INTEGER NOT NULL,
+    created_at TEXT NOT NULL
 );
 
 -- A passenger asking for a person. Staff replies are stored in
@@ -228,6 +238,10 @@ def _migrate(conn):
     for column in ("quote_id", "expires_at"):
         if column not in state_columns:
             conn.execute(f"ALTER TABLE payment_state ADD COLUMN {column} TEXT")
+
+    context_columns = {r["name"] for r in conn.execute("PRAGMA table_info(conversation_context)")}
+    if "booking" not in context_columns:
+        conn.execute("ALTER TABLE conversation_context ADD COLUMN booking TEXT")
 
 
 # ---------------------------------------------------------------------------

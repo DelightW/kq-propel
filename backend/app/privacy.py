@@ -120,7 +120,7 @@ def erase_sessions(session_ids: Iterable[str]) -> Dict[str, int]:
         counts["payment_contacts"] = conn.execute(
             f"UPDATE transactions SET phone_number = NULL WHERE session_id IN ({marks}) "
             f"AND phone_number IS NOT NULL", ids).rowcount
-        for table in ("conversation_context", "payment_state", "chat_sessions"):
+        for table in ("conversation_context", "payment_state", "booking_lookups", "chat_sessions"):
             conn.execute(f"DELETE FROM {table} WHERE session_id IN ({marks})", ids)
     return counts
 

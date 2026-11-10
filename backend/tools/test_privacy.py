@@ -43,7 +43,8 @@ def seed(session, when, *, phone="254712345678", status="paid", handover_status=
                            ("assistant", "Two pieces of 23kg.")):
             conn.execute("INSERT INTO conversations (session_id, role, message, created_at) "
                          "VALUES (?,?,?,?)", (session, role, text, when))
-        conn.execute("INSERT INTO conversation_context VALUES (?,?,?,?)", (session, question, "KQ100", when))
+        conn.execute("INSERT INTO conversation_context (session_id, last_query, flight_number, updated_at) "
+                     "VALUES (?,?,?,?)", (session, question, "KQ100", when))
         conn.execute("INSERT INTO payment_state (session_id, amount, description, stage, updated_at) "
                      "VALUES (?,?,?,?,?)", (session, 75, "fee", "offered", when))
         conn.execute("INSERT INTO transactions (session_id, checkout_request_id, phone_number, amount, "

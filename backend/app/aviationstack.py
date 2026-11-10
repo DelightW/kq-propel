@@ -34,7 +34,9 @@ FLIGHT_STATUS_KEYS = frozenset({
 })
 
 SOURCE_LIVE = "aviationstack_live"
+SOURCE_KQ = "kenya_airways_live"       # the airline's own feed (app/kq_flights.py)
 SOURCE_DEMO = "demo"
+LIVE_SOURCES = {SOURCE_LIVE: "AviationStack", SOURCE_KQ: "Kenya Airways flight information"}
 
 _DEMO_FLIGHTS = {
     "KQ100": {"route": "Nairobi (NBO) -> London (LHR)", "status": "delayed", "delay_minutes": 185, "gate": "B14"},
@@ -65,7 +67,7 @@ def _result(source: str, flight_number: str, available: bool, *, route=None, sta
             delay_minutes=None, gate=None, estimated=None, reason=None) -> Dict:
     return {
         "source": source,
-        "is_live": source == SOURCE_LIVE,
+        "is_live": source in LIVE_SOURCES,
         "available": available,
         "flight_number": flight_number,
         "route": route,
@@ -192,7 +194,8 @@ def describe(status: Dict) -> str:
     body = "; ".join(details) if details else "no details were provided"
 
     if status.get("is_live"):
-        return (f"Live status for {number} (AviationStack, retrieved "
+        provider = LIVE_SOURCES.get(status.get("source"), "live data")
+        return (f"Live status for {number} ({provider}, retrieved "
                 f"{status.get('retrieved_at_utc')}): {body}.")
     return (f"Demonstration data for {number} - this is not live flight information: "
             f"{body}.")

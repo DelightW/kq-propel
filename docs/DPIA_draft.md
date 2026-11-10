@@ -17,6 +17,8 @@ KQ-Propel is a chat assistant that answers passenger questions from Kenya Airway
 | Fee offer in progress | `payment_state` table | Completing a payment the passenger accepted | Derived from policy |
 | M-Pesa phone number, amount, status and reference | `transactions` table | Sending the payment request; financial record | Passenger, payment provider |
 | Handover case, reason, frustration score | `handovers` table | Connecting the passenger with staff | Passenger |
+| Booked trip (flights, route, cabin, fare, baggage) for 30 minutes; never names | `conversation_context` table | Answering for the passenger's own trip | Kenya Airways booking system |
+| Count of booking lookups per session | `booking_lookups` table | Stopping booking references being guessed | Derived |
 | Question text with answer-quality scores | `rag_evaluations` table | Monitoring answer quality | Passenger |
 | Staff username, actions and IP address | `admin_audit`, `admin_sessions` tables | Accountability for access to passenger data | Staff |
 
@@ -28,7 +30,8 @@ Passengers may also type data the system does not ask for, such as names, bookin
 |---|---|---|---|
 | Safaricom (Daraja) | Phone number, amount, account reference | Passenger chooses M-Pesa | Kenya |
 | PayPal | Amount, currency, order description | Passenger chooses card (card details are entered on PayPal's page, never in KQ-Propel) | Outside Kenya |
-| AviationStack | Flight number only | Passenger asks about a flight | Outside Kenya |
+| AviationStack | Flight number only | Passenger asks about a flight (backup once the Kenya Airways feed is connected) | Outside Kenya |
+| Kenya Airways booking system | Booking reference and surname | Passenger gives both to look up a booking | Kenya Airways |
 | Language model provider (OpenAI), if enabled | Question text and retrieved policy text | Every answered question | Outside Kenya |
 | Kenya Airways contact-centre system, if a webhook is configured | Case reference, reason, transcript with phone numbers masked | Passenger asks for a person | **[Kenya Airways to decide]** |
 
@@ -54,6 +57,7 @@ The developer's suggestion, for review:
 | A passenger cannot exercise the right to erasure | Medium, medium | Self-service deletion in the chat; staff erasure by case reference or phone number, with a preview and an audit entry | Low |
 | Frustration estimate treats passengers unfairly | Medium, high | Tone only; automated test that calm and frustrated passengers get identical policy answers (this test found and fixed such a defect before release) | Low |
 | Classifier misreads Swahili, Sheng or certain groups | High, low | It only adds an apology; all passengers can ask for a person. Retraining on consented real messages is planned (`tools/import_real_messages.py`) | Medium |
+| A booking is looked up by someone who is not the passenger | Medium, high | Reference and surname both required; identical reply whichever is wrong; lookups locked after 5 failures per hour; surname not copied into the staff-visible trace | Low to medium: anyone holding an e-ticket can look the trip up, as on Manage My Booking |
 | Assistant states wrong policy | Medium, high | Answers only from cited policy text; grounding check declines off-topic questions; release quality gate | Low to medium |
 | Cross-border transfer to a model provider | High if enabled | Off by default; local model option | **[Kenya Airways to decide]** |
 | Sensitive data typed into chat (health, ID numbers) | Medium, medium | Not requested; erased with the conversation; masked if a phone number | Medium: a notice asking passengers not to share such data is recommended |

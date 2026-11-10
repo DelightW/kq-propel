@@ -11,10 +11,11 @@ supporting the groundedness / zero-hallucination goals.
 """
 import re
 import uuid
+import json
 from typing import Dict, List, Optional, Tuple
 
-from app import (aviationstack, composer, config, daraja, database, evaluation,
-                  handover, memory, payments, paypal, retrieval, sentiment)
+from app import (aviationstack, booking, composer, config, daraja, database, evaluation,
+                  handover, kq_flights, memory, payments, paypal, retrieval, sentiment)
 from app.llm import generate_answer
 from app.vectorstore import get_vector_store
 
@@ -703,6 +704,35 @@ def _escalation_offer() -> str:
             f"{config.HANDOVER_FALLBACK_CONTACT}.")
 
 
+def _booking_turn(session_id: str, message: str, trace: List[Dict],
+                  sentiment_result: Dict) -> Optional[Dict]:
+    """Looks up a booking when the message gives a booking reference. None
+    when it gives none."""
+    reference = booking.find_reference(message)
+    if not reference:
+        return None
+    surname = booking.find_surname(message)
+    if not surname:
+        trace.append({"step": "thought",
+                       "content": "Booking reference given without a surname; both are required."})
+        return _finalize_direct(session_id, message, _apply_empathy(
+            f"To look up booking {reference} I also need the surname on the booking. Please send "
+            f"both together, for example \"booking {reference}, surname Kamau\".", sentiment_result),
+            trace, sentiment_result)
+    result = booking.lookup(session_id, reference, surname)
+    # The surname is not copied into the trace, which staff can see.
+    trace.append({"step": "action", "tool": "lookup_booking", "input": reference,
+                  "observation": {"source": result["source"], "available": result["available"],
+                                  "reason": result["reason"], "segments": result["segments"]}})
+    if result["available"]:
+        first = result["segments"][0]
+        memory.remember(session_id, booking=json.dumps(result["segments"]),
+                        flight_number=first.get("flight_number"))
+    return _finalize_direct(session_id, message,
+                            _apply_empathy(booking.describe(result, reference), sentiment_result),
+                            trace, sentiment_result)
+
+
 def _handover_turn(session_id: str, message: str, trace: List[Dict],
                    sentiment_result: Dict) -> Optional[Dict]:
     """Handles a request for a person, and messages sent while a person is
@@ -862,6 +892,11 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
                        "content": "Conversational intent detected - no document retrieval needed."})
         return _finalize_direct(session_id, message, small_talk, trace, sentiment_result)
 
+    # --- Action: the passenger's own booking, from a reference and surname ---
+    booked = _booking_turn(session_id, message, trace, sentiment_result)
+    if booked:
+        return booked
+
     # --- Thought 3: a departure/arrival time needs live telemetry, and that
     # tool is keyed on a flight number. Ask for it instead of falling back to
     # an unrelated policy section. ---
@@ -896,6 +931,13 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
         trace.append({"step": "thought",
                        "content": (f"Follow-up to the previous question. Searching for "
                                    f"\"{resolved}\".")})
+    # A baggage or check-in question that names no cabin or route is answered
+    # for the trip the passenger has looked up, if any.
+    enriched = booking.enrich(search_text, booking.remembered(session_id))
+    if enriched:
+        search_text = enriched
+        trace.append({"step": "thought",
+                       "content": f"Answering for the booked trip. Searching for \"{enriched}\"."})
     query = retrieval.focus_query(search_text)
     if query != search_text:
         trace.append({"step": "thought",
@@ -936,7 +978,7 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
     # --- Action: live flight telemetry tool (AviationStack) ---
     if flight_number:
         memory.remember(session_id, flight_number=flight_number)
-        flight_status = aviationstack.get_flight_status(flight_number)
+        flight_status = kq_flights.get_flight_status(flight_number)
         trace.append({"step": "action", "tool": "get_flight_status",
                        "input": flight_number, "observation": flight_status})
         tool_observations.append(aviationstack.describe(flight_status))
@@ -1029,6 +1071,11 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
 
     if flight_number and tool_observations:
         answer = tool_observations[0] + "\n\n" + answer
+
+    trip_note = booking.allowance_note(message, booking.remembered(session_id))
+    if trip_note:
+        trace.append({"step": "observation", "content": f"From the booking record: {trip_note}"})
+        answer = trip_note + "\n\n" + answer
 
     if payment_prompt_text:
         answer += "\n\n" + payment_prompt_text

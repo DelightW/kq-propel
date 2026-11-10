@@ -86,19 +86,20 @@ def recall(session_id: str) -> Dict:
 
 
 def remember(session_id: str, *, query: Optional[str] = None,
-             flight_number: Optional[str] = None) -> None:
-    """Records the latest answered question and/or flight. A value left as
-    None keeps what was stored before."""
-    if query is None and flight_number is None:
+             flight_number: Optional[str] = None, booking: Optional[str] = None) -> None:
+    """Records the latest answered question, flight and/or booked trip (JSON
+    segments). A value left as None keeps what was stored before."""
+    if query is None and flight_number is None and booking is None:
         return
     with database._connect() as conn:
         conn.execute(
-            "INSERT INTO conversation_context (session_id, last_query, flight_number, updated_at) "
-            "VALUES (?, ?, ?, ?) ON CONFLICT(session_id) DO UPDATE SET "
+            "INSERT INTO conversation_context (session_id, last_query, flight_number, booking, "
+            "updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(session_id) DO UPDATE SET "
             "last_query = COALESCE(excluded.last_query, conversation_context.last_query), "
             "flight_number = COALESCE(excluded.flight_number, conversation_context.flight_number), "
+            "booking = COALESCE(excluded.booking, conversation_context.booking), "
             "updated_at = excluded.updated_at",
-            (session_id, query, flight_number, _now().isoformat()))
+            (session_id, query, flight_number, booking, _now().isoformat()))
 
 
 def forget(session_id: str) -> None:
