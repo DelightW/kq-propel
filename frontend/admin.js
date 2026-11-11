@@ -42,27 +42,46 @@
     });
   }
 
+  var passwordScreen = document.getElementById("password-screen");
+  var me = null;
+
+  function allowed(panel) { return !!(me && me.panels && me.panels.indexOf(panel) !== -1); }
+
   function showLogin(message) {
+    me = null;
     dashboard.hidden = true;
+    passwordScreen.hidden = true;
     loginScreen.hidden = false;
     loginError.textContent = message || "";
     if (loginUser) { loginUser.focus(); }
   }
 
-  function showDashboard(username) {
+  function showDashboard(info) {
+    me = info;
     loginScreen.hidden = true;
+    if (info.must_change_password) { showPasswordScreen(true); return; }
+    passwordScreen.hidden = true;
     dashboard.hidden = false;
-    if (who && username) { who.textContent = "Signed in as " + username; }
+    if (who) {
+      who.textContent = "Signed in as " + (info.display_name || info.username) +
+        " (" + (info.role_label || info.role) + ")";
+    }
+    // Panels outside this person's role are not drawn. The server refuses
+    // those routes anyway; this only keeps the page honest about it.
+    Array.prototype.forEach.call(document.querySelectorAll("[data-panel]"), function (sec) {
+      sec.hidden = !allowed(sec.getAttribute("data-panel"));
+    });
     loadOverview();
-    startHandoverPolling();
-    loadPrivacy();
+    if (allowed("handovers") || allowed("requests")) { startHandoverPolling(); }
+    if (allowed("privacy")) { loadPrivacy(); }
+    if (allowed("staff")) { loadStaff(); }
   }
 
   function checkSession() {
     fetch("/api/admin/session", { credentials: "same-origin" })
       .then(function (r) { return r.json(); })
       .then(function (d) {
-        if (d && d.authenticated) { showDashboard(d.username); }
+        if (d && d.authenticated) { showDashboard(d); }
         else { showLogin(""); }
       })
       .catch(function () {
@@ -91,7 +110,7 @@
           throw new Error((res.body && res.body.detail) || "Sign-in failed.");
         }
         loginPass.value = "";
-        showDashboard(res.body.username);
+        showDashboard(res.body);
       })
       .catch(function (err) {
         loginError.textContent = err.message;
@@ -162,7 +181,7 @@
         return r.json();
       })
       .then(renderOverview)
-      .then(loadAudit)
+      .then(function () { if (allowed("audit")) { return loadAudit(); } })
       .catch(function (err) {
         if (err.message === "Not signed in") { return; }
         kpis.innerHTML = "";
@@ -289,7 +308,7 @@
       // on punctuation alone.
       var ch = sm.challenge;
       if (ch && ch.accuracy !== undefined) {
-        sentimentMetrics.appendChild(el("h4", "sub-head", "Challenge set (never trained on)"));
+        sentimentMetrics.appendChild(el("h3", "sub-head", "Challenge set (never trained on)"));
         sentimentMetrics.appendChild(meterRow("Accuracy", ch.accuracy));
         sentimentMetrics.appendChild(meterRow("F1 score", ch.f1_score));
         var gap = sm.generalization_gap;
@@ -668,6 +687,7 @@
     loadRequests();
     hoTimer = setInterval(function () {
       if (dashboard.hidden || document.hidden) { return; }
+      if (!allowed("handovers")) { return; }
       loadHandovers();
       loadRequests();
       if (openCaseId !== null && !hoReply.value) { openCase(openCaseId); }
@@ -736,6 +756,160 @@
       eraseCase.value = ""; erasePhone.value = ""; resetErase();
       loadHandovers();
     }).catch(function (err) { eraseStatus.textContent = err.message; });
+  });
+
+  /* ------------------------------ passwords ------------------------------ */
+
+  var pwForm = document.getElementById("password-form");
+  var pwCurrent = document.getElementById("pw-current");
+  var pwNew = document.getElementById("pw-new");
+  var pwConfirm = document.getElementById("pw-confirm");
+  var pwError = document.getElementById("pw-error");
+  var pwCancel = document.getElementById("pw-cancel");
+  var pwTitle = document.getElementById("password-title");
+  var pwSub = document.getElementById("password-sub");
+
+  function showPasswordScreen(required) {
+    dashboard.hidden = true;
+    passwordScreen.hidden = false;
+    pwCancel.hidden = required;
+    pwTitle.textContent = required ? "Choose your password" : "Change your password";
+    pwSub.textContent = required
+      ? "You signed in with a one-time password. Choose your own to continue (at least 10 characters)."
+      : "Enter your current password and the new one (at least 10 characters).";
+    pwError.textContent = "";
+    pwCurrent.value = pwNew.value = pwConfirm.value = "";
+    pwCurrent.focus();
+  }
+
+  pwForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+    if (pwNew.value !== pwConfirm.value) {
+      pwError.textContent = "The new passwords do not match.";
+      pwConfirm.focus();
+      return;
+    }
+    api("/api/admin/password", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ current_password: pwCurrent.value, new_password: pwNew.value })
+    }).then(function (r) {
+      return r.json().then(function (d) {
+        if (!r.ok) { throw new Error(typeof d.detail === "string" ? d.detail : "Check the passwords entered."); }
+        pwCurrent.value = pwNew.value = pwConfirm.value = "";
+        showDashboard(d);
+      });
+    }).catch(function (err) { pwError.textContent = err.message; });
+  });
+  pwCancel.addEventListener("click", function () { showDashboard(me); });
+  document.getElementById("change-password").addEventListener("click", function () {
+    showPasswordScreen(false);
+  });
+
+  /* ---------------------------- staff accounts ---------------------------- */
+
+  var staffForm = document.getElementById("staff-form");
+  var staffBody = document.querySelector("#staff-table tbody");
+  var staffStatus = document.getElementById("staff-status");
+  var staffOtp = document.getElementById("staff-otp");
+  var ROLE_NAMES = { admin: "Administrator", agent: "Customer service agent", analyst: "Analyst" };
+
+  function staffCall(path, body) {
+    return api(path, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {})
+    }).then(function (r) {
+      return r.json().then(function (d) {
+        if (!r.ok) { throw new Error(typeof d.detail === "string" ? d.detail : "Check the details entered."); }
+        return d;
+      });
+    });
+  }
+
+  function showOneTimePassword(account) {
+    staffOtp.hidden = false;
+    staffOtp.innerHTML = "";
+    staffOtp.appendChild(el("p", null, "One-time password for " + account.username +
+      " (shown only now - give it to them privately):"));
+    var code = el("code", "otp", account.one_time_password);
+    staffOtp.appendChild(code);
+    staffOtp.appendChild(el("p", "hint", "They will be asked to choose their own password when they sign in."));
+  }
+
+  function loadStaff() {
+    return api("/api/admin/staff").then(function (r) { return r.json(); }).then(function (d) {
+      staffBody.innerHTML = "";
+      (d.staff || []).forEach(function (s) {
+        var tr = el("tr");
+        tr.appendChild(el("td", null, s.username));
+        tr.appendChild(el("td", null, s.display_name || "-"));
+
+        var roleCell = el("td");
+        var select = el("select");
+        select.setAttribute("aria-label", "Role for " + s.username);
+        Object.keys(ROLE_NAMES).forEach(function (r) {
+          var o = el("option", null, ROLE_NAMES[r]); o.value = r; if (r === s.role) { o.selected = true; }
+          select.appendChild(o);
+        });
+        select.addEventListener("change", function () {
+          var role = select.value;
+          if (!window.confirm("Make " + s.username + " a " + ROLE_NAMES[role] + "?")) { select.value = s.role; return; }
+          staffCall("/api/admin/staff/" + encodeURIComponent(s.username) + "/role", { role: role })
+            .then(function () { staffStatus.textContent = s.username + " is now a " + ROLE_NAMES[role] + "."; loadStaff(); })
+            .catch(function (err) { staffStatus.textContent = err.message; select.value = s.role; });
+        });
+        roleCell.appendChild(select);
+        tr.appendChild(roleCell);
+
+        var st = el("td");
+        st.appendChild(el("span", "pill " + (s.active ? (s.must_change_password ? "warn" : "ok") : "muted"),
+          s.active ? (s.must_change_password ? "Awaiting first sign-in" : "Active") : "Disabled"));
+        tr.appendChild(st);
+        tr.appendChild(el("td", null, s.last_login_at ? s.last_login_at.replace("T", " ") : "Never"));
+
+        var act = el("td", "row-actions");
+        var self = me && s.username.toLowerCase() === me.username.toLowerCase();
+        var reset = el("button", "btn btn-small btn-quiet", "Reset password");
+        reset.type = "button";
+        reset.setAttribute("aria-label", "Reset password for " + s.username);
+        reset.disabled = s.created_by === "environment";
+        if (reset.disabled) { reset.title = "Set in the server's environment"; }
+        reset.addEventListener("click", function () {
+          if (!window.confirm("Issue a new one-time password for " + s.username + "? They will be signed out.")) { return; }
+          staffCall("/api/admin/staff/" + encodeURIComponent(s.username) + "/reset-password")
+            .then(function (acc) { showOneTimePassword(acc); loadStaff(); })
+            .catch(function (err) { staffStatus.textContent = err.message; });
+        });
+        act.appendChild(reset);
+        if (!self) {
+          var toggle = el("button", "btn btn-small btn-quiet", s.active ? "Disable" : "Enable");
+          toggle.type = "button";
+          toggle.setAttribute("aria-label", (s.active ? "Disable " : "Enable ") + s.username);
+          toggle.addEventListener("click", function () {
+            if (s.active && !window.confirm("Disable " + s.username + "? They are signed out at once.")) { return; }
+            staffCall("/api/admin/staff/" + encodeURIComponent(s.username) + (s.active ? "/disable" : "/enable"))
+              .then(function () { staffStatus.textContent = s.username + (s.active ? " disabled." : " enabled."); loadStaff(); })
+              .catch(function (err) { staffStatus.textContent = err.message; });
+          });
+          act.appendChild(toggle);
+        }
+        tr.appendChild(act);
+        staffBody.appendChild(tr);
+      });
+    }).catch(function () {});
+  }
+
+  staffForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+    staffCall("/api/admin/staff", {
+      username: document.getElementById("staff-username").value.trim(),
+      display_name: document.getElementById("staff-name").value.trim() || null,
+      role: document.getElementById("staff-role").value
+    }).then(function (acc) {
+      staffForm.reset();
+      staffStatus.textContent = "Account " + acc.username + " created.";
+      showOneTimePassword(acc);
+      loadStaff();
+    }).catch(function (err) { staffStatus.textContent = err.message; });
   });
 
   refreshBtn.addEventListener("click", loadOverview);

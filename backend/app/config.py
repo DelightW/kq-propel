@@ -279,3 +279,23 @@ ALLOWED_ORIGINS = [
 # Maximum accepted passenger message length. Unbounded input was accepted
 # before, so a single request could carry a 100,000-character payload.
 MAX_MESSAGE_CHARS = int(os.getenv("MAX_MESSAGE_CHARS", "2000"))
+
+# --- Staff accounts and roles (Priority 5) ---
+# The ADMIN_* credential above is the first administrator. Further staff get
+# their own accounts from the dashboard, each with one role:
+#   admin    everything, including staff accounts, erasure and the audit log
+#   agent    customer service: handovers, name corrections, payments, receipts
+#   analyst  quality metrics and the model comparison; no passenger records
+STAFF_ROLES = ("admin", "agent", "analyst")
+STAFF_MIN_PASSWORD_LENGTH = int(os.getenv("STAFF_MIN_PASSWORD_LENGTH", "10"))
+
+# --- Rate limits (Priority 5, see app/ratelimit.py) ---
+RATE_LIMIT_ENABLED = os.getenv("RATE_LIMIT_ENABLED", "true").strip().lower() \
+    not in {"0", "false", "no", "off"}
+RATE_LIMIT_CHAT_PER_MINUTE = int(os.getenv("RATE_LIMIT_CHAT_PER_MINUTE", "12"))
+RATE_LIMIT_CHAT_PER_MINUTE_PER_IP = int(os.getenv("RATE_LIMIT_CHAT_PER_MINUTE_PER_IP", "120"))
+RATE_LIMIT_SESSIONS_PER_10_MIN_PER_IP = int(os.getenv("RATE_LIMIT_SESSIONS_PER_10_MIN_PER_IP", "60"))
+RATE_LIMIT_MPESA_PROMPTS_PER_10_MIN = int(os.getenv("RATE_LIMIT_MPESA_PROMPTS_PER_10_MIN", "5"))
+# How many proxies the app runs behind. 0 (local) uses the connecting address;
+# behind Render's proxy it is 1, so the client is the last X-Forwarded-For entry.
+TRUSTED_PROXY_HOPS = int(os.getenv("TRUSTED_PROXY_HOPS", "0"))

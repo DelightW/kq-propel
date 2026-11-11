@@ -14,7 +14,7 @@ import uuid
 import json
 from typing import Dict, List, Optional, Tuple
 
-from app import (aviationstack, booking, composer, config, daraja, database, evaluation,
+from app import (aviationstack, booking, composer, config, daraja, database, evaluation, ratelimit,
                   handover, kq_flights, memory, payments, paypal, retrieval, sentiment,
                   service_requests)
 from app.llm import generate_answer
@@ -315,6 +315,20 @@ def _execute_payment(session_id: str, phone: str, amount: float, description: st
                                   f"{existing['status']}; not sending a second prompt."})
         return _existing_attempt_result(existing)
 
+    # Each prompt rings a real phone, and anyone can type any number, so
+    # prompts are limited per conversation and per number.
+    try:
+        ratelimit.hit("mpesa_session", session_id)
+        ratelimit.hit("mpesa_phone", daraja.normalize_phone(phone) or phone)
+    except ratelimit.Limited as exc:
+        trace.append({"step": "thought",
+                       "content": f"M-Pesa prompt refused by the rate limit ({exc.bucket})."})
+        return {"success": False, "rate_limited": True,
+                "message": ("I've sent several M-Pesa prompts in the last few minutes, so I'll "
+                            f"wait before sending another. Please try again in "
+                            f"{ratelimit.wait_text(exc)}, or say \"card\" to pay by card instead. "
+                            "Nothing has been charged.")}
+
     reference = _new_reference()
     result = daraja.initiate_stk_push(
         phone_number=phone, amount=amount, reference=reference, description=description,
@@ -567,6 +581,8 @@ def _handle_pending_payment(session_id: str, message: str, pending: Dict,
             answer = _payment_sent_message(kes_amount, phone, result)
             if conversion_note and not result.get("duplicate"):
                 answer = conversion_note + "\n\n" + answer
+        elif result.get("rate_limited"):
+            answer = result["message"]
         else:
             answer = ("I wasn't able to send the M-Pesa prompt just now. Please try again in "
                       "a moment, or say \"card\" and I'll generate a secure card checkout "
@@ -1181,6 +1197,7 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
                                                   trace, quote_id=quote_id)
                 text = (_payment_sent_message(kes_amount, phone, payment_result)
                         if payment_result.get("success") else
+                        payment_result.get("message") if payment_result.get("rate_limited") else
                         "I wasn't able to send the M-Pesa prompt just now. Nothing has been "
                         "charged - please try again in a moment.")
                 if conversion_note and payment_result.get("success") \

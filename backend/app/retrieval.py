@@ -15,7 +15,7 @@ import math
 import re
 from collections import Counter
 from functools import lru_cache
-from typing import Dict, Iterable, List
+from typing import Optional, Dict, Iterable, List
 
 _WORD_RE = re.compile(r"[a-z0-9]+")
 
@@ -426,3 +426,70 @@ def topical_tokens(text: str) -> List[str]:
     from app import places
     return [t for t in tokenize(text)
             if t not in _GENERIC_QUERY_WORDS and t not in places.PLACE_WORDS]
+
+
+# --------------------------------------------------------------------------
+# Checked versus hand baggage
+# --------------------------------------------------------------------------
+# "What is the baggage allowance for Economy?" was answered with the cabin-bag
+# rule: the hand-baggage section is short and full of "allowance" and
+# "Economy", so it outscored the checked-allowance table. A passenger who says
+# "checked", or asks about the baggage allowance without mentioning the cabin,
+# means the bags they check in; one who says "hand", "carry-on" or "cabin bag"
+# means the bag they carry. Bare "cabin" is not a signal, because it also
+# names the travel class ("Business cabin").
+_HAND_RE = re.compile(r"\b(hand\s*(baggage|luggage|bags?)|carry[- ]?on|cabin\s*(baggage|luggage|bags?)|"
+                      r"on\s*board\s*bags?|overhead|personal\s+item|laptop\s+bag)\b", re.I)
+_CHECKED_RE = re.compile(r"\b(checked|check\s+in\s+(a\s+|my\s+)?bags?|hold\s+(baggage|luggage)|"
+                         r"how\s+many\s+(bags|pieces|suitcases))\b", re.I)
+# "Baggage allowance" on its own means the checked allowance, but it is only a
+# weak signal: "cabin baggage allowance" is about the hand bag.
+_ALLOWANCE_RE = re.compile(r"\b(baggage|luggage|bag)\s+allowance\b", re.I)
+
+
+_DELAYED_RE = re.compile(r"\b(delay\w*|lost|missing|damaged?|not\s+(arrived|received)|first\s+needs|claim\w*|liabilit\w*)\b", re.I)
+
+
+_SPECIAL_RE = re.compile(r"\b(ski\w*|golf|bicycles?|bikes?|surf\w*|div(e|ing)|scuba|sport\w*|equipment|fishing|firearms?|guns?|ammunition|wheelchairs?|mobility|instruments?|pets?|animals?)\b", re.I)
+
+
+def baggage_kind(query: str) -> Optional[str]:
+    """'delayed', 'special', 'hand', 'checked' or None (not about which bag).
+
+    A question about a bag that is delayed, lost or damaged is 'delayed' first:
+    its "allowance" is the first-needs allowance, not the free baggage.
+    """
+    if _DELAYED_RE.search(query or ""):
+        return "delayed"
+    if _SPECIAL_RE.search(query or ""):
+        return "special"
+    hand, checked = bool(_HAND_RE.search(query or "")), bool(_CHECKED_RE.search(query or ""))
+    if hand and checked:
+        # "two checked bags and two cabin bags": both policies are needed.
+        return None
+    if hand:
+        return "hand"
+    if checked or _ALLOWANCE_RE.search(query or ""):
+        return "checked"
+    return None
+
+
+def chunk_baggage_kind(record: dict) -> Optional[str]:
+    title = (record.get("doc_title") or "").lower()
+    if "hand baggage" in title:
+        return "hand"
+    if "checked baggage" in title:
+        return "checked"
+    if "delayed and lost baggage" in title:
+        return "delayed"
+    if "special baggage" in title:
+        return "special"
+    return None
+
+
+def baggage_kind_mismatch(want: Optional[str], record: dict) -> bool:
+    """True for a chunk about a different kind of bag from the one asked about.
+    Only a question about allowances (checked or hand) excludes anything; a
+    delayed-bag question keeps every section, as before."""
+    have = chunk_baggage_kind(record)
+    return want in ("checked", "hand") and have is not None and have != want

@@ -11,7 +11,7 @@ from typing import Optional
 from fastapi import APIRouter, Cookie, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
-from app import auth, config, database, handover, memory, payments, privacy, receipts
+from app import auth, config, database, handover, memory, payments, privacy, ratelimit, receipts
 from app.agent import run_agent_turn
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -35,6 +35,7 @@ def start_session(request: Request, response: Response,
     if auth.chat_session_is_valid(kq_session):
         return {"session_id": kq_session, "resumed": True}
 
+    ratelimit.check_http("session_ip", auth.client_ip(request))
     session_id = auth.issue_chat_session(auth.client_ip(request))
     response.set_cookie(auth.CHAT_COOKIE, session_id,
                          **auth.cookie_kwargs(max_age=60 * 60 * 12))
@@ -52,8 +53,11 @@ def chat(req: ChatRequest, request: Request, response: Response,
     # The cookie is the only trusted source of identity. A session_id in the
     # body is accepted only when it agrees with it, which keeps the existing
     # client contract working without letting the body override ownership.
+    ip = auth.client_ip(request)
+    ratelimit.check_http("chat_ip", ip)
     if not auth.chat_session_is_valid(kq_session):
-        session_id = auth.issue_chat_session(auth.client_ip(request))
+        ratelimit.check_http("session_ip", ip)
+        session_id = auth.issue_chat_session(ip)
         response.set_cookie(auth.CHAT_COOKIE, session_id,
                              **auth.cookie_kwargs(max_age=60 * 60 * 12))
     else:
@@ -65,6 +69,7 @@ def chat(req: ChatRequest, request: Request, response: Response,
             detail="Session mismatch. Reload the page to start a new session.",
         )
 
+    ratelimit.check_http("chat_session", session_id)
     result = run_agent_turn(session_id, message)
     result["session_id"] = session_id
     return result
@@ -80,6 +85,7 @@ def payment_status(reference: str, kq_session: Optional[str] = Cookie(default=No
     """
     if not auth.chat_session_is_valid(kq_session):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No session.")
+    ratelimit.check_http("poll_session", kq_session)
     row = payments.for_passenger(kq_session, reference)
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payment not found.")
@@ -100,6 +106,7 @@ def payment_receipt(reference: str, kq_session: Optional[str] = Cookie(default=N
     """PDF receipt for one of this session's payments, once it is paid."""
     if not auth.chat_session_is_valid(kq_session):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No session.")
+    ratelimit.check_http("receipt_session", kq_session)
     row = payments.for_passenger(kq_session, reference)
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payment not found.")
@@ -122,6 +129,7 @@ def handover_updates(after: int = 0, kq_session: Optional[str] = Cookie(default=
     """
     if not auth.chat_session_is_valid(kq_session):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No session.")
+    ratelimit.check_http("poll_session", kq_session)
     return {
         "handover": handover.status_for_passenger(kq_session),
         "messages": handover.messages_since(kq_session, max(after, 0)),
@@ -145,6 +153,7 @@ def forget_me(req: ForgetRequest, request: Request, response: Response,
                             detail="Erasure must be confirmed.")
     if not auth.chat_session_is_valid(kq_session):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No session.")
+    ratelimit.check_http("session_ip", auth.client_ip(request))
     counts = privacy.erase_sessions([kq_session])
     session_id = auth.issue_chat_session(auth.client_ip(request))
     response.set_cookie(auth.CHAT_COOKIE, session_id,
@@ -169,6 +178,7 @@ def reset_session(request: Request, response: Response,
     device cannot leave a part-finished transaction available to the next
     person to use it.
     """
+    ratelimit.check_http("session_ip", auth.client_ip(request))
     if kq_session:
         database.clear_pending_payment(kq_session)
         # The next person on a shared device must not inherit the previous

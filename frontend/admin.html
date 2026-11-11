@@ -10,10 +10,12 @@
 </head>
 <body>
 
+<a class="skip-link" href="#main">Skip to main content</a>
+
 <!-- Staff sign-in. The dashboard exposes the transaction ledger, which holds
      passenger phone numbers, so nothing below renders until the API confirms
      an authenticated session. -->
-<div id="login-screen" class="login-screen" hidden>
+<main id="login-screen" class="login-screen" hidden>
   <form id="login-form" class="login-card" autocomplete="on">
     <div class="logo" aria-hidden="true">KQ</div>
     <h1>Staff sign-in</h1>
@@ -31,7 +33,32 @@
     <button id="login-submit" class="btn" type="submit">Sign in</button>
     <p id="login-error" class="login-error" role="alert" aria-live="assertive"></p>
   </form>
-</div>
+</main>
+
+<!-- A new account's one-time password must be replaced before anything else. -->
+<main id="password-screen" class="login-screen" hidden>
+  <form id="password-form" class="login-card">
+    <div class="logo" aria-hidden="true">KQ</div>
+    <h1 id="password-title">Choose your password</h1>
+    <p class="login-sub" id="password-sub">You signed in with a one-time password. Choose your own
+      to continue (at least 10 characters).</p>
+
+    <label for="pw-current">Current password</label>
+    <input id="pw-current" type="password" autocomplete="current-password" required />
+
+    <label for="pw-new">New password</label>
+    <input id="pw-new" type="password" autocomplete="new-password" minlength="10" required
+           aria-describedby="pw-hint" />
+    <p id="pw-hint" class="field-hint">At least 10 characters.</p>
+
+    <label for="pw-confirm">Confirm new password</label>
+    <input id="pw-confirm" type="password" autocomplete="new-password" minlength="10" required />
+
+    <button id="pw-submit" class="btn" type="submit">Save password</button>
+    <button id="pw-cancel" class="btn btn-ghost" type="button" hidden>Cancel</button>
+    <p id="pw-error" class="login-error" role="alert"></p>
+  </form>
+</main>
 
 <div id="dashboard" hidden>
 
@@ -45,16 +72,17 @@
   </div>
   <div class="header-actions">
     <span id="who" class="who"></span>
+    <button id="change-password" class="btn btn-ghost" type="button">Change password</button>
     <button id="refresh" class="btn">Refresh</button>
     <button id="logout" class="btn btn-ghost">Sign out</button>
   </div>
 </header>
 
-<main class="wrap">
+<main class="wrap" id="main" tabindex="-1">
 
-  <section class="cards" id="kpis" aria-label="Key metrics"></section>
+  <section class="cards" id="kpis" aria-label="Key metrics" data-panel="metrics"></section>
 
-  <section class="grid">
+  <section class="grid" data-panel="metrics" aria-label="Quality metrics">
 
     <article class="panel">
       <h2>RAG-Triad Evaluation</h2>
@@ -84,7 +112,7 @@
 
   </section>
 
-  <section class="panel" id="requests-panel">
+  <section class="panel" id="requests-panel" data-panel="requests">
     <div class="panel-head">
       <div>
         <h2>Name Correction Requests</h2>
@@ -96,7 +124,7 @@
     <div class="table-scroll">
       <table id="requests-table">
         <thead>
-          <tr><th>Request</th><th>Booking</th><th>Change</th><th>Fee</th><th>Payment</th><th>Status</th><th></th></tr>
+          <tr><th>Request</th><th>Booking</th><th>Change</th><th>Fee</th><th>Payment</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr>
         </thead>
         <tbody></tbody>
       </table>
@@ -104,7 +132,7 @@
     <p id="requests-status" class="status-line" role="status"></p>
   </section>
 
-  <section class="panel" id="handover-panel">
+  <section class="panel" id="handover-panel" data-panel="handovers">
     <div class="panel-head">
       <div>
         <h2>Passengers Waiting for a Person</h2>
@@ -116,7 +144,7 @@
     <div class="table-scroll">
       <table id="handover-table">
         <thead>
-          <tr><th>Case</th><th>Opened</th><th>Status</th><th>Frustration</th><th>Latest passenger message</th><th></th></tr>
+          <tr><th>Case</th><th>Opened</th><th>Status</th><th>Frustration</th><th>Latest passenger message</th><th><span class="sr-only">Actions</span></th></tr>
         </thead>
         <tbody></tbody>
       </table>
@@ -140,7 +168,7 @@
     </div>
   </section>
 
-  <section class="panel">
+  <section class="panel" data-panel="transactions">
     <h2>M-Pesa Transaction Audit Trail</h2>
     <p class="hint">Every payment the agent initiated, with its policy-grounded amount.</p>
     <div class="table-scroll">
@@ -153,7 +181,7 @@
     </div>
   </section>
 
-  <section class="panel">
+  <section class="panel" data-panel="comparison">
     <div class="panel-head">
       <div>
         <h2 id="comparison-title">Dual-Configuration Comparison</h2>
@@ -173,7 +201,7 @@
       </table>
     </div>
   </section>
-  <section class="panel">
+  <section class="panel" data-panel="audit">
     <h2>Administrative Access Log</h2>
     <p class="hint">Staff sign-ins and reads of passenger data. Recorded because
       the ledger below contains personal information.</p>
@@ -187,7 +215,7 @@
     </div>
   </section>
 
-  <section class="panel" id="privacy-panel">
+  <section class="panel" id="privacy-panel" data-panel="privacy">
     <h2>Data Protection</h2>
     <p class="hint" id="privacy-retention">Retention settings are loading.</p>
     <form id="erase-form" class="erase-form">
@@ -203,6 +231,41 @@
       </div>
       <p id="erase-status" class="status-line" role="status"></p>
     </form>
+  </section>
+
+  <section class="panel" id="staff-panel" data-panel="staff">
+    <h2>Staff Accounts</h2>
+    <p class="hint">Each person signs in as themselves, so the access log shows who did what. Roles:
+      <strong>Administrator</strong> (everything), <strong>Customer service agent</strong> (passengers
+      waiting, name corrections, payments) and <strong>Analyst</strong> (quality metrics only; no passenger
+      records). A new account gets a one-time password, shown once, that must be changed at first sign-in.</p>
+    <form id="staff-form" class="erase-form">
+      <div class="erase-fields">
+        <label>Username <input id="staff-username" type="text" maxlength="40" required
+               autocapitalize="none" spellcheck="false" pattern="[A-Za-z0-9._\-]+" /></label>
+        <label>Full name <input id="staff-name" type="text" maxlength="80" /></label>
+        <label>Role
+          <select id="staff-role">
+            <option value="agent">Customer service agent</option>
+            <option value="analyst">Analyst</option>
+            <option value="admin">Administrator</option>
+          </select>
+        </label>
+      </div>
+      <div class="handover-actions">
+        <button id="staff-create" class="btn" type="submit">Create account</button>
+      </div>
+    </form>
+    <div id="staff-otp" class="otp-box" role="status" hidden></div>
+    <div class="table-scroll">
+      <table id="staff-table">
+        <thead>
+          <tr><th>Username</th><th>Name</th><th>Role</th><th>Status</th><th>Last sign-in</th><th><span class="sr-only">Actions</span></th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p id="staff-status" class="status-line" role="status"></p>
   </section>
 
 </main>

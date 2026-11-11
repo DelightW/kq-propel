@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from app import auth, config, database, payments, privacy, sentiment
+from app import auth, config, database, payments, privacy, sentiment, staff
 from app.vectorstore import ingest_policy_directory
 from app.routers import admin, chat
 from app.routers import payments as payment_routes
@@ -34,6 +34,7 @@ app.include_router(payment_routes.router)
 def startup():
     database.init_db()
     database.purge_expired_admin_sessions()
+    staff.ensure_bootstrap_admin()
     ingest_policy_directory()
     sentiment.train_frustration_classifier()
     # Settle or expire payments whose outcome arrived while the server was down.

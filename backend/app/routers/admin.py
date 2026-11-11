@@ -15,7 +15,7 @@ from typing import Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
-from app import auth, config, database, handover, payments, privacy, receipts, sentiment, service_requests
+from app import auth, config, database, handover, payments, privacy, receipts, sentiment, service_requests, staff
 from app.llm import compare_models, comparison_mode
 from app.vectorstore import get_vector_store
 from app import retrieval
@@ -49,28 +49,37 @@ def login(req: LoginRequest, request: Request, response: Response):
             detail=f"Too many failed attempts. Try again in {locked} seconds.",
         )
 
-    cred = auth.credential()
-    username_ok = username.lower() == cred.username.lower()
-    # Verify the password even when the username is wrong, so the response
-    # time does not reveal which half of the credential was incorrect.
-    password_ok = auth.verify_password(req.password or "", cred.password_hash)
-
-    if not (username_ok and password_ok):
+    # The password is checked even for an unknown or disabled username, so the
+    # response time does not reveal which half of the credential was wrong.
+    account = staff.authenticate(username, req.password or "")
+    if not account:
         auth.record_failure(username, ip)
-        database.record_admin_audit(username, "login_failed", None, ip)
+        # The forwarded chain is kept with a failed sign-in so an attack can be
+        # traced through the proxies (and TRUSTED_PROXY_HOPS checked against it).
+        forwarded = request.headers.get("x-forwarded-for")
+        database.record_admin_audit(username, "login_failed",
+                                    f"forwarded: {forwarded[:200]}" if forwarded else None, ip)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                              detail="Invalid username or password.")
 
     auth.clear_failures(username, ip)
     token = auth.issue_staff_session(
-        cred.username, ip, request.headers.get("user-agent", ""))
+        account["username"], ip, request.headers.get("user-agent", ""))
     response.set_cookie(
         auth.ADMIN_COOKIE, token,
         **auth.cookie_kwargs(max_age=config.ADMIN_SESSION_TTL_MINUTES * 60),
     )
-    database.record_admin_audit(cred.username, "login_success", None, ip)
-    return {"authenticated": True, "username": cred.username,
-            "expires_in_minutes": config.ADMIN_SESSION_TTL_MINUTES}
+    database.record_admin_audit(account["username"], "login_success", account["role"], ip)
+    return {**_who(account), "expires_in_minutes": config.ADMIN_SESSION_TTL_MINUTES}
+
+
+def _who(account: Dict) -> Dict:
+    """What the dashboard needs to know about the person signed in."""
+    return {"authenticated": True, "username": account["username"],
+            "display_name": account.get("display_name"), "role": account["role"],
+            "role_label": staff.ROLE_LABELS.get(account["role"], account["role"]),
+            "panels": staff.PANELS.get(account["role"], []),
+            "must_change_password": bool(account.get("must_change_password"))}
 
 
 @router.post("/logout")
@@ -95,12 +104,11 @@ def session_status(session: Optional[Dict] = Depends(auth.optional_staff)):
     """
     if not session:
         return {"authenticated": False}
-    return {"authenticated": True, "username": session.get("username"),
-            "last_seen_at": session.get("last_seen_at")}
+    return {**_who(session), "last_seen_at": session.get("last_seen_at")}
 
 
 @router.get("/overview")
-def overview(request: Request, session: Dict = Depends(auth.require_staff)):
+def overview(request: Request, session: Dict = Depends(auth.require_role(*staff.ROLES))):
     vector_stats = get_vector_store().stats()
     database.record_admin_audit(session.get("username"), "view_overview", None,
                                  auth.client_ip(request))
@@ -140,14 +148,16 @@ def overview(request: Request, session: Dict = Depends(auth.require_staff)):
             "pending_by_currency": {k: round(v, 2) for k, v in ledger["pending_by_currency"].items()},
             "counts_by_status": ledger["counts_by_status"],
             "counts_by_method": ledger["counts_by_method"],
-            "recent": privacy.mask_rows(ledger["recent"]),
+            # Analysts see totals, not individual payments.
+            "recent": (privacy.mask_rows(ledger["recent"])
+                       if session.get("role") != staff.ANALYST else []),
         },
         "sentiment_model_metrics": sentiment.get_metrics(),
     }
 
 
 @router.get("/transactions")
-def transactions(request: Request, session: Dict = Depends(auth.require_staff)):
+def transactions(request: Request, session: Dict = Depends(auth.require_role(staff.ADMIN, staff.AGENT))):
     database.record_admin_audit(session.get("username"), "view_transactions",
                                  None, auth.client_ip(request))
     # Staff see the last digits only; the full number stays with the payment
@@ -157,7 +167,7 @@ def transactions(request: Request, session: Dict = Depends(auth.require_staff)):
 
 @router.get("/transactions/{reference}/receipt")
 def transaction_receipt(reference: str, request: Request,
-                        session: Dict = Depends(auth.require_staff)):
+                        session: Dict = Depends(auth.require_role(staff.ADMIN, staff.AGENT))):
     """PDF receipt for a paid transaction, for staff answering a passenger.
     Recorded in the audit log like any other read of payment data."""
     with database._connect() as conn:
@@ -177,13 +187,13 @@ def transaction_receipt(reference: str, request: Request,
 
 
 @router.get("/audit")
-def audit(session: Dict = Depends(auth.require_staff)):
+def audit(session: Dict = Depends(auth.require_role(staff.ADMIN))):
     """Who accessed passenger data, and when."""
     return {"entries": database.fetch_admin_audit(limit=100)}
 
 
 @router.get("/model-comparison")
-def model_comparison(request: Request, session: Dict = Depends(auth.require_staff)):
+def model_comparison(request: Request, session: Dict = Depends(auth.require_role(staff.ADMIN, staff.ANALYST))):
     """Runs both configured generators across the full evaluation dataset over
     identical RAG context.
 
@@ -244,14 +254,14 @@ class HandoverClose(BaseModel):
 
 @router.get("/handovers")
 def list_handovers(include_closed: bool = False,
-                   session: Dict = Depends(auth.require_staff)):
+                   session: Dict = Depends(auth.require_role(staff.ADMIN, staff.AGENT))):
     """Passengers waiting for a person, oldest-open first."""
     return {"enabled": config.HANDOVER_ENABLED,
             "cases": privacy.mask_rows(handover.list_cases(include_closed=include_closed))}
 
 
 @router.get("/handovers/{case_id}")
-def get_handover(case_id: int, request: Request, session: Dict = Depends(auth.require_staff)):
+def get_handover(case_id: int, request: Request, session: Dict = Depends(auth.require_role(staff.ADMIN, staff.AGENT))):
     """One case with the passenger's conversation. Reading a transcript is
     recorded in the audit log, as it may contain personal details."""
     case = handover.get(case_id)
@@ -265,7 +275,7 @@ def get_handover(case_id: int, request: Request, session: Dict = Depends(auth.re
 
 @router.post("/handovers/{case_id}/reply")
 def reply_handover(case_id: int, body: HandoverReply, request: Request,
-                   session: Dict = Depends(auth.require_staff)):
+                   session: Dict = Depends(auth.require_role(staff.ADMIN, staff.AGENT))):
     try:
         case = handover.staff_reply(case_id, session.get("username"), body.message)
     except LookupError:
@@ -279,7 +289,7 @@ def reply_handover(case_id: int, body: HandoverReply, request: Request,
 
 @router.post("/handovers/{case_id}/close")
 def close_handover(case_id: int, body: HandoverClose, request: Request,
-                   session: Dict = Depends(auth.require_staff)):
+                   session: Dict = Depends(auth.require_role(staff.ADMIN, staff.AGENT))):
     try:
         case = handover.close(case_id, session.get("username"), body.note)
     except LookupError:
@@ -303,14 +313,14 @@ class ErasureRequest(BaseModel):
 
 
 @router.get("/privacy")
-def privacy_status(session: Dict = Depends(auth.require_staff)):
+def privacy_status(session: Dict = Depends(auth.require_role(staff.ADMIN))):
     return {"retention": privacy.retention_policy(), "last_purge": privacy.last_purge(),
             "contact": config.PRIVACY_CONTACT}
 
 
 @router.post("/privacy/erase")
 def erase_passenger(body: ErasureRequest, request: Request,
-                    session: Dict = Depends(auth.require_staff)):
+                    session: Dict = Depends(auth.require_role(staff.ADMIN))):
     """Finds the passenger's sessions and, when `confirm` is true, erases them.
     Without `confirm` it only reports what would be erased, so staff can check
     they have the right person first. Both are recorded in the audit log, with
@@ -346,7 +356,7 @@ def erase_passenger(body: ErasureRequest, request: Request,
 
 @router.get("/requests")
 def list_service_requests(request: Request, include_closed: bool = False,
-                          session: Dict = Depends(auth.require_staff)):
+                          session: Dict = Depends(auth.require_role(staff.ADMIN, staff.AGENT))):
     """Paid requests waiting for staff, then those still waiting for payment.
     Recorded in the audit log, because requests hold passenger names."""
     database.record_admin_audit(session.get("username"), "view_service_requests", None,
@@ -356,7 +366,7 @@ def list_service_requests(request: Request, include_closed: bool = False,
 
 @router.post("/requests/{request_id}/complete")
 def complete_service_request(request_id: int, request: Request,
-                             session: Dict = Depends(auth.require_staff)):
+                             session: Dict = Depends(auth.require_role(staff.ADMIN, staff.AGENT))):
     """Staff confirm they have updated the booking in Kenya Airways' system."""
     try:
         done = service_requests.complete(request_id, session.get("username"))
@@ -367,3 +377,113 @@ def complete_service_request(request_id: int, request: Request,
     database.record_admin_audit(session.get("username"), "complete_service_request",
                                 service_requests.reference(done), auth.client_ip(request))
     return {**done, "reference": service_requests.reference(done)}
+
+
+# ---------------------------------------------------------------------------
+# Staff accounts (Priority 5)
+# ---------------------------------------------------------------------------
+
+class NewStaff(BaseModel):
+    username: str = Field(min_length=1, max_length=40)
+    display_name: Optional[str] = Field(default=None, max_length=80)
+    role: str
+
+
+class RoleChange(BaseModel):
+    role: str
+
+
+class PasswordChange(BaseModel):
+    current_password: str = Field(max_length=200)
+    new_password: str = Field(max_length=200)
+
+
+def _staff_error(exc: Exception):
+    if isinstance(exc, LookupError):
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such member of staff.")
+    return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+
+
+@router.get("/staff")
+def list_staff(session: Dict = Depends(auth.require_role(staff.ADMIN))):
+    return {"staff": staff.list_staff(), "roles": [
+        {"role": r, "label": staff.ROLE_LABELS[r], "panels": staff.PANELS[r]} for r in staff.ROLES]}
+
+
+@router.post("/staff")
+def create_staff(body: NewStaff, request: Request,
+                 session: Dict = Depends(auth.require_role(staff.ADMIN))):
+    """Creates an account. The one-time password is in this response only;
+    it is never stored or logged in readable form."""
+    try:
+        account = staff.create(body.username, body.display_name or "", body.role, session["username"])
+    except (staff.StaffError, LookupError) as exc:
+        raise _staff_error(exc)
+    database.record_admin_audit(session["username"], "create_staff",
+                                f"{account['username']} ({account['role']})", auth.client_ip(request))
+    return account
+
+
+@router.post("/staff/{username}/role")
+def change_staff_role(username: str, body: RoleChange, request: Request,
+                      session: Dict = Depends(auth.require_role(staff.ADMIN))):
+    try:
+        account = staff.set_role(username, body.role)
+    except (staff.StaffError, LookupError) as exc:
+        raise _staff_error(exc)
+    database.record_admin_audit(session["username"], "change_staff_role",
+                                f"{account['username']} -> {account['role']}", auth.client_ip(request))
+    return account
+
+
+@router.post("/staff/{username}/disable")
+def disable_staff(username: str, request: Request,
+                  session: Dict = Depends(auth.require_role(staff.ADMIN))):
+    if username.lower() == session["username"].lower():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="You cannot disable your own account.")
+    try:
+        account = staff.set_active(username, False)
+    except (staff.StaffError, LookupError) as exc:
+        raise _staff_error(exc)
+    database.record_admin_audit(session["username"], "disable_staff", account["username"],
+                                auth.client_ip(request))
+    return account
+
+
+@router.post("/staff/{username}/enable")
+def enable_staff(username: str, request: Request,
+                 session: Dict = Depends(auth.require_role(staff.ADMIN))):
+    try:
+        account = staff.set_active(username, True)
+    except (staff.StaffError, LookupError) as exc:
+        raise _staff_error(exc)
+    database.record_admin_audit(session["username"], "enable_staff", account["username"],
+                                auth.client_ip(request))
+    return account
+
+
+@router.post("/staff/{username}/reset-password")
+def reset_staff_password(username: str, request: Request,
+                         session: Dict = Depends(auth.require_role(staff.ADMIN))):
+    """Issues a new one-time password and signs the person out everywhere."""
+    try:
+        account = staff.reset_password(username)
+    except (staff.StaffError, LookupError) as exc:
+        raise _staff_error(exc)
+    database.record_admin_audit(session["username"], "reset_staff_password", account["username"],
+                                auth.client_ip(request))
+    return account
+
+
+@router.post("/password")
+def change_password(body: PasswordChange, request: Request,
+                    session: Dict = Depends(auth.require_staff)):
+    """Any member of staff changing their own password (and the only thing a
+    person holding a one-time password may do)."""
+    try:
+        account = staff.change_own_password(session["username"], body.current_password, body.new_password)
+    except staff.StaffError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    database.record_admin_audit(session["username"], "change_own_password", None, auth.client_ip(request))
+    return _who(account)

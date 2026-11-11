@@ -156,3 +156,16 @@ def route_mismatch(query_text: str, chunk_text: str) -> bool:
     if sum(1 for p in stated if is_city(p)) < 2:
         return False
     return any(not covered(p, stated) for p in asked)
+
+
+_ROUTE_WORDS_RE = re.compile(r"\b(routes?|routings?|one[- ]piece|domestic|exceptions?|reduced)\b", re.I)
+
+
+def route_list_unasked(query_text: str, chunk_text: str) -> bool:
+    """True when the chunk is a list of specific routes but the passenger named
+    no place and did not ask about routes. Such a list is an exception to the
+    general rule ("on Nairobi to Mumbai ... one piece"), and a passenger asking
+    "what is the baggage allowance?" wants the general rule first."""
+    if mentioned(query_text) or _ROUTE_WORDS_RE.search(query_text or ""):
+        return False
+    return sum(1 for p in mentioned(chunk_text) if is_city(p)) >= 2

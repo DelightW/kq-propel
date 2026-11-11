@@ -48,5 +48,11 @@ Every push to the `priority-1-hardening` branch redeploys automatically.
 - The chat is public. Sandbox payment prompts reach only `DARAJA_SANDBOX_TEST_NUMBERS`.
 - Do not set `DARAJA_VERIFY_CALLBACKS=false`. Leave `HANDOVER_ENABLED` and `PRIVACY_RETENTION_ENABLED` off until
   Kenya Airways decides.
-- Rate limits per session and IP address are not built yet (Priority 5); public use consumes the AviationStack
-  quota.
+- Rate limits (Priority 5) cap messages per conversation and per address, new sessions per address, and M-Pesa
+  prompts per conversation and per phone number. Counters are in memory and reset when the service restarts.
+- The limits and the sign-in lockout need the caller's real address. Behind Render's proxy it comes from
+  `X-Forwarded-For`, whose left-hand entries the caller can forge. Set `TRUSTED_PROXY_HOPS` to the number of
+  entries Render's proxies add (the address used is that many places from the right). To check it, make one
+  failed sign-in and read the "login failed" row in the access log: its detail shows the forwarded chain.
+- Staff accounts other than the first administrator live in the database, so on the free plan they are lost when
+  the service restarts; the administrator from `ADMIN_PASSWORD_HASH` is recreated at every start.

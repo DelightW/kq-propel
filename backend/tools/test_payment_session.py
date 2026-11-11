@@ -38,11 +38,16 @@ print("=== Multi-turn payment flow ===")
 # tariff, because Kenya Airways does not publish one. A name-correction fee on
 # an international booking is a figure the corpus does publish, so it is the
 # scenario that legitimately reaches settlement.
-step("turn 1 quotes a grounded fee",
-     say("I need to fix a typo in my name on my international booking"), "")
-step("turn 2 accepts the offer", say("Yes, I would like to pay it now"), "")
+# Since name corrections became a full request (booking, new name, fee), the
+# fee is quoted only once the booking and the new name are known.
+step("turn 1 asks for the booking", say("I need to fix a typo in my name"), "booking reference")
+step("turn 2 finds the booking", say("booking reference KQDLW1, surname Wangui"), "Delight Wangui")
+step("turn 3 quotes the fee from policy", say("Delight Wambui"), "USD 75.00")
+step("turn 4 accepts", say("yes"), "SR-")
+say("M-Pesa")
+# Not a registered sandbox test number, so no real prompt is sent.
 d = say("0712345678")
-step("turn 3 pushes the prompt to the handset", d, "")
+step("turn 5 starts the payment", d, "M-Pesa")
 
 payment = d.get("payment")
 print("\n=== Payment record ===")

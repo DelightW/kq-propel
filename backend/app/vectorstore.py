@@ -125,6 +125,14 @@ _MMR_CANDIDATE_POOL = 15
 # retrievable when nothing better exists.
 _ROUTE_MISMATCH_FACTOR = float(os.getenv("RETRIEVAL_ROUTE_MISMATCH_FACTOR", "0.75"))
 
+# Applied to a list of specific routes when the passenger named no place and
+# did not ask about routes: the general rule should come first.
+_ROUTE_UNASKED_FACTOR = float(os.getenv("RETRIEVAL_ROUTE_UNASKED_FACTOR", "0.85"))
+
+# Applied to a hand-baggage section when the passenger asked about checked bags,
+# and the reverse (see retrieval.baggage_kind). Also a penalty, not removal.
+_BAGGAGE_KIND_MISMATCH_FACTOR = float(os.getenv("RETRIEVAL_BAGGAGE_KIND_FACTOR", "0.35"))
+
 # How redundant an additional chunk of an already-represented document is.
 # The first repeat is plausibly useful - a long policy often answers a question
 # across two paragraphs - so it is only moderately penalised. Each further
@@ -299,6 +307,7 @@ class _HybridSearchMixin:
                         else [cosine_similarity(q_emb, r["embedding"]) for r in records])
 
         blended = retrieval.blend(lexical_scores, dense_scores)
+        want_kind = retrieval.baggage_kind(query)
 
         scored = []
         for rec, lex, dense, score in zip(records, lexical_scores, dense_scores, blended):
@@ -307,6 +316,12 @@ class _HybridSearchMixin:
             if places.route_mismatch(query, rec.get("text") or ""):
                 boosted *= _ROUTE_MISMATCH_FACTOR
                 item["route_mismatch"] = True
+            elif places.route_list_unasked(query, rec.get("text") or ""):
+                boosted *= _ROUTE_UNASKED_FACTOR
+                item["route_list_unasked"] = True
+            if retrieval.baggage_kind_mismatch(want_kind, rec):
+                boosted *= _BAGGAGE_KIND_MISMATCH_FACTOR
+                item["baggage_kind_mismatch"] = True
             item["score"] = round(boosted, 4)
             item["lexical_score"] = round(lex, 4)
             item["dense_score"] = round(dense, 4)

@@ -1,34 +1,43 @@
 # KQ-Propel
 
-An agentic retrieval-augmented generation (RAG) assistant for Kenya Airways customer support. It answers passenger questions from airline policy documents, checks live flight status, and can collect fees by card or M-Pesa. Built as a final-year project at Strathmore University.
+An agentic retrieval-augmented generation (RAG) assistant for Kenya Airways customer support. It answers passenger questions from airline policy with a citation, checks flight status, looks up a booking, takes payment by M-Pesa or card, and hands a conversation to a member of staff when asked. Built as a final-year project at Strathmore University.
 
-## Features
+**Live demonstration:** https://kq-propel.onrender.com (chat) and https://kq-propel.onrender.com/admin (staff dashboard). It runs on Render's free plan, so the first visit after a quiet spell takes about a minute to wake, and its data is reset whenever it restarts.
 
-| Feature | What it does |
+> This is a research prototype, not a Kenya Airways service. Bookings and flights shown without a live source are labelled as demonstration data, and M-Pesa runs in Safaricom's sandbox.
+
+## What it does
+
+| For passengers | |
 |---|---|
-| Policy answers | Retrieves the relevant policy section and answers from it, with a section citation on every reply. |
-| Hybrid retrieval | Combines BM25 keyword scoring with embedding similarity. Maximal Marginal Relevance (MMR) stops results from repeating the same document. |
-| Agent loop | A ReAct loop (thought, action, observation) with tools for policy search, flight status and payments. |
-| Payments | Offers card (PayPal) or M-Pesa (Daraja STK Push) when an answer quotes a fee. A payment starts only after the passenger confirms, and only for an amount found in a policy. |
-| Frustration detection | A TF-IDF and logistic regression classifier flags frustrated passengers so the agent responds with empathy and offers escalation. |
-| Evaluation | RAG-Triad scores (context relevance, groundedness, answer relevance) are logged for every turn. |
-| Model comparison | GPT-4o-mini is compared with an open-source model served through Ollama, using the same documents, retrieval and evaluation set. |
-| Scope guards | If the retrieved sections do not match the question, the agent says so. Flight times need a flight number. |
+| Policy answers | Retrieves the relevant policy section and answers from it, citing the section and edition. Declines when nothing it retrieved matches the question. |
+| Follow-up questions | "What about Business class?" or "Is that flight delayed?" keep the context of the previous turn for 30 minutes. |
+| Flight status | Kenya Airways' own feed when configured, then AviationStack. A status is never invented. |
+| Booking lookup | Booking reference and surname give answers for the passenger's own trip. Five failed lookups in an hour lock the conversation. |
+| Name corrections | Shows the name on the booking, asks for the new one, counts the characters changed, quotes the fee from the refund policy and, once paid, sends the request to staff. |
+| Payments | M-Pesa (Daraja STK Push) or card (PayPal), only for a fee quoted from policy and only after the passenger confirms. A payment counts as paid only when the provider confirms it. |
+| Receipts | A PDF receipt for every paid payment. |
+| A person | Opens a case that staff answer from the dashboard (when handover is switched on). |
+| Privacy | A passenger can delete their conversation from the chat. See [the privacy notice](frontend/privacy.html). |
 
-All API keys are optional. Without them the system uses local embeddings and simulated flight and payment responses, which are labelled as simulated in the chat.
+| For staff (`/admin`) | |
+|---|---|
+| Individual accounts and roles | **Administrator** (everything), **customer service agent** (handovers, name corrections, payments) or **analyst** (quality metrics only, no passenger records). New accounts receive a one-time password that must be changed at first sign-in. |
+| Work queues | Passengers waiting for a person, and paid name corrections to carry out and mark done. |
+| Monitoring | RAG-Triad scores, frustration levels, classifier performance, payment ledger and an access log of who read passenger data. |
+| Data protection | Phone numbers shown masked; erasure on request; configurable retention. |
 
-## Applications
+Behind the scenes:
 
-| | Chat assistant | Admin dashboard |
-|---|---|---|
-| URL | `/` | `/admin` |
-| Files | `index.html`, `chat.css`, `chat.js` | `admin.html`, `admin.css`, `admin.js` |
-| Users | Passengers | Support supervisors |
-| Purpose | Ask questions, check flights, pay fees | Sentiment metrics, RAG-Triad scores, hallucination rate, payment audit trail, model comparison |
+- **Hybrid retrieval.** BM25 combined with all-MiniLM-L6-v2 embeddings, Maximal Marginal Relevance and policy-aware ranking (route exceptions; checked versus hand baggage).
+- **ReAct agent.** Each answer shows the agent's reasoning trace.
+- **Frustration classifier.** A self-trained TF-IDF and logistic-regression classifier. It changes only the tone of a reply, never the policy answer.
+- **Rate limits.** Per conversation, per network address and per phone number.
+- **Accessible interfaces.** Both pass the WCAG 2.1 A/AA rules checked by axe-core.
 
-Both are responsive and work on phones and laptops.
+All API keys are optional. Without them the assistant uses its offline answer composer, local embeddings and labelled demonstration data.
 
-## Running it
+## Running it locally
 
 ```powershell
 cd kq-propel\backend
@@ -38,105 +47,70 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 | What | URL |
 |---|---|
-| Chat assistant | http://127.0.0.1:8000/ |
-| Admin dashboard | http://127.0.0.1:8000/admin |
-| API docs | http://127.0.0.1:8000/docs |
+| Chat | http://127.0.0.1:8000/ |
+| Staff dashboard | http://127.0.0.1:8000/admin |
+| API documentation | http://127.0.0.1:8000/docs |
 
-### Signing in to the admin dashboard
+The policy index and the classifier are built automatically on first start.
 
-The dashboard shows the payment audit trail, which contains passenger phone numbers, so every `/api/admin/*` route needs a staff session. There is no default password in the source code.
-
-Set a permanent one:
+**Staff sign-in.** Create a password hash and put it in `.env` at the repository root:
 
 ```powershell
-cd kq-propel\backend
 python -m app.auth "your-password"      # prints ADMIN_PASSWORD_HASH=scrypt$...
 ```
 
-Paste the printed line into `.env` next to `ADMIN_USERNAME=admin`. Only the hash is stored; the password itself never enters the repository.
+That account (`ADMIN_USERNAME`, default `admin`) is the first administrator; other staff are added from the dashboard's Staff Accounts panel. If no credential is set, a one-time password is printed at start-up and changes on every restart. There is no default password in the source code.
 
-If no credential is set, a one-time password is generated and printed to the console at startup, and it changes on every restart:
+**On a phone.** With `--host 0.0.0.0`, open `http://<laptop's Wi-Fi address>:8000/` on a phone on the same network (allow TCP port 8000 through Windows Firewall for Private networks). In a desktop browser, Ctrl+Shift+I and then Ctrl+Shift+M shows the phone layout.
 
-```
-[auth] No ADMIN_PASSWORD_HASH or ADMIN_PASSWORD was configured.
-       A one-time password has been generated for THIS RUN ONLY.
+## Hosting
 
-         username: admin
-         password: 8Kd2mQx7bLpR
-```
-
-| Control | Behaviour |
-|---|---|
-| Unauthenticated request | `401`, before any data is read |
-| Password storage | scrypt, standard library, never plaintext |
-| Session token | Random 32 bytes; only its SHA-256 digest is stored |
-| Cookie | `HttpOnly`, `SameSite=Lax`, `Secure` when `SECURE_COOKIES=true` |
-| Sign out | Revokes the session on the server, not just in the browser |
-| Repeated failures | Locks that username and IP for 5 minutes after 5 attempts |
-| Error message | The same for a wrong username as a wrong password, so accounts cannot be guessed |
-| Access log | Sign-ins and reads of passenger data are recorded and shown in the dashboard |
-
-### Passenger sessions
-
-The server issues the chat session (`POST /api/chat/session`) and binds it to an `HttpOnly` cookie. The browser used to invent its own identifier and the server trusted it, which meant anyone supplying another passenger's identifier inherited that conversation and its pending payment. A `session_id` that disagrees with the cookie is now rejected with `403`.
-
-`POST /api/chat/reset` starts a new session and clears any pending payment, which matters on a shared device.
-
-### Opening the chatbot on your phone
-
-Running with `--host 0.0.0.0` makes the assistant reachable from other devices on the same Wi-Fi network.
-
-1. Find the laptop's Wi-Fi address:
-```powershell
-   Get-NetIPAddress -AddressFamily IPv4 | Where-Object InterfaceAlias -eq "Wi-Fi"
-```
-2. Allow the port through Windows Firewall. Run this once in an Administrator PowerShell:
-```powershell
-   New-NetFirewallRule -DisplayName "KQ-Propel (TCP 8000)" -Direction Inbound `
-     -Action Allow -Protocol TCP -LocalPort 8000 -Profile Private
-```
-3. On the phone, open `http://<that-address>:8000/`, for example `http://192.168.100.70:8000/`.
-
-Both devices must be on the same network, and Windows must mark it as Private.
+The live copy is deployed from this repository with the Render Blueprint in [render.yaml](render.yaml). The server installs [backend/requirements-server.txt](backend/requirements-server.txt), which runs the same embedding model on ONNX Runtime instead of PyTorch so that it fits the free plan's 512 MB. Secrets are entered in Render's dashboard, never in the repository. Every push to the deployed branch redeploys it. Step-by-step instructions: [docs/deploy_render.md](docs/deploy_render.md).
 
 ## Payments
 
-When the agent quotes a fee the passenger owes, it offers two ways to pay.
-
-| | Card (PayPal Orders API) | M-Pesa (Daraja STK Push) |
+| | M-Pesa (Daraja STK Push) | Card (PayPal Orders) |
 |---|---|---|
-| Reaches | Anyone with a Visa, Mastercard or Amex | Kenyan Safaricom lines only |
-| Currency | The currency the fee is published in | Kenya shillings |
-| Exchange rate | None needed | `USD_TO_KES_RATE`, shown to the passenger every time |
+| Currency | Kenya shillings, converted at `USD_TO_KES_RATE` and disclosed every time | The currency the fee is published in |
+| Confirmation | Callback to a secret URL, double-checked with Safaricom's status query | Order captured on the server |
 
-Money owed to the passenger, such as refunds and meal vouchers, is never offered for payment. Without credentials both rails run in simulated mode. To test the M-Pesa rail against the Safaricom sandbox, use the operator tool instead of the chat:
+Safaricom's sandbox takes real money when the PIN is entered. In sandbox mode, prompts therefore go only to numbers listed in `DARAJA_SANDBOX_TEST_NUMBERS`, always for Ksh 1. Any other number receives a labelled demonstration. Money owed to the passenger, such as refunds, is never offered as a payment.
 
+## Testing
+
+```powershell
+cd kq-propel\backend
+python tools/quality_gate.py             # release gate: groundedness, relevance, conversation cases, fairness
+python tools/test_priority5.py           # each suite in tools/ runs on its own
 ```
-python tools/send_test_stk.py --phone 0712345678 --amount 1
-```
+
+There are 19 suites with 340 checks. `test_auth.py` and `test_payment_session.py` need a running server; the others use a temporary database and stubbed providers.
 
 ## Configuration
 
-Set values in a `.env` file at the repository root (see `.env.example`). Real environment variables take precedence.
+Copy [.env.example](.env.example) to `.env`; it documents every setting. The main ones:
 
 | Variable | Purpose |
 |---|---|
-| `OPENAI_API_KEY` | Enables GPT-4o-mini and `text-embedding-3-small` |
-| `OPEN_SOURCE_MODEL_NAME`, `OLLAMA_BASE_URL` | Second model for the comparison, served through Ollama |
-| `AVIATIONSTACK_API_KEY` | Live flight data |
-| `DARAJA_CONSUMER_KEY`, `DARAJA_CONSUMER_SECRET`, `DARAJA_PASSKEY`, `DARAJA_SHORTCODE` | Safaricom Daraja credentials |
-| `DARAJA_SANDBOX`, `DARAJA_CALLBACK_URL` | Sandbox or production host, and where Safaricom posts the result |
-| `PAYPAL_CLIENT_ID`, `PAYPAL_SECRET`, `PAYPAL_SANDBOX` | PayPal card checkout |
-| `USD_TO_KES_RATE` | Indicative rate for M-Pesa payments (default 129.0, not a live rate) |
-| `LOCAL_EMBEDDING_MODEL`, `LOCAL_EMBEDDING_ENABLED` | Local sentence-transformer embeddings (default `all-MiniLM-L6-v2`) |
-| `RETRIEVAL_MMR_LAMBDA` | Relevance and diversity balance in retrieval (default 0.8) |
-| `MONGODB_URI`, `MONGODB_DB_NAME` | MongoDB Atlas Vector Search. A local JSON index is used if unset |
-| `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH` | Staff login for the admin dashboard. Generate the hash with `python -m app.auth "password"` |
-| `ADMIN_SESSION_TTL_MINUTES`, `ADMIN_MAX_LOGIN_ATTEMPTS`, `ADMIN_LOCKOUT_SECONDS` | Session lifetime and brute-force lockout (defaults 120, 5, 300) |
-| `SECURE_COOKIES` | Marks session cookies `Secure`. Set to true when serving over HTTPS |
-| `ALLOWED_ORIGINS` | Browsers permitted to call the API. A wildcard is not allowed with cookies |
-| `MAX_MESSAGE_CHARS` | Longest passenger message accepted (default 2000) |
+| `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH` | First administrator account |
+| `OPENAI_API_KEY`, `OPEN_SOURCE_MODEL_NAME`, `OLLAMA_BASE_URL` | Live language models for answers and the model comparison |
+| `AVIATIONSTACK_API_KEY` | Live flight status |
+| `KQ_BOOKING_API_URL`, `KQ_FLIGHT_API_URL` (+ tokens) | Kenya Airways booking and flight services, when provided ([specification](docs/kq_integration_spec.md)) |
+| `DARAJA_CONSUMER_KEY`, `DARAJA_CONSUMER_SECRET`, `DARAJA_PASSKEY`, `DARAJA_CALLBACK_URL`, `DARAJA_CALLBACK_TOKEN` | M-Pesa |
+| `DARAJA_SANDBOX_TEST_NUMBERS` | The only numbers sandbox prompts may go to |
+| `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` | Card checkout |
+| `HANDOVER_ENABLED` | Lets passengers reach a person (off by default) |
+| `PRIVACY_RETENTION_ENABLED` | Automatic deletion by age (off until retention periods are agreed) |
+| `RATE_LIMIT_*`, `TRUSTED_PROXY_HOPS` | Rate limits, and how many proxies sit in front of the app |
+| `SECURE_COOKIES`, `ALLOWED_ORIGINS` | Cookie and browser-origin security for HTTPS deployments |
 
-## More detail
+## Project layout
 
-The sentiment classifier is documented in [docs/sentiment.md](docs/sentiment.md), and the payment flow in [docs/payments.md](docs/payments.md).
+```
+backend/app/        FastAPI app: agent, retrieval, payments, staff, privacy, rate limits
+backend/data/       Policy corpus, evaluation sets, classifier data
+backend/tools/      Test suites, quality gate and evaluation tools
+frontend/           Chat, staff dashboard and privacy notice
+docs/               Deployment guide, Kenya Airways integration spec, draft DPIA
+docgen/             How the synthetic datasets were generated
+```

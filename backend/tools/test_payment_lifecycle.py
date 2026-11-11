@@ -20,6 +20,9 @@ config.APP_DB_PATH = Path(tempfile.mkdtemp()) / "lifecycle.db"
 config.DARAJA_CONSUMER_KEY = config.DARAJA_CONSUMER_SECRET = config.DARAJA_PASSKEY = ""
 config.PAYPAL_CLIENT_ID = config.PAYPAL_CLIENT_SECRET = ""
 config.DARAJA_CALLBACK_TOKEN = "test-callback-secret"
+# This suite sends many prompts to one test number on purpose; the limits
+# have their own suite (test_priority5.py).
+config.RATE_LIMIT_ENABLED = False
 
 from app import agent, daraja, database, payments, paypal  # noqa: E402
 

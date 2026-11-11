@@ -163,6 +163,11 @@
     var bubble = document.createElement("div");
     bubble.className = "bubble " + role;
 
+    var speaker = document.createElement("span");
+    speaker.className = "sr-only";
+    speaker.textContent = role === "user" ? "You said: " : (role === "agent" ? "" : "Assistant: ");
+    if (speaker.textContent) { bubble.appendChild(speaker); }
+
     if (role === "agent") {
       var who = document.createElement("span");
       who.className = "who";
@@ -393,7 +398,8 @@
   function addTyping() {
     var bubble = document.createElement("div");
     bubble.className = "bubble bot";
-    bubble.innerHTML = '<span class="typing"><span></span><span></span><span></span></span>';
+    bubble.innerHTML = '<span class="sr-only">The assistant is typing</span>' +
+      '<span class="typing" aria-hidden="true"><span></span><span></span><span></span></span>';
     chatWindow.appendChild(bubble);
     scrollToBottom();
     return bubble;
@@ -505,13 +511,17 @@
   function openTrace() {
     tracePanel.classList.add("open");
     tracePanel.classList.remove("collapsed");
-    if (!isDesktop()) { scrim.hidden = false; }
+    traceToggle.setAttribute("aria-expanded", "true");
+    if (!isDesktop()) { scrim.hidden = false; traceClose.focus(); }
   }
 
   function closeTrace() {
+    var wasOverlay = !isDesktop() && tracePanel.classList.contains("open");
     tracePanel.classList.remove("open");
     if (isDesktop()) { tracePanel.classList.add("collapsed"); }
+    traceToggle.setAttribute("aria-expanded", "false");
     scrim.hidden = true;
+    if (wasOverlay) { traceToggle.focus(); }
   }
 
   function toggleTrace() {
@@ -532,6 +542,7 @@
   // On phones the panel starts hidden; on laptops it starts docked open.
   if (isDesktop()) {
     tracePanel.classList.remove("open");
+    traceToggle.setAttribute("aria-expanded", "true");
   } else {
     tracePanel.classList.add("collapsed");
   }
@@ -551,6 +562,7 @@
     busy = state;
     sendBtn.disabled = state;
     input.disabled = state;
+    chatWindow.setAttribute("aria-busy", state ? "true" : "false");
     if (!state) { input.focus(); }
   }
 
@@ -571,6 +583,13 @@
       body: JSON.stringify({ session_id: sessionId, message: message })
     })
       .then(function (res) {
+        if (res.status === 429) {
+          return res.json().then(function (body) {
+            var e = new Error((body && body.detail) || "Too many messages. Please wait a moment.");
+            e.limited = true;
+            throw e;
+          });
+        }
         if (!res.ok) { throw new Error("Server responded with " + res.status); }
         return res.json();
       })
@@ -595,6 +614,11 @@
       })
       .catch(function (err) {
         typing.remove();
+        if (err.limited) {
+          addBubble("bot", "You're sending messages faster than I can take them. " + err.message);
+          setBusy(false);
+          return;
+        }
         addBubble("bot",
           "I couldn't reach the support service just now (" + err.message +
           "). Please check your connection and try again.");

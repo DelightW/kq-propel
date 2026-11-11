@@ -93,6 +93,20 @@ CREATE TABLE IF NOT EXISTS admin_sessions (
     user_agent TEXT
 );
 
+-- One row per member of staff (Priority 5). The role decides which routes
+-- they may call; see app/staff.py.
+CREATE TABLE IF NOT EXISTS staff_users (
+    username TEXT PRIMARY KEY COLLATE NOCASE,
+    display_name TEXT,
+    role TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    active INTEGER NOT NULL DEFAULT 1,
+    must_change_password INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    created_by TEXT,
+    last_login_at TEXT
+);
+
 -- Who looked at passenger data, and when. The transaction ledger contains
 -- phone numbers, so administrative reads are themselves events worth
 -- recording.
@@ -121,12 +135,10 @@ CREATE TABLE IF NOT EXISTS conversation_context (
     session_id TEXT PRIMARY KEY,
     last_query TEXT,
     flight_number TEXT,
-    booking TEXT,                    -- JSON trip segments, never names
+    booking TEXT,                    -- JSON trip and passenger names (for a name correction); expires with the context
     updated_at TEXT NOT NULL
 );
 
--- Booking lookups per session, so references cannot be guessed by trial and
--- error (app/booking.py). Holds no reference or name.
 -- Changes a passenger asks for and staff carry out (app/service_requests.py).
 -- Holds the old and new name, because that is the change being requested.
 CREATE TABLE IF NOT EXISTS service_requests (
@@ -150,6 +162,8 @@ CREATE TABLE IF NOT EXISTS service_requests (
     updated_at TEXT NOT NULL
 );
 
+-- Booking lookups per session, so references cannot be guessed by trial and
+-- error (app/booking.py). Holds no reference or name.
 CREATE TABLE IF NOT EXISTS booking_lookups (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id TEXT NOT NULL,

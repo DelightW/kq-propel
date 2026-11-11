@@ -1,0 +1,236 @@
+"""Priority 5: staff accounts with roles, and rate limits.
+
+Runs the real FastAPI app in-process (TestClient) against a temporary
+database. Payments are stubbed; nothing contacts Safaricom.
+
+Run:  python tools/test_priority5.py
+"""
+import sys
+import tempfile
+import traceback
+from pathlib import Path
+
+BACKEND = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(BACKEND))
+
+from app import config  # noqa: E402
+
+config.APP_DB_PATH = Path(tempfile.mkdtemp()) / "p5.db"
+config.OPENAI_API_KEY = ""
+config.CHAT_MODEL_PROVIDER = "offline"
+config.AVIATIONSTACK_API_KEY = ""
+config.KQ_BOOKING_API_URL = ""
+config.ADMIN_USERNAME = "admin"
+config.ADMIN_PASSWORD_HASH = ""
+config.ADMIN_PASSWORD = "first-admin-password"
+
+from fastapi.testclient import TestClient  # noqa: E402
+
+from app import agent, auth, daraja, database, ratelimit, staff  # noqa: E402
+from app.main import app  # noqa: E402
+
+database.init_db()
+daraja.is_configured = lambda: True
+daraja.initiate_stk_push = lambda phone_number, amount, reference, description: {
+    "source": "daraja_sandbox", "success": True, "amount": 1, "checkout_request_id": f"ws_CO_{reference}",
+    "phone_number": phone_number, "reference": reference, "message": "accepted"}
+daraja.query_stk_status = lambda checkout_id: {"status": None, "detail": "pending"}
+
+
+def signed_in(username, password):
+    c = TestClient(app)
+    r = c.post("/api/admin/login", json={"username": username, "password": password})
+    assert r.status_code == 200, r.text
+    return c, r.json()
+
+
+ADMIN_ONLY = ["/api/admin/audit", "/api/admin/privacy", "/api/admin/staff"]
+AGENT_ROUTES = ["/api/admin/transactions", "/api/admin/handovers", "/api/admin/requests"]
+
+
+# ------------------------------------------------------------------ staff accounts
+
+def test_first_admin_comes_from_the_environment():
+    admin, who = signed_in("admin", "first-admin-password")
+    assert who["role"] == "admin" and "staff" in who["panels"] and not who["must_change_password"]
+    for path in ADMIN_ONLY + AGENT_ROUTES + ["/api/admin/overview"]:
+        assert admin.get(path).status_code == 200, path
+    assert TestClient(app).post("/api/admin/login", json={"username": "admin", "password": "wrong"}
+                                ).status_code == 401
+
+
+def test_new_account_must_change_its_one_time_password():
+    admin, _ = signed_in("admin", "first-admin-password")
+    created = admin.post("/api/admin/staff", json={"username": "wanjiku", "display_name": "Wanjiku M.",
+                                                   "role": "agent"}).json()
+    otp = created["one_time_password"]
+    assert created["must_change_password"] and "password_hash" not in created
+    listed = admin.get("/api/admin/staff").json()["staff"]
+    assert all("password_hash" not in s for s in listed) and all(otp not in str(s) for s in listed)
+
+    agent_c, who = signed_in("wanjiku", otp)
+    assert who["must_change_password"]
+    assert agent_c.get("/api/admin/requests").status_code == 403, "nothing else until it is changed"
+    short = agent_c.post("/api/admin/password", json={"current_password": otp, "new_password": "short"})
+    assert short.status_code == 400
+    ok = agent_c.post("/api/admin/password", json={"current_password": otp,
+                                                   "new_password": "wanjiku-own-pass"})
+    assert ok.status_code == 200 and not ok.json()["must_change_password"]
+    assert agent_c.get("/api/admin/requests").status_code == 200
+
+
+def test_roles_limit_what_each_person_can_reach():
+    admin, _ = signed_in("admin", "first-admin-password")
+    otp = admin.post("/api/admin/staff", json={"username": "otieno", "role": "analyst"}).json()["one_time_password"]
+    analyst, _ = signed_in("otieno", otp)
+    analyst.post("/api/admin/password", json={"current_password": otp, "new_password": "otieno-own-pass"})
+    agent_c, who = signed_in("wanjiku", "wanjiku-own-pass")
+    assert who["panels"] == staff.PANELS["agent"]
+
+    for path in ADMIN_ONLY:
+        assert agent_c.get(path).status_code == 403, path
+        assert analyst.get(path).status_code == 403, path
+    for path in AGENT_ROUTES:
+        assert agent_c.get(path).status_code == 200, path
+        assert analyst.get(path).status_code == 403, "analysts see no passenger records: " + path
+    overview = analyst.get("/api/admin/overview")
+    assert overview.status_code == 200 and overview.json()["transactions"]["recent"] == []
+    assert agent_c.post("/api/admin/staff", json={"username": "x", "role": "admin"}).status_code == 403
+    assert agent_c.post("/api/admin/privacy/erase", json={"phone": "0704136123"}).status_code == 403
+
+
+def test_disabling_signs_out_at_once_and_is_audited():
+    admin, _ = signed_in("admin", "first-admin-password")
+    agent_c, _ = signed_in("wanjiku", "wanjiku-own-pass")
+    assert admin.post("/api/admin/staff/wanjiku/disable").status_code == 200
+    assert agent_c.get("/api/admin/requests").status_code == 401, "existing session ends"
+    assert TestClient(app).post("/api/admin/login", json={"username": "wanjiku",
+                                                          "password": "wanjiku-own-pass"}).status_code == 401
+    admin.post("/api/admin/staff/wanjiku/enable")
+    signed_in("wanjiku", "wanjiku-own-pass")
+    actions = [(e["username"], e["action"]) for e in admin.get("/api/admin/audit").json()["entries"]]
+    for expected in [("admin", "create_staff"), ("admin", "disable_staff"), ("admin", "enable_staff"),
+                     ("wanjiku", "change_own_password"), ("wanjiku", "login_success")]:
+        assert expected in actions, expected
+
+
+def test_role_change_applies_immediately():
+    admin, _ = signed_in("admin", "first-admin-password")
+    agent_c, _ = signed_in("wanjiku", "wanjiku-own-pass")
+    assert agent_c.get("/api/admin/audit").status_code == 403
+    admin.post("/api/admin/staff/wanjiku/role", json={"role": "admin"})
+    assert agent_c.get("/api/admin/audit").status_code == 200, "same session, new role"
+    admin.post("/api/admin/staff/wanjiku/role", json={"role": "agent"})
+    assert agent_c.get("/api/admin/audit").status_code == 403
+
+
+def test_there_is_always_an_administrator():
+    admin, _ = signed_in("admin", "first-admin-password")
+    assert admin.post("/api/admin/staff/admin/disable").status_code == 409, "not yourself"
+    assert admin.post("/api/admin/staff/admin/role", json={"role": "agent"}).status_code == 409, "last admin"
+    assert admin.post("/api/admin/staff", json={"username": "admin", "role": "agent"}).status_code == 409
+    assert admin.post("/api/admin/staff", json={"username": "bad name!", "role": "agent"}).status_code == 409
+    assert admin.post("/api/admin/staff", json={"username": "ok", "role": "pilot"}).status_code == 409
+
+
+def test_password_reset_revokes_sessions():
+    admin, _ = signed_in("admin", "first-admin-password")
+    agent_c, _ = signed_in("wanjiku", "wanjiku-own-pass")
+    otp = admin.post("/api/admin/staff/wanjiku/reset-password").json()["one_time_password"]
+    assert agent_c.get("/api/admin/requests").status_code == 401
+    _, who = signed_in("wanjiku", otp)
+    assert who["must_change_password"]
+
+
+def test_environment_account_password_is_managed_in_the_environment():
+    admin, _ = signed_in("admin", "first-admin-password")
+    r = admin.post("/api/admin/password", json={"current_password": "first-admin-password",
+                                                "new_password": "something-else-long"})
+    assert r.status_code == 400 and "environment" in r.json()["detail"]
+
+
+# ------------------------------------------------------------------ rate limits
+
+def test_chat_messages_are_limited_per_conversation():
+    ratelimit.reset()
+    c = TestClient(app)
+    c.post("/api/chat/session")
+    codes = [c.post("/api/chat", json={"message": "hello"}).status_code
+             for _ in range(config.RATE_LIMIT_CHAT_PER_MINUTE + 1)]
+    assert codes[:-1] == [200] * config.RATE_LIMIT_CHAT_PER_MINUTE and codes[-1] == 429, codes
+    limited = c.post("/api/chat", json={"message": "hello"})
+    assert int(limited.headers["Retry-After"]) > 0 and "Please wait" in limited.json()["detail"]
+    other = TestClient(app)
+    other.post("/api/chat/session")
+    assert other.post("/api/chat", json={"message": "hello"}).status_code == 200, "others unaffected"
+
+
+def test_new_sessions_are_limited_per_address():
+    ratelimit.reset()
+    codes = [TestClient(app).post("/api/chat/session").status_code
+             for _ in range(config.RATE_LIMIT_SESSIONS_PER_10_MIN_PER_IP + 1)]
+    assert codes[-1] == 429 and codes.count(200) == config.RATE_LIMIT_SESSIONS_PER_10_MIN_PER_IP
+    ratelimit.reset()
+
+
+def test_mpesa_prompts_are_limited_per_number():
+    ratelimit.reset()
+    limit = config.RATE_LIMIT_MPESA_PROMPTS_PER_10_MIN
+    trace = []
+    sent = [agent._execute_payment(f"cs_p5_{i}", "0704136123", 75, "fee", trace)
+            for i in range(limit + 1)]
+    assert all(r["success"] for r in sent[:limit])
+    blocked = sent[-1]
+    assert blocked.get("rate_limited") and "Nothing has been charged" in blocked["message"]
+    assert "card" in blocked["message"], "offers the other way to pay"
+    # The same number written another way is the same number.
+    assert agent._execute_payment("cs_p5_x", "+254 704 136 123", 75, "fee", [])["rate_limited"]
+    assert agent._execute_payment("cs_p5_y", "0712345678", 75, "fee", [])["success"], "other numbers fine"
+    ratelimit.reset()
+
+
+def test_forwarded_address_uses_only_trusted_hops():
+    class Req:
+        def __init__(self, xff, peer="10.0.0.1"):
+            self.headers = {"x-forwarded-for": xff}
+            self.client = type("C", (), {"host": peer})()
+    saved = config.TRUSTED_PROXY_HOPS
+    try:
+        config.TRUSTED_PROXY_HOPS = 0
+        assert ratelimit.client_ip(Req("1.2.3.4")) == "10.0.0.1", "header ignored when not behind a proxy"
+        config.TRUSTED_PROXY_HOPS = 1
+        assert ratelimit.client_ip(Req("6.6.6.6, 41.90.1.2")) == "41.90.1.2", "a forged left entry is ignored"
+        assert ratelimit.client_ip(Req("")) == "10.0.0.1"
+    finally:
+        config.TRUSTED_PROXY_HOPS = saved
+
+
+def test_limits_can_be_switched_off():
+    ratelimit.reset()
+    saved = config.RATE_LIMIT_ENABLED
+    config.RATE_LIMIT_ENABLED = False
+    try:
+        for _ in range(50):
+            ratelimit.hit("mpesa_phone", "254704136123")
+    finally:
+        config.RATE_LIMIT_ENABLED = saved
+    ratelimit.reset()
+
+
+def main() -> int:
+    tests = [(n, f) for n, f in globals().items() if n.startswith("test_") and callable(f)]
+    failures = 0
+    for name, fn in tests:
+        try:
+            fn()
+            print(f"  PASS  {name}")
+        except Exception:
+            failures += 1
+            print(f"  FAIL  {name}")
+            traceback.print_exc()
+    print(f"\n{len(tests) - failures}/{len(tests)} passed")
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -210,7 +210,10 @@ def resolve_staff_session(token: Optional[str]) -> Optional[Dict]:
 
 
 def client_ip(request: Request) -> str:
-    return (request.client.host if request.client else "unknown")
+    # One definition of "the caller's address" for sign-in lockout, the audit
+    # log and the rate limits, so a proxy cannot make them disagree.
+    from app import ratelimit
+    return ratelimit.client_ip(request)
 
 
 # --------------------------------------------------------------------------
@@ -228,15 +231,47 @@ def require_staff(kq_staff: Optional[str] = Cookie(default=None)) -> Dict:
 
     Returns the session record so handlers can attribute actions to a user.
     """
-    session = resolve_staff_session(kq_staff)
+    session = _with_account(resolve_staff_session(kq_staff))
     if not session:
         raise _UNAUTHENTICATED
     database.touch_admin_session(_digest(kq_staff))
     return session
 
 
+def _with_account(session: Optional[Dict]) -> Optional[Dict]:
+    """The session with its account's current role. The role is read on every
+    request, not stored in the session, so a change of role or a disabled
+    account takes effect immediately."""
+    if not session:
+        return None
+    from app import staff
+    account = staff.get(session["username"])
+    if not account or not account["active"]:
+        return None
+    return {**session, "username": account["username"], "role": account["role"],
+            "display_name": account.get("display_name"),
+            "must_change_password": bool(account["must_change_password"])}
+
+
+_FORBIDDEN = HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                           detail="Your role does not have access to this.")
+
+
+def require_role(*roles: str):
+    """Dependency for a route only some roles may use. A member of staff who
+    must still change their one-time password may do nothing else."""
+    def dependency(session: Dict = Depends(require_staff)) -> Dict:
+        if session.get("must_change_password"):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                                detail="Change your one-time password first.")
+        if session.get("role") not in roles:
+            raise _FORBIDDEN
+        return session
+    return dependency
+
+
 def optional_staff(kq_staff: Optional[str] = Cookie(default=None)) -> Optional[Dict]:
-    return resolve_staff_session(kq_staff)
+    return _with_account(resolve_staff_session(kq_staff))
 
 
 # --------------------------------------------------------------------------
