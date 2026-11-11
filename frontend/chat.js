@@ -6,6 +6,8 @@
   var API = "/api/chat";
 
   var chatWindow = document.getElementById("chat-window");
+  var chatScroll = document.getElementById("chat-scroll");
+  var welcome = document.getElementById("welcome");
   var form = document.getElementById("chat-form");
   var input = document.getElementById("chat-input");
   var sendBtn = document.getElementById("send-btn");
@@ -46,7 +48,13 @@
   }
 
   function scrollToBottom() {
-    chatWindow.scrollTop = chatWindow.scrollHeight;
+    chatScroll.scrollTop = chatScroll.scrollHeight;
+  }
+
+  /* The suggested questions are shown until the first message is sent, and
+     again after the conversation is deleted. */
+  function showWelcome(show) {
+    welcome.hidden = !show;
   }
 
   /* ----------------------------- rendering ----------------------------- */
@@ -405,14 +413,15 @@
     return bubble;
   }
 
-  function step(label, text, code) {
+  function step(label, text, code, kind) {
     var el = document.createElement("div");
-    el.className = "step";
+    el.className = "step" + (kind ? " step-" + kind : "");
     var l = document.createElement("span");
     l.className = "label";
     l.textContent = label;
     el.appendChild(l);
-    if (text) { el.appendChild(document.createTextNode(text)); }
+    // The trace is plain text: drop the answer's **bold** markers.
+    if (text) { el.appendChild(document.createTextNode(String(text).replace(/\*\*/g, ""))); }
     if (code) {
       var c = document.createElement("code");
       c.textContent = code;
@@ -440,11 +449,14 @@
         } else if (t.observation !== undefined) {
           detail = String(t.observation);
         }
-        traceBody.appendChild(step("Action - " + t.tool, t.input ? String(t.input) : "", detail.trim()));
+        var toolInput = t.input;
+        if (toolInput && typeof toolInput === "object") { toolInput = JSON.stringify(toolInput); }
+        traceBody.appendChild(step("Action · " + t.tool, toolInput ? String(toolInput) : "",
+                                   detail.trim(), "action"));
       } else if (t.step === "final_answer") {
-        traceBody.appendChild(step("Final answer - " + (t.model || "model"), t.content || ""));
+        traceBody.appendChild(step("Answer · " + (t.model || "model"), t.content || "", "", "final"));
       } else {
-        traceBody.appendChild(step(t.step || "step", t.content || ""));
+        traceBody.appendChild(step(t.step || "step", t.content || "", "", "thought"));
       }
     }
 
@@ -452,14 +464,14 @@
       traceBody.appendChild(step(
         "Sentiment model",
         data.sentiment.label + " (confidence " + data.sentiment.confidence +
-        ", frustration " + data.sentiment.frustration_score + ")"
+        ", frustration " + data.sentiment.frustration_score + ")", "", "metrics"
       ));
     }
 
     var m = data.rag_metrics || {};
     if (m.context_relevance !== undefined) {
       var wrap = document.createElement("div");
-      wrap.className = "step";
+      wrap.className = "step step-metrics";
       var lab = document.createElement("span");
       lab.className = "label";
       lab.textContent = "RAG-Triad evaluation";
@@ -562,6 +574,9 @@
     busy = state;
     sendBtn.disabled = state;
     input.disabled = state;
+    Array.prototype.forEach.call(chips.querySelectorAll("button"), function (b) {
+      b.disabled = state;
+    });
     chatWindow.setAttribute("aria-busy", state ? "true" : "false");
     if (!state) { input.focus(); }
   }
@@ -570,6 +585,7 @@
     var message = (text !== undefined ? text : input.value).trim();
     if (!message || busy) { return; }
 
+    showWelcome(false);
     addBubble("user", message);
     input.value = "";
     setBusy(true);
@@ -609,7 +625,9 @@
         }
 
         renderTrace(data);
-        setStatus(true, data.model_used || "Aviation Support Assistant");
+        // The model that answered is shown in the reasoning panel; the header
+        // only says whether the service is reachable.
+        setStatus(true, "Policy assistant");
         setBusy(false);
       })
       .catch(function (err) {
@@ -669,7 +687,8 @@
         sessionId = d.session_id;
         lastAgentMessageId = 0;
         chatWindow.innerHTML = "";
-        traceBody.innerHTML = "";
+        traceBody.innerHTML = '<p class="trace-empty">Ask a question to see each step.</p>';
+        showWelcome(true);
         addBubble("bot",
           "Your conversation has been deleted. Any payment record keeps its amount and " +
           "reference, as the airline must, but no longer holds your phone number.\n\n" +
@@ -686,10 +705,12 @@
   /* ------------------------------ greeting ------------------------------ */
 
   addBubble("bot",
-    "Hello, and welcome to KQ-Propel.\n\n" +
-    "I can help you with baggage allowances and overweight fees, flight status, " +
-    "delay and cancellation entitlements, refunds, check-in times, and M-Pesa payments.\n\n" +
+    "Hello, I'm KQ-Propel. I answer questions about baggage, check-in, delays and refunds " +
+    "from the airline's published policies, and I can look up a booking, check a flight " +
+    "or take payment for a name correction.\n\n" +
     "What would you like to know?");
+  // Start at the top, so the greeting and the suggestions are read in order.
+  chatScroll.scrollTop = 0;
 
   /* The composer stays disabled until the server has issued a session, so a
      message can never be sent without one. */

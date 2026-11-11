@@ -3,10 +3,13 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<meta name="theme-color" content="#c8102e" />
-<meta name="description" content="KQ-Propel aviation support assistant" />
-<title>KQ-Propel | Aviation Support Assistant</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23c8102e'/><text x='16' y='23' font-size='15' font-family='Arial' font-weight='bold' fill='white' text-anchor='middle'>KQ</text></svg>" />
+<meta name="theme-color" content="#ffffff" />
+<meta name="description" content="KQ-Propel: a research prototype that answers airline policy questions from published policy, with citations." />
+<title>KQ-Propel | Policy assistant</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23c8102e'/><path transform='translate(4 4)' fill='white' d='M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z'/></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
 <link rel="stylesheet" href="/static/chat.css" />
 </head>
 <body>
@@ -15,41 +18,73 @@
 
 <div class="app">
 
-  <header class="chat-header">
+  <header class="topbar">
     <div class="brand">
-      <div class="logo" aria-hidden="true">KQ</div>
+      <span class="mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>
+      </span>
       <div class="brand-text">
         <h1>KQ-Propel</h1>
-        <p class="status"><span class="dot" id="status-dot"></span><span id="status-text">Aviation Support Assistant</span></p>
+        <p class="status"><span class="dot" id="status-dot" aria-hidden="true"></span><span id="status-text">Policy assistant</span></p>
       </div>
     </div>
-    <button id="trace-toggle" class="icon-btn" aria-label="Agent reasoning" title="Agent reasoning"
-            aria-controls="trace-panel" aria-expanded="false">
-      <span class="icon-bars" aria-hidden="true"><i></i><i></i><i></i></span>
-    </button>
+    <div class="topbar-actions">
+      <span class="proto-badge">Research prototype</span>
+      <button id="trace-toggle" class="ghost-btn" type="button" aria-label="Agent reasoning" aria-controls="trace-panel" aria-expanded="false">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 6h16M4 12h10M4 18h13"/></svg>
+        <span class="btn-label">Reasoning</span>
+      </button>
+    </div>
   </header>
 
   <main class="chat-main">
 
-    <section class="chat-column">
-      <div id="chat-window" class="chat-window" role="log" aria-live="polite" aria-label="Conversation"></div>
+    <section class="chat-column" aria-label="Chat">
+      <div class="chat-scroll" id="chat-scroll">
+        <div class="chat-inner">
+          <div id="chat-window" class="chat-window" role="log" aria-live="polite" aria-label="Conversation"></div>
+
+          <section id="welcome" class="welcome" aria-labelledby="welcome-title">
+            <h2 id="welcome-title" class="welcome-title">Try asking</h2>
+            <div class="suggestions" id="chips" role="group" aria-labelledby="welcome-title">
+              <button type="button" data-q="How many bags can I check in Economy to London?">
+                <span class="s-title">Checked baggage</span>
+                <span class="s-q">How many bags can I check in Economy to London?</span>
+              </button>
+              <button type="button" data-q="How much hand luggage can I take in Economy?">
+                <span class="s-title">Cabin baggage</span>
+                <span class="s-q">How much hand luggage can I take in Economy?</span>
+              </button>
+              <button type="button" data-q="My bag didn't arrive. What can I claim?">
+                <span class="s-title">Delayed bag</span>
+                <span class="s-q">My bag didn't arrive. What can I claim?</span>
+              </button>
+              <button type="button" data-q="When does check-in close for international flights?">
+                <span class="s-title">Check-in</span>
+                <span class="s-q">When does check-in close for international flights?</span>
+              </button>
+              <button type="button" data-q="What is the status of flight KQ100?">
+                <span class="s-title">Flight status</span>
+                <span class="s-q">What is the status of flight KQ100?</span>
+              </button>
+              <button type="button" data-q="I need to correct the name on my booking">
+                <span class="s-title">Name correction</span>
+                <span class="s-q">I need to correct the name on my booking</span>
+              </button>
+            </div>
+            <p class="welcome-note">Answers are quoted from Kenya Airways' published policies, with the section
+              they came from. This is a student research prototype, not a Kenya Airways service; bookings and
+              flights without a live source are demonstration data and are labelled as such.</p>
+          </section>
+        </div>
+      </div>
 
       <div class="composer">
-        <div class="chips" id="chips" role="group" aria-label="Suggested questions">
-          <button type="button" data-q="What is the baggage allowance for economy class?">Baggage allowance</button>
-          <button type="button" data-q="My bag is 5kg over the limit, what is the fee?">Overweight fee</button>
-          <button type="button" data-q="What is the status of flight KQ100?">Flight status</button>
-          <button type="button" data-q="My flight was delayed 4 hours, what am I entitled to?">Delay compensation</button>
-          <button type="button" data-q="How long does a refund take?">Refunds</button>
-          <button type="button" data-q="What time does check-in close for international flights?">Check-in times</button>
-          <button type="button" data-q="I want to pay my overweight baggage fee by M-Pesa">Pay by M-Pesa</button>
-        </div>
-
-        <form class="input-row" id="chat-form" autocomplete="off">
-          <input id="chat-input" type="text" placeholder="Ask about baggage, delays, refunds or check-in..."
+        <form class="input-shell" id="chat-form" autocomplete="off">
+          <input id="chat-input" type="text" placeholder="Ask about baggage, check-in, refunds or your booking"
                  aria-label="Type your question" autocomplete="off" />
           <button type="submit" id="send-btn" class="send-btn" aria-label="Send message">
-            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M3.4 20.4 21 12 3.4 3.6 3.4 10.2 15.6 12 3.4 13.8z"/></svg>
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M12 19V5M5 12l7-7 7 7"/></svg>
           </button>
         </form>
         <p class="privacy-line">
@@ -62,11 +97,16 @@
 
     <aside class="trace-panel" id="trace-panel" aria-label="Agent reasoning" tabindex="-1">
       <div class="trace-head">
-        <h2>Agent Reasoning</h2>
-        <button id="trace-close" class="icon-btn close" aria-label="Close reasoning panel">&times;</button>
+        <div>
+          <h2>Agent reasoning</h2>
+          <p class="trace-sub">How the latest answer was reached</p>
+        </div>
+        <button id="trace-close" class="icon-btn close" type="button" aria-label="Close reasoning panel">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
       </div>
-      <div id="trace-body" class="trace-body">
-        <p class="trace-empty">Ask a question to see how the agent reasons: the policy sections it retrieves, the tools it calls, and how well-grounded its answer is.</p>
+      <div id="trace-body" class="trace-body" tabindex="0" role="region" aria-label="Reasoning steps">
+        <p class="trace-empty">Ask a question to see each step: the policy sections retrieved, the tools called, and how well the answer is grounded in the sources.</p>
       </div>
     </aside>
 

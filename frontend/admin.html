@@ -3,9 +3,12 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<meta name="theme-color" content="#c8102e" />
-<title>KQ-Propel | Administrative Dashboard</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23c8102e'/><text x='16' y='23' font-size='15' font-family='Arial' font-weight='bold' fill='white' text-anchor='middle'>KQ</text></svg>" />
+<meta name="theme-color" content="#ffffff" />
+<title>KQ-Propel | Staff dashboard</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23c8102e'/><path transform='translate(4 4)' fill='white' d='M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z'/></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
 <link rel="stylesheet" href="/static/admin.css" />
 </head>
 <body>
@@ -17,10 +20,12 @@
      an authenticated session. -->
 <main id="login-screen" class="login-screen" hidden>
   <form id="login-form" class="login-card" autocomplete="on">
-    <div class="logo" aria-hidden="true">KQ</div>
+    <div class="login-brand">
+      <span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg></span>
+      <span class="login-product">KQ-Propel</span>
+    </div>
     <h1>Staff sign-in</h1>
-    <p class="login-sub">The administrative dashboard contains passenger payment
-      records. Authorised personnel only.</p>
+    <p class="login-sub">The dashboard holds passenger payment records. Authorised staff only.</p>
 
     <label for="login-user">Username</label>
     <input id="login-user" name="username" type="text" autocomplete="username"
@@ -32,13 +37,17 @@
 
     <button id="login-submit" class="btn" type="submit">Sign in</button>
     <p id="login-error" class="login-error" role="alert" aria-live="assertive"></p>
+    <p class="login-foot">Research prototype &middot; not a Kenya Airways system</p>
   </form>
 </main>
 
 <!-- A new account's one-time password must be replaced before anything else. -->
 <main id="password-screen" class="login-screen" hidden>
   <form id="password-form" class="login-card">
-    <div class="logo" aria-hidden="true">KQ</div>
+    <div class="login-brand">
+      <span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg></span>
+      <span class="login-product">KQ-Propel</span>
+    </div>
     <h1 id="password-title">Choose your password</h1>
     <p class="login-sub" id="password-sub">You signed in with a one-time password. Choose your own
       to continue (at least 10 characters).</p>
@@ -64,19 +73,35 @@
 
 <header class="admin-header">
   <div class="brand">
-    <div class="logo" aria-hidden="true">KQ</div>
+    <span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg></span>
     <div>
-      <h1>KQ-Propel Administrative Dashboard</h1>
-      <p class="sub">Agentic RAG monitoring, hallucination telemetry &amp; M-Pesa audit</p>
+      <h1>KQ-Propel <span class="h1-sub">Staff dashboard</span></h1>
+      <p class="sub">Answer quality, passenger requests and payments</p>
     </div>
   </div>
   <div class="header-actions">
     <span id="who" class="who"></span>
     <button id="change-password" class="btn btn-ghost" type="button">Change password</button>
-    <button id="refresh" class="btn">Refresh</button>
-    <button id="logout" class="btn btn-ghost">Sign out</button>
+    <button id="refresh" class="btn btn-ghost" type="button">Refresh</button>
+    <button id="logout" class="btn btn-ghost" type="button">Sign out</button>
   </div>
 </header>
+
+<div class="layout">
+
+<nav class="side-nav" aria-label="Dashboard sections">
+  <ul>
+    <li data-panel="metrics"><a href="#kpis">Overview</a></li>
+    <li data-panel="requests"><a href="#requests-panel">Name corrections</a></li>
+    <li data-panel="handovers"><a href="#handover-panel">Handovers</a></li>
+    <li data-panel="transactions"><a href="#transactions-panel">Payments</a></li>
+    <li data-panel="comparison"><a href="#comparison-panel">Model comparison</a></li>
+    <li data-panel="audit"><a href="#audit-panel">Access log</a></li>
+    <li data-panel="privacy"><a href="#privacy-panel">Data protection</a></li>
+    <li data-panel="staff"><a href="#staff-panel">Staff accounts</a></li>
+  </ul>
+  <p class="nav-note">Research prototype. Data on the hosted demo is reset on every restart.</p>
+</nav>
 
 <main class="wrap" id="main" tabindex="-1">
 
@@ -85,19 +110,19 @@
   <section class="grid" data-panel="metrics" aria-label="Quality metrics">
 
     <article class="panel">
-      <h2>RAG-Triad Evaluation</h2>
+      <h2>RAG Triad</h2>
       <p class="hint">Rolling averages across logged conversations.</p>
       <div id="triad" class="meters"></div>
     </article>
 
     <article class="panel">
-      <h2>Passenger Sentiment Distribution</h2>
+      <h2>Passenger sentiment</h2>
       <p class="hint">Output of the self-developed frustration classifier.</p>
       <div id="sentiment-dist" class="meters"></div>
     </article>
 
     <article class="panel">
-      <h2>Sentiment Classifier Performance</h2>
+      <h2>Sentiment classifier</h2>
       <p class="hint">Two figures are reported: a held-out split of the training
         file, and an independently worded challenge set the model never sees.
         The gap between them is what the headline accuracy alone hides.</p>
@@ -105,7 +130,7 @@
     </article>
 
     <article class="panel">
-      <h2>Knowledge Base</h2>
+      <h2>Knowledge base</h2>
       <p class="hint">Vector store indexing status.</p>
       <div id="vectorstore" class="kv"></div>
     </article>
@@ -115,13 +140,13 @@
   <section class="panel" id="requests-panel" data-panel="requests">
     <div class="panel-head">
       <div>
-        <h2>Name Correction Requests</h2>
+        <h2>Name correction requests</h2>
         <p class="hint">Paid requests from passengers. Update the booking in the reservation system,
           then mark the request done; the passenger sees the new status in the chat.</p>
       </div>
       <label class="check"><input type="checkbox" id="requests-closed" /> Show closed</label>
     </div>
-    <div class="table-scroll">
+    <div class="table-scroll" tabindex="0" role="region" aria-label="Table (scrolls sideways on small screens)">
       <table id="requests-table">
         <thead>
           <tr><th>Request</th><th>Booking</th><th>Change</th><th>Fee</th><th>Payment</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr>
@@ -135,13 +160,13 @@
   <section class="panel" id="handover-panel" data-panel="handovers">
     <div class="panel-head">
       <div>
-        <h2>Passengers Waiting for a Person</h2>
+        <h2>Passengers waiting for a person</h2>
         <p class="hint" id="handover-hint">Cases opened when a passenger asks for a member of
           staff. Your reply appears in their chat window.</p>
       </div>
       <label class="check"><input type="checkbox" id="handover-closed" /> Show closed</label>
     </div>
-    <div class="table-scroll">
+    <div class="table-scroll" tabindex="0" role="region" aria-label="Table (scrolls sideways on small screens)">
       <table id="handover-table">
         <thead>
           <tr><th>Case</th><th>Opened</th><th>Status</th><th>Frustration</th><th>Latest passenger message</th><th><span class="sr-only">Actions</span></th></tr>
@@ -168,10 +193,10 @@
     </div>
   </section>
 
-  <section class="panel" data-panel="transactions">
-    <h2>M-Pesa Transaction Audit Trail</h2>
-    <p class="hint">Every payment the agent initiated, with its policy-grounded amount.</p>
-    <div class="table-scroll">
+  <section class="panel" id="transactions-panel" data-panel="transactions">
+    <h2>Payments</h2>
+    <p class="hint">Every payment the agent started, M-Pesa and card, with its policy-grounded amount.</p>
+    <div class="table-scroll" tabindex="0" role="region" aria-label="Table (scrolls sideways on small screens)">
       <table id="tx-table">
         <thead>
           <tr><th>Time</th><th>Session</th><th>Method</th><th>Payer</th><th>Amount</th><th>Status</th><th>Reference</th></tr>
@@ -181,18 +206,18 @@
     </div>
   </section>
 
-  <section class="panel" data-panel="comparison">
+  <section class="panel" id="comparison-panel" data-panel="comparison">
     <div class="panel-head">
       <div>
-        <h2 id="comparison-title">Dual-Configuration Comparison</h2>
+        <h2 id="comparison-title">Dual-configuration comparison</h2>
         <p class="hint" id="comparison-subtitle">Identical documents, chunking, embeddings, retrieval and prompts &mdash; only the generator varies.</p>
       </div>
-      <button id="run-comparison" class="btn">Run comparison</button>
+      <button id="run-comparison" class="btn" type="button">Run comparison</button>
     </div>
     <div id="comparison-caveat" class="caveat" style="display:none"></div>
     <div id="comparison-status" class="status-line"></div>
     <div id="comparison-summary" class="meters"></div>
-    <div class="table-scroll">
+    <div class="table-scroll" tabindex="0" role="region" aria-label="Table (scrolls sideways on small screens)">
       <table id="cmp-table">
         <thead>
           <tr><th>Query</th><th>Model</th><th>Context rel.</th><th>Groundedness</th><th>Answer rel.</th><th>Latency (s)</th></tr>
@@ -201,11 +226,12 @@
       </table>
     </div>
   </section>
-  <section class="panel" data-panel="audit">
-    <h2>Administrative Access Log</h2>
+
+  <section class="panel" id="audit-panel" data-panel="audit">
+    <h2>Access log</h2>
     <p class="hint">Staff sign-ins and reads of passenger data. Recorded because
-      the ledger below contains personal information.</p>
-    <div class="table-scroll">
+      the payment ledger contains personal information.</p>
+    <div class="table-scroll" tabindex="0" role="region" aria-label="Table (scrolls sideways on small screens)">
       <table id="audit-table">
         <thead>
           <tr><th>Time</th><th>User</th><th>Action</th><th>Detail</th><th>IP</th></tr>
@@ -216,25 +242,25 @@
   </section>
 
   <section class="panel" id="privacy-panel" data-panel="privacy">
-    <h2>Data Protection</h2>
+    <h2>Data protection</h2>
     <p class="hint" id="privacy-retention">Retention settings are loading.</p>
     <form id="erase-form" class="erase-form">
       <p class="hint">Erase a passenger's data when they ask by phone, email or at a desk. Find them by a
         handover case reference or the phone number they used; check the count before erasing.</p>
       <div class="erase-fields">
         <label>Case reference <input id="erase-case" type="text" maxlength="20" placeholder="H-00012" /></label>
-        <label>Phone number <input id="erase-phone" type="tel" maxlength="20" placeholder="0712 345 678" /></label>
+        <label>Phone number <input id="erase-phone" type="tel" maxlength="20" placeholder="0708 374 149" /></label>
       </div>
       <div class="handover-actions">
         <button id="erase-find" class="btn btn-quiet" type="submit">Find</button>
-        <button id="erase-confirm" class="btn" type="button" disabled>Erase</button>
+        <button id="erase-confirm" class="btn btn-danger" type="button" disabled>Erase</button>
       </div>
       <p id="erase-status" class="status-line" role="status"></p>
     </form>
   </section>
 
   <section class="panel" id="staff-panel" data-panel="staff">
-    <h2>Staff Accounts</h2>
+    <h2>Staff accounts</h2>
     <p class="hint">Each person signs in as themselves, so the access log shows who did what. Roles:
       <strong>Administrator</strong> (everything), <strong>Customer service agent</strong> (passengers
       waiting, name corrections, payments) and <strong>Analyst</strong> (quality metrics only; no passenger
@@ -257,7 +283,7 @@
       </div>
     </form>
     <div id="staff-otp" class="otp-box" role="status" hidden></div>
-    <div class="table-scroll">
+    <div class="table-scroll" tabindex="0" role="region" aria-label="Table (scrolls sideways on small screens)">
       <table id="staff-table">
         <thead>
           <tr><th>Username</th><th>Name</th><th>Role</th><th>Status</th><th>Last sign-in</th><th><span class="sr-only">Actions</span></th></tr>
@@ -269,6 +295,8 @@
   </section>
 
 </main>
+
+</div>
 
 </div>
 
