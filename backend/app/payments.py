@@ -140,7 +140,12 @@ def transition(row_id: int, new_status: str, *, detail: Optional[str] = None,
             "WHERE id = ? AND status = ?",
             (new_status, detail, receipt, _now().isoformat(), row_id, PENDING))
         changed = cur.rowcount == 1
-        return changed, _row(conn, "id = ?", (row_id,))
+        row = _row(conn, "id = ?", (row_id,))
+    if changed and new_status == PAID:
+        # A paid fee for a service request (a name correction) submits it to staff.
+        from app import service_requests
+        service_requests.on_payment_paid(row)
+    return changed, row
 
 
 def find_by_checkout(method: str, checkout_id: str) -> Optional[Dict]:

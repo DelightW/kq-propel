@@ -127,6 +127,29 @@ CREATE TABLE IF NOT EXISTS conversation_context (
 
 -- Booking lookups per session, so references cannot be guessed by trial and
 -- error (app/booking.py). Holds no reference or name.
+-- Changes a passenger asks for and staff carry out (app/service_requests.py).
+-- Holds the old and new name, because that is the change being requested.
+CREATE TABLE IF NOT EXISTS service_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    kind TEXT NOT NULL,                 -- name_correction
+    booking_reference TEXT,
+    scope TEXT,                         -- domestic | international
+    current_name TEXT,
+    new_name TEXT,
+    characters_changed INTEGER,
+    change_kind TEXT,                   -- correction | change
+    fee_amount REAL,
+    fee_currency TEXT,
+    fee_source TEXT,
+    quote_id TEXT,
+    payment_reference TEXT,
+    status TEXT NOT NULL,
+    completed_by TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS booking_lookups (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id TEXT NOT NULL,

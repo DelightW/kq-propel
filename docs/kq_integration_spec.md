@@ -21,6 +21,7 @@ POST is used so that the surname never appears in a URL or access log.
 ```json
 {
   "pnr": "AB12CD",
+  "passengers": [{ "givenName": "Jane", "surname": "Kamau" }],
   "segments": [{
     "flightNumber": "KQ412",
     "origin":      { "iata": "NBO", "city": "Nairobi" },
@@ -37,8 +38,8 @@ POST is used so that the surname never appears in a URL or access log.
 
 **What the assistant does with it.**
 
-- Passenger names are not needed and, if present in the response, are discarded.
-- Only the segments are kept, for 30 minutes of conversation memory. They are deleted with the conversation.
+- Passenger names (`passengers[].givenName`, `passengers[].surname`) are needed for name corrections. They are kept with the segments for 30 minutes of conversation memory, never written to the staff-visible trace, and deleted with the conversation.
+- A paid name correction becomes a request on the staff dashboard; staff update the booking in the reservation system and mark it done. A future `POST /orders/{pnr}/name-correction` endpoint could replace that manual step.
 - After five failed lookups within an hour, a session is refused further lookups.
 - Errors and timeouts (8 seconds) are reported to the passenger as "booking system unavailable". The assistant never guesses a booking.
 

@@ -17,7 +17,8 @@ KQ-Propel is a chat assistant that answers passenger questions from Kenya Airway
 | Fee offer in progress | `payment_state` table | Completing a payment the passenger accepted | Derived from policy |
 | M-Pesa phone number, amount, status and reference | `transactions` table | Sending the payment request; financial record | Passenger, payment provider |
 | Handover case, reason, frustration score | `handovers` table | Connecting the passenger with staff | Passenger |
-| Booked trip (flights, route, cabin, fare, baggage) for 30 minutes; never names | `conversation_context` table | Answering for the passenger's own trip | Kenya Airways booking system |
+| Booked trip (flights, route, cabin, fare, baggage) and the passenger names on the booking, for 30 minutes | `conversation_context` table | Answering for the passenger's own trip; name corrections | Kenya Airways booking system |
+| Name correction requests: booking reference, current and new name, fee, payment reference, status | `service_requests` table | Carrying out the correction the passenger paid for | Passenger, booking system |
 | Count of booking lookups per session | `booking_lookups` table | Stopping booking references being guessed | Derived |
 | Question text with answer-quality scores | `rag_evaluations` table | Monitoring answer quality | Passenger |
 | Staff username, actions and IP address | `admin_audit`, `admin_sessions` tables | Accountability for access to passenger data | Staff |

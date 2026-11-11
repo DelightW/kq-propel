@@ -15,7 +15,8 @@ import json
 from typing import Dict, List, Optional, Tuple
 
 from app import (aviationstack, booking, composer, config, daraja, database, evaluation,
-                  handover, kq_flights, memory, payments, paypal, retrieval, sentiment)
+                  handover, kq_flights, memory, payments, paypal, retrieval, sentiment,
+                  service_requests)
 from app.llm import generate_answer
 from app.vectorstore import get_vector_store
 
@@ -714,6 +715,144 @@ def _escalation_offer() -> str:
             f"{config.HANDOVER_FALLBACK_CONTACT}.")
 
 
+def _start_name_request(session_id: str, trace: List[Dict]) -> Optional[str]:
+    """Starts (or continues) a name correction for the booking in memory.
+    Returns the question to ask, or None when there is no booking yet."""
+    trip = booking.remembered_booking(session_id)
+    if not trip.get("segments"):
+        return None
+    names = trip.get("passengers") or []
+    segments = trip["segments"]
+    if not names:
+        service_requests.start(session_id, service_requests.AWAITING_BOOKING)
+        return ("To correct a name I need to look the booking up again. Please send the booking "
+                "reference and surname, for example \"booking KQDLW1, surname Wangui\".")
+    # The policy: name changes apply to Kenya Airways operated flights only.
+    if not all(str(s.get("flight_number") or "").startswith("KQ") for s in segments):
+        return ("Name changes apply to Kenya Airways operated flights only, and this booking includes "
+                "a flight operated by another airline, so I can't take this request here. Please "
+                "contact Kenya Airways customer service.")
+    request = service_requests.start(session_id, service_requests.AWAITING_NEW_NAME,
+                                     booking_reference=trip.get("reference"), current_name=names[0],
+                                     scope=booking.scope(segments[0]))
+    trace.append({"step": "thought",
+                  "content": f"Name correction {service_requests.reference(request)} started for booking "
+                             f"{trip.get('reference')}; asking for the new name."})
+    return (f"Your booking {trip.get('reference')} shows the passenger as **{names[0]}**. "
+            f"What should the name be? You can send the full name, or just the corrected surname.")
+
+
+def _name_request_summary(request: Dict) -> str:
+    what = ("a correction of up to three characters" if request["change_kind"] == "correction"
+            else "a full name change")
+    return (f"Here is the change I'll submit:\n\n"
+            f"- Booking: **{request['booking_reference']}** ({request['scope']})\n"
+            f"- Current name: **{request['current_name']}**\n"
+            f"- New name: **{request['new_name']}**\n"
+            f"- {request['characters_changed']} character(s) changed, which counts as {what}\n"
+            f"- Fee: **{request['fee_currency']} {request['fee_amount']:,.2f}** "
+            f"({request['fee_source']})\n\n"
+            f"Shall I go ahead? Say **yes** to pay and submit it, or **no** to cancel.")
+
+
+def _service_request_turn(session_id: str, message: str, trace: List[Dict],
+                          sentiment_result: Dict) -> Optional[Dict]:
+    """A name correction in progress, a new one, or a question about one.
+    None when the message is none of these."""
+    request = service_requests.in_dialog(session_id)
+
+    if request is None:
+        if service_requests.STATUS_RE.search(message):
+            last = service_requests.latest(session_id)
+            if last:
+                return _finalize_direct(session_id, message, _request_status_reply(last), trace,
+                                        sentiment_result)
+        if not service_requests.START_RE.search(message) or service_requests.INFO_RE.search(message):
+            return None
+        question = _start_name_request(session_id, trace)
+        if question is None:
+            service_requests.start(session_id, service_requests.AWAITING_BOOKING)
+            question = ("I can help you correct the name on your booking. First, please send your "
+                        "booking reference and the surname on the booking, for example "
+                        "\"booking KQDLW1, surname Wangui\".")
+        return _finalize_direct(session_id, message, _apply_empathy(question, sentiment_result),
+                                trace, sentiment_result)
+
+    if service_requests.NO_RE.search(message):
+        service_requests.update(request["id"], status=service_requests.CANCELLED)
+        return _finalize_direct(session_id, message,
+                                "No problem - I've cancelled the name correction. Nothing has been charged.",
+                                trace, sentiment_result)
+
+    if request["status"] == service_requests.AWAITING_BOOKING:
+        return None            # the booking lookup (or another question) handles this message
+
+    if request["status"] == service_requests.AWAITING_NEW_NAME:
+        new_name = service_requests.parse_new_name(message, request["current_name"])
+        if new_name is None:
+            return _finalize_direct(session_id, message,
+                                    f"Please send the name as it should appear on the booking, for "
+                                    f"example \"{request['current_name']}\" with the spelling corrected, "
+                                    f"or say \"cancel\".", trace, sentiment_result)
+        if new_name.upper() == request["current_name"].upper():
+            return _finalize_direct(session_id, message,
+                                    "That is the same as the name already on the booking. What should "
+                                    "it be changed to?", trace, sentiment_result)
+        chunks = get_vector_store().similarity_search("name correction full name change fee", k=4)
+        fees = service_requests.name_fees(chunks)
+        trace.append({"step": "action", "tool": "retrieve_policy_documents",
+                      "input": "name correction full name change fee",
+                      "observation": [{"source": c.get("source"), "section": c.get("section")} for c in chunks]})
+        if fees is None:
+            return _finalize_direct(session_id, message,
+                                    "I couldn't find the name-correction fees in the policy documents, so I "
+                                    "can't price this safely. Please contact Kenya Airways customer service.",
+                                    trace, sentiment_result)
+        changed = service_requests.characters_changed(request["current_name"], new_name)
+        quote = service_requests.price(fees, request["scope"] or "international", changed)
+        request = service_requests.update(
+            request["id"], new_name=new_name, characters_changed=changed, change_kind=quote["kind"],
+            fee_amount=quote["amount"], fee_currency=quote["currency"], fee_source=fees["source"],
+            status=service_requests.AWAITING_CONFIRMATION)
+        trace.append({"step": "thought",
+                      "content": f"{changed} character(s) differ, so this is a name {quote['kind']} on a "
+                                 f"{request['scope']} booking: {quote['currency']} {quote['amount']:,.2f} "
+                                 f"from {fees['source']}."})
+        return _finalize_direct(session_id, message, _name_request_summary(request), trace,
+                                sentiment_result)
+
+    # Awaiting confirmation.
+    if service_requests.YES_RE.search(message):
+        description = service_requests.description(request)
+        quote_id = payments.new_quote(session_id, request["fee_amount"], request["fee_currency"],
+                                      description, stage="awaiting_method")
+        service_requests.update(request["id"], quote_id=quote_id,
+                                status=service_requests.AWAITING_PAYMENT)
+        trace.append({"step": "thought",
+                      "content": f"Passenger confirmed {service_requests.reference(request)}; quoting "
+                                 f"{request['fee_currency']} {request['fee_amount']:,.2f} for payment."})
+        reply = (f"Thank you. Request **{service_requests.reference(request)}** will be submitted to our "
+                 f"team as soon as the fee is paid.\n\n"
+                 + _ask_for_method_message(request["fee_amount"], request["fee_currency"]))
+        return _finalize_direct(session_id, message, reply, trace, sentiment_result)
+    return _finalize_direct(session_id, message,
+                            "Please say **yes** to pay and submit the name correction, or **no** to cancel.",
+                            trace, sentiment_result)
+
+
+def _request_status_reply(request: Dict) -> str:
+    ref = service_requests.reference(request)
+    change = f"{request.get('current_name')} to {request.get('new_name')}"
+    return {
+        service_requests.SUBMITTED: (f"Request {ref} ({change}) is paid and with our team, who will update "
+                                     f"the booking. Payment reference {request.get('payment_reference')}."),
+        service_requests.COMPLETED: f"Request {ref} is complete: the booking now shows {request.get('new_name')}.",
+        service_requests.AWAITING_PAYMENT: (f"Request {ref} ({change}) is waiting for the fee to be paid. "
+                                            f"Once the payment is confirmed it goes to our team."),
+        service_requests.CANCELLED: f"Request {ref} was cancelled and nothing was charged for it.",
+    }.get(request["status"], f"Request {ref} is not finished yet.")
+
+
 def _booking_turn(session_id: str, message: str, trace: List[Dict],
                   sentiment_result: Dict) -> Optional[Dict]:
     """Looks up a booking when the message gives a booking reference. None
@@ -731,15 +870,24 @@ def _booking_turn(session_id: str, message: str, trace: List[Dict],
             trace, sentiment_result)
     result = booking.lookup(session_id, reference, surname)
     # The surname is not copied into the trace, which staff can see.
+    # Passenger names are kept out of the trace, which staff can see.
     trace.append({"step": "action", "tool": "lookup_booking", "input": reference,
                   "observation": {"source": result["source"], "available": result["available"],
                                   "reason": result["reason"], "segments": result["segments"]}})
+    reply = booking.describe(result, reference)
     if result["available"]:
         first = result["segments"][0]
-        memory.remember(session_id, booking=json.dumps(result["segments"]),
+        memory.remember(session_id, booking=json.dumps({"reference": reference,
+                                                         "segments": result["segments"],
+                                                         "passengers": result["passengers"]}),
                         flight_number=first.get("flight_number"))
-    return _finalize_direct(session_id, message,
-                            _apply_empathy(booking.describe(result, reference), sentiment_result),
+        # A name correction that was waiting for the booking carries on.
+        waiting = service_requests.in_dialog(session_id)
+        if waiting and waiting["status"] == service_requests.AWAITING_BOOKING:
+            follow_up = _start_name_request(session_id, trace)
+            if follow_up:
+                reply = reply.rsplit("\n\nYou can now ask", 1)[0] + "\n\n" + follow_up
+    return _finalize_direct(session_id, message, _apply_empathy(reply, sentiment_result),
                             trace, sentiment_result)
 
 
@@ -887,6 +1035,11 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
     handed_over = _handover_turn(session_id, message, trace, sentiment_result)
     if handed_over:
         return handed_over
+
+    # --- A name correction in progress, or a new one ---
+    requested = _service_request_turn(session_id, message, trace, sentiment_result)
+    if requested:
+        return requested
 
     # --- Thought 2b: continue an in-progress payment conversation ---
     pending = database.get_pending_payment(session_id)

@@ -111,7 +111,10 @@ def test_live_booking_adapter():
         assert found["available"] and found["is_live"] and found["source"] == booking.SOURCE_LIVE
         seg = found["segments"][0]
         assert seg["flight_number"] == "KQ412" and seg["checked_baggage"] == {"pieces": 1, "weight_kg": 23}
-        assert "Kamau" not in json.dumps(found) and "Jane" not in json.dumps(found), "names are not kept"
+        # Names are kept (for a name correction) but only as the passenger list,
+        # never inside the trip segments.
+        assert found["passengers"] == ["Jane Kamau"], found["passengers"]
+        assert "Kamau" not in json.dumps(found["segments"]), "names stay out of the segments"
         url, body, headers = calls[-1]
         assert url.endswith("/orders/retrieve") and "Kamau" not in url, "surname never in a URL"
         assert headers["Authorization"] == "Bearer tok"
@@ -150,7 +153,9 @@ def test_agent_answers_for_the_booked_trip():
     assert "surname" in asked["answer"] and asked["sources"] == []
     found = agent.run_agent_turn(s, "My booking reference is KQDEMO and my surname is Wanjiru")
     assert "demonstration booking KQDEMO" in found["answer"]
-    assert "Wanjiru" not in json.dumps(found["trace"]), "the surname is not copied into the trace"
+    lookup = next(t for t in found["trace"] if t.get("tool") == "lookup_booking")
+    assert "Wanjiru" not in json.dumps(lookup), "names are not copied into the booking tool's record"
+    assert "Passenger: Grace Wanjiru" in found["answer"], "the passenger sees the name on their booking"
     bags = agent.run_agent_turn(s, "How many bags can I check?")
     assert bags["answer"].startswith("Your booking on KQ100 (Economy, Economy Classic fare) includes 2")
     assert "two pieces of up to 23kg" in bags["answer"]

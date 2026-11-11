@@ -12,8 +12,8 @@ Two modes, like the flight tool:
 
   * Live (KQ_BOOKING_API_URL set). The reference and surname are POSTed to
     Kenya Airways' booking service; nothing is invented on failure.
-  * Demo (no URL). Two fixed demonstration bookings, labelled as such:
-    KQDEMO / Wanjiru and KQBIZ1 / Otieno.
+  * Demo (no URL). Three fixed demonstration bookings, labelled as such:
+    KQDEMO / Wanjiru, KQBIZ1 / Otieno and KQDLW1 / Wangui.
 
 Safeguards, because a booking holds personal data:
 
@@ -22,10 +22,10 @@ Safeguards, because a booking holds personal data:
     confirmed on its own.
   * A session that fails BOOKING_LOOKUP_MAX_FAILURES lookups within an hour is
     refused further lookups, so references cannot be guessed.
-  * Only the trip itself (flights, route, cabin, fare, baggage) is remembered,
-    for the conversation-memory period. Names are never stored; the surname
-    stays only in the passenger's own message, which follows the normal
-    retention and erasure rules.
+  * The trip and the passenger names on the booking are remembered only for
+    the conversation-memory period (30 minutes), because a name correction
+    needs them; they are never copied into the trace that staff can see, and
+    they are erased with the conversation.
 
 Proposed live request and response (docs/kq_integration_spec.md):
 
@@ -61,6 +61,16 @@ _DEMO = {
         "destination": "Amsterdam", "destination_code": "AMS", "departure_utc": "2026-12-20T08:15Z",
         "cabin": "Business", "fare_brand": "Business Flex",
         "checked_baggage": {"pieces": 2, "weight_kg": 32}}],
+    ("KQDLW1", "WANGUI"): [{
+        "flight_number": "KQ100", "origin": "Nairobi", "origin_code": "NBO",
+        "destination": "London", "destination_code": "LHR", "departure_utc": "2026-12-18T22:40Z",
+        "cabin": "Economy", "fare_brand": "Economy Classic",
+        "checked_baggage": {"pieces": 2, "weight_kg": 23}}],
+}
+_DEMO_PASSENGERS = {
+    ("KQDEMO", "WANJIRU"): ["Grace Wanjiru"],
+    ("KQBIZ1", "OTIENO"): ["Brian Otieno"],
+    ("KQDLW1", "WANGUI"): ["Delight Wangui"],
 }
 
 # "booking reference ABC12D", "my PNR is abc12d", "ref: KQDEMO". The words
@@ -110,9 +120,9 @@ def _now() -> datetime:
 
 
 def _result(source: str, available: bool, segments: Optional[List[Dict]] = None,
-            reason: Optional[str] = None) -> Dict:
+            reason: Optional[str] = None, passengers: Optional[List[str]] = None) -> Dict:
     return {"source": source, "is_live": source == SOURCE_LIVE, "available": available,
-            "segments": segments or [], "reason": reason,
+            "segments": segments or [], "passengers": passengers or [], "reason": reason,
             "retrieved_at_utc": _now().strftime("%Y-%m-%dT%H:%MZ")}
 
 
@@ -133,9 +143,18 @@ def _record(session_id: str, found: bool) -> None:
 
 # ------------------------------------------------------------------ providers
 
+def passenger_names(body: Dict) -> List[str]:
+    """Full names on an NDC-style order, as "Given Surname"."""
+    names = []
+    for p in body.get("passengers") or []:
+        full = " ".join(x for x in (p.get("givenName"), p.get("surname")) if x)
+        if full:
+            names.append(full)
+    return names
+
+
 def normalize(body: Dict) -> List[Dict]:
-    """NDC-style order -> the segments the agent uses. Passenger names in the
-    response are deliberately not copied."""
+    """NDC-style order -> the segments the agent uses."""
     out = []
     for seg in body.get("segments") or []:
         o, d, bag = seg.get("origin") or {}, seg.get("destination") or {}, seg.get("checkedBaggage") or {}
@@ -162,7 +181,8 @@ def _fetch_live(reference: str, surname: str) -> Optional[List[Dict]]:
     if resp.status_code == 404:
         return None
     resp.raise_for_status()
-    return normalize(resp.json())
+    body = resp.json()
+    return normalize(body), passenger_names(body)
 
 
 last_error: Optional[str] = None
@@ -178,15 +198,18 @@ def lookup(session_id: str, reference: str, surname: str) -> Dict:
     if not config.KQ_BOOKING_API_URL:
         segments = _DEMO.get((reference, key_surname))
         _record(session_id, bool(segments))
-        return _result(SOURCE_DEMO, bool(segments), segments, None if segments else "not_found")
+        return _result(SOURCE_DEMO, bool(segments), segments, None if segments else "not_found",
+                       passengers=_DEMO_PASSENGERS.get((reference, key_surname)))
     try:
-        segments = _fetch_live(reference, surname.strip())
+        found = _fetch_live(reference, surname.strip())
     except Exception as exc:
         last_error = f"{type(exc).__name__}: {exc}"
         return _result(SOURCE_LIVE, False, reason="unavailable")
     last_error = None
+    segments, passengers = found if found else ([], [])
     _record(session_id, bool(segments))
-    return _result(SOURCE_LIVE, bool(segments), segments, None if segments else "not_found")
+    return _result(SOURCE_LIVE, bool(segments), segments, None if segments else "not_found",
+                   passengers=passengers)
 
 
 # ------------------------------------------------------------------ wording
@@ -220,19 +243,30 @@ def describe(result: Dict, reference: str) -> str:
         lines.append(f"- {s.get('flight_number')} {s.get('origin')} ({s.get('origin_code')}) to "
                      f"{s.get('destination')} ({s.get('destination_code')}), {_when(s.get('departure_utc'))}, "
                      f"{s.get('cabin')} ({s.get('fare_brand')}){bag_text}")
+    if result.get("passengers"):
+        lines.insert(0, "Passenger: " + ", ".join(result["passengers"]))
     head = (f"I found booking {reference}." if result["is_live"] else
             f"I found demonstration booking {reference} - this is sample data, not a real booking.")
     return (head + "\n\n" + "\n".join(lines) + "\n\n"
             "You can now ask about baggage, check-in or your flight's status, and I'll answer for this trip.")
 
 
-def remembered(session_id: str) -> List[Dict]:
+def remembered_booking(session_id: str) -> Dict:
+    """{"reference", "segments", "passengers"} of the booking looked up in this
+    conversation, or {} once memory has expired."""
     from app import memory
     raw = memory.recall(session_id).get("booking")
     try:
-        return json.loads(raw) if raw else []
+        data = json.loads(raw) if raw else {}
     except ValueError:
-        return []
+        return {}
+    if isinstance(data, list):              # stored before passengers were kept
+        return {"reference": None, "segments": data, "passengers": []}
+    return data
+
+
+def remembered(session_id: str) -> List[Dict]:
+    return remembered_booking(session_id).get("segments") or []
 
 
 def enrich(question: str, segments: List[Dict]) -> Optional[str]:

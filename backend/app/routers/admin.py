@@ -15,7 +15,7 @@ from typing import Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
-from app import auth, config, database, handover, payments, privacy, receipts, sentiment
+from app import auth, config, database, handover, payments, privacy, receipts, sentiment, service_requests
 from app.llm import compare_models, comparison_mode
 from app.vectorstore import get_vector_store
 from app import retrieval
@@ -338,3 +338,32 @@ def erase_passenger(body: ErasureRequest, request: Request,
     database.record_admin_audit(session.get("username"), "erase_passenger_data",
                                 f"{who}: {counts}", auth.client_ip(request))
     return {"confirmed": True, "erased": counts}
+
+
+# ---------------------------------------------------------------------------
+# Service requests (name corrections)
+# ---------------------------------------------------------------------------
+
+@router.get("/requests")
+def list_service_requests(request: Request, include_closed: bool = False,
+                          session: Dict = Depends(auth.require_staff)):
+    """Paid requests waiting for staff, then those still waiting for payment.
+    Recorded in the audit log, because requests hold passenger names."""
+    database.record_admin_audit(session.get("username"), "view_service_requests", None,
+                                auth.client_ip(request))
+    return {"requests": service_requests.list_requests(include_closed=include_closed)}
+
+
+@router.post("/requests/{request_id}/complete")
+def complete_service_request(request_id: int, request: Request,
+                             session: Dict = Depends(auth.require_staff)):
+    """Staff confirm they have updated the booking in Kenya Airways' system."""
+    try:
+        done = service_requests.complete(request_id, session.get("username"))
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such request.")
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    database.record_admin_audit(session.get("username"), "complete_service_request",
+                                service_requests.reference(done), auth.client_ip(request))
+    return {**done, "reference": service_requests.reference(done)}

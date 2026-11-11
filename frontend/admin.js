@@ -497,6 +497,58 @@
   };
   var ROLE_NAME = { user: "Passenger", assistant: "Assistant", agent: "Staff" };
 
+  /* ------------------------ name correction requests ------------------------ */
+
+  var reqBody = document.querySelector("#requests-table tbody");
+  var reqClosed = document.getElementById("requests-closed");
+  var reqStatus = document.getElementById("requests-status");
+  var REQUEST_LOOK = {
+    submitted: ["warn", "Paid - to do"], awaiting_payment: ["muted", "Awaiting payment"],
+    completed: ["ok", "Done"], cancelled: ["muted", "Cancelled"]
+  };
+
+  function loadRequests() {
+    return api("/api/admin/requests?include_closed=" + (reqClosed.checked ? "true" : "false"))
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        reqBody.innerHTML = "";
+        var rows = d.requests || [];
+        if (!rows.length) { emptyRow(reqBody, 7, "No name correction requests."); return; }
+        rows.forEach(function (q) {
+          var tr = el("tr");
+          tr.appendChild(el("td", null, q.reference));
+          tr.appendChild(el("td", null, q.booking_reference || "-"));
+          tr.appendChild(el("td", null, (q.current_name || "-") + " → " + (q.new_name || "-")));
+          tr.appendChild(el("td", null, q.fee_amount != null ? q.fee_currency + " " + Number(q.fee_amount).toFixed(2) : "-"));
+          tr.appendChild(el("td", null, q.payment_reference || "-"));
+          var look = REQUEST_LOOK[q.status] || ["muted", q.status];
+          var st = el("td"); st.appendChild(el("span", "pill " + look[0], look[1])); tr.appendChild(st);
+          var act = el("td");
+          if (q.status === "submitted") {
+            var btn = el("button", "btn btn-small", "Mark done");
+            btn.type = "button";
+            btn.addEventListener("click", function () {
+              if (!window.confirm("Have you updated booking " + q.booking_reference + " to " + q.new_name + "?")) { return; }
+              btn.disabled = true;
+              api("/api/admin/requests/" + q.id + "/complete", {
+                method: "POST", headers: { "Content-Type": "application/json" }, body: "{}"
+              }).then(function (r) {
+                return r.json().then(function (body) {
+                  if (!r.ok) { throw new Error(body.detail || ("HTTP " + r.status)); }
+                  reqStatus.textContent = q.reference + " marked done.";
+                  return loadRequests();
+                });
+              }).catch(function (err) { reqStatus.textContent = err.message; btn.disabled = false; });
+            });
+            act.appendChild(btn);
+          }
+          tr.appendChild(act);
+          reqBody.appendChild(tr);
+        });
+      }).catch(function () {});
+  }
+  reqClosed.addEventListener("change", loadRequests);
+
   function loadHandovers() {
     return api("/api/admin/handovers" + (hoClosed.checked ? "?include_closed=true" : ""))
       .then(function (r) { return r.ok ? r.json() : { cases: [] }; })
@@ -613,9 +665,11 @@
   function startHandoverPolling() {
     if (hoTimer) { return; }
     loadHandovers();
+    loadRequests();
     hoTimer = setInterval(function () {
       if (dashboard.hidden || document.hidden) { return; }
       loadHandovers();
+      loadRequests();
       if (openCaseId !== null && !hoReply.value) { openCase(openCaseId); }
     }, 15000);
   }

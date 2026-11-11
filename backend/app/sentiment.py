@@ -218,9 +218,26 @@ def classify_frustration(message: str) -> Dict:
     classes = list(model.classes_)
     frustrated_idx = classes.index("frustrated") if "frustrated" in classes else None
     frustration_score = float(proba[frustrated_idx]) if frustrated_idx is not None else 0.0
+    # One or two plain words ("yes", "card", a phone number) carry no tone, but
+    # the model scored them 0.77-0.86 frustrated, so every "yes" in a payment
+    # conversation was answered with an apology. Without a visible sign of
+    # emotion (exclamation marks or shouting) such a reply is treated as calm.
+    if _too_short_to_judge(message):
+        frustration_score = min(frustration_score, SHORT_REPLY_CEILING)
     label = "frustrated" if frustration_score >= 0.5 else "calm"
     return {
         "label": label,
-        "confidence": round(float(max(proba)), 3),
+        "confidence": round(max(frustration_score, 1 - frustration_score), 3),
         "frustration_score": round(frustration_score, 3),
     }
+
+
+SHORT_REPLY_CEILING = 0.3
+
+
+def _too_short_to_judge(message: str) -> bool:
+    words = re.findall(r"[A-Za-z0-9']+", message or "")
+    if len(words) >= 3:
+        return False
+    shouting = any(len(w) >= 3 and w.isupper() and w.isalpha() for w in words)
+    return "!" not in message and not shouting

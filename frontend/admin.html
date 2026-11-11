@@ -84,6 +84,26 @@
 
   </section>
 
+  <section class="panel" id="requests-panel">
+    <div class="panel-head">
+      <div>
+        <h2>Name Correction Requests</h2>
+        <p class="hint">Paid requests from passengers. Update the booking in the reservation system,
+          then mark the request done; the passenger sees the new status in the chat.</p>
+      </div>
+      <label class="check"><input type="checkbox" id="requests-closed" /> Show closed</label>
+    </div>
+    <div class="table-scroll">
+      <table id="requests-table">
+        <thead>
+          <tr><th>Request</th><th>Booking</th><th>Change</th><th>Fee</th><th>Payment</th><th>Status</th><th></th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p id="requests-status" class="status-line" role="status"></p>
+  </section>
+
   <section class="panel" id="handover-panel">
     <div class="panel-head">
       <div>
