@@ -41,7 +41,7 @@ print("=== Multi-turn payment flow ===")
 # Since name corrections became a full request (booking, new name, fee), the
 # fee is quoted only once the booking and the new name are known.
 step("turn 1 asks for the booking", say("I need to fix a typo in my name"), "booking reference")
-step("turn 2 finds the booking", say("booking reference KQDLW1, surname Wambiu"), "Delight Wambiu")
+step("turn 2 finds the booking", say("booking reference KQDLW1, surname Wangui"), "Delight Wangui")
 step("turn 3 quotes the fee from policy", say("Delight Wambui"), "USD 75.00")
 step("turn 4 accepts", say("yes"), "SR-")
 say("M-Pesa")

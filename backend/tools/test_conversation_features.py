@@ -99,6 +99,19 @@ def test_that_flight_uses_the_flight_named_earlier():
     assert calls and calls[0]["input"] == "KQ100", result["trace"]
 
 
+def test_status_question_gets_only_the_status():
+    # "status" used to match headings such as "Status of This Document", so an
+    # unrelated policy sentence followed the flight status.
+    for q in ("What is the status of flight KQ100?", "Is KQ100 delayed?"):
+        result = turn("status-only-" + q, q)
+        answer = result["answer"]
+        assert answer.startswith("Demonstration data for KQ100"), answer[:120]
+        assert "Source:" not in answer and answer.count("Demonstration data") == 1, answer
+    # A question with a policy subject still gets the policy text.
+    result = turn("status-policy", "KQ100 is delayed, what am I entitled to?")
+    assert "Source:" in result["answer"], result["answer"][:300]
+
+
 def test_sessions_do_not_share_memory():
     turn("mem-a", "How many bags can I check in Economy on a flight from Nairobi to London?")
     assert memory.resolve_query("mem-b", "What about Business class?") is None

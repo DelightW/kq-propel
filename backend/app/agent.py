@@ -205,6 +205,25 @@ def _schedule_request_reply(message: str) -> str:
     )
 
 
+# Words that only ask where a flight is. A question made of nothing else
+# ("What is the status of KQ100?") has no policy subject, yet "status" matches
+# headings such as "Status of This Document", so the answer used to carry an
+# unrelated policy sentence after the flight status.
+_FLIGHT_STATUS_WORDS = frozenset({
+    "what", "status", "flight", "flights", "delayed", "delay", "late", "early", "time",
+    "today", "now", "depart", "departs", "departed", "departure", "departing", "arrive",
+    "arrives", "arrived", "arrival", "arriving", "land", "landed", "landing", "gate",
+    "schedule", "scheduled", "cancelled", "canceled", "eta", "kq",
+})
+
+
+def _is_flight_status_only(question: str) -> bool:
+    """True when every subject word in the question is about a flight's state."""
+    words = [t for t in retrieval.topical_tokens(question)
+             if not re.fullmatch(r"(?:kq)?\d{1,4}|kq\d{1,4}", t)]
+    return all(w in _FLIGHT_STATUS_WORDS for w in words)
+
+
 def _is_grounded_in_context(message: str, chunks: List[Dict]) -> bool:
     """True when the retrieved policy text actually shares subject matter with
     the question. Retrieval always returns its best candidates, so without this
@@ -742,7 +761,7 @@ def _start_name_request(session_id: str, trace: List[Dict]) -> Optional[str]:
     if not names:
         service_requests.start(session_id, service_requests.AWAITING_BOOKING)
         return ("To correct a name I need to look the booking up again. Please send the booking "
-                "reference and surname, for example \"booking KQDLW1, surname Wambiu\".")
+                "reference and surname, for example \"booking KQDLW1, surname Wangui\".")
     # The policy: name changes apply to Kenya Airways operated flights only.
     if not all(str(s.get("flight_number") or "").startswith("KQ") for s in segments):
         return ("Name changes apply to Kenya Airways operated flights only, and this booking includes "
@@ -790,7 +809,7 @@ def _service_request_turn(session_id: str, message: str, trace: List[Dict],
             service_requests.start(session_id, service_requests.AWAITING_BOOKING)
             question = ("I can help you correct the name on your booking. First, please send your "
                         "booking reference and the surname on the booking, for example "
-                        "\"booking KQDLW1, surname Wambiu\".")
+                        "\"booking KQDLW1, surname Wangui\".")
         return _finalize_direct(session_id, message, _apply_empathy(question, sentiment_result),
                                 trace, sentiment_result)
 
@@ -1161,6 +1180,11 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
         trace.append({"step": "action", "tool": "get_flight_status",
                        "input": flight_number, "observation": flight_status})
         tool_observations.append(aviationstack.describe(flight_status))
+        if _is_flight_status_only(search_text):
+            retrieved = []
+            trace.append({"step": "thought",
+                           "content": ("The question only asks about the flight's status, so it is "
+                                       "answered from the flight tool alone, without policy text.")})
 
     # --- Action: payment tools (M-Pesa STK push, or a card checkout) ---
     payment_result = None
@@ -1250,7 +1274,10 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
                                    f"composer instead, which only quotes the policy text.")})
 
     if flight_number and tool_observations:
-        answer = tool_observations[0] + "\n\n" + answer
+        # With no policy text the composer can only repeat the status, so the
+        # status is the whole answer.
+        answer = (tool_observations[0] if not retrieved
+                  else tool_observations[0] + "\n\n" + answer)
 
     trip_note = booking.allowance_note(message, booking.remembered(session_id))
     if trip_note:

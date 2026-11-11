@@ -96,7 +96,7 @@ def test_roles_limit_what_each_person_can_reach():
     overview = analyst.get("/api/admin/overview")
     assert overview.status_code == 200 and overview.json()["transactions"]["recent"] == []
     assert agent_c.post("/api/admin/staff", json={"username": "x", "role": "admin"}).status_code == 403
-    assert agent_c.post("/api/admin/privacy/erase", json={"phone": "0704136123"}).status_code == 403
+    assert agent_c.post("/api/admin/privacy/erase", json={"phone": "0708374149"}).status_code == 403
 
 
 def test_disabling_signs_out_at_once_and_is_audited():
@@ -177,14 +177,14 @@ def test_mpesa_prompts_are_limited_per_number():
     ratelimit.reset()
     limit = config.RATE_LIMIT_MPESA_PROMPTS_PER_10_MIN
     trace = []
-    sent = [agent._execute_payment(f"cs_p5_{i}", "0704136123", 75, "fee", trace)
+    sent = [agent._execute_payment(f"cs_p5_{i}", "0708374149", 75, "fee", trace)
             for i in range(limit + 1)]
     assert all(r["success"] for r in sent[:limit])
     blocked = sent[-1]
     assert blocked.get("rate_limited") and "Nothing has been charged" in blocked["message"]
     assert "card" in blocked["message"], "offers the other way to pay"
     # The same number written another way is the same number.
-    assert agent._execute_payment("cs_p5_x", "+254 704 136 123", 75, "fee", [])["rate_limited"]
+    assert agent._execute_payment("cs_p5_x", "+254 708 374 149", 75, "fee", [])["rate_limited"]
     assert agent._execute_payment("cs_p5_y", "0712345678", 75, "fee", [])["success"], "other numbers fine"
     ratelimit.reset()
 
@@ -211,7 +211,7 @@ def test_limits_can_be_switched_off():
     config.RATE_LIMIT_ENABLED = False
     try:
         for _ in range(50):
-            ratelimit.hit("mpesa_phone", "254704136123")
+            ratelimit.hit("mpesa_phone", "254708374149")
     finally:
         config.RATE_LIMIT_ENABLED = saved
     ratelimit.reset()

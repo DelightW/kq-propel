@@ -52,7 +52,7 @@ class Resp:
 
 def test_reference_and_surname_detection():
     cases = {
-        "My booking reference is KQDEMO and my surname is Kanja": ("KQDEMO", "Kanja"),
+        "My booking reference is KQDEMO and my surname is Wanjiru": ("KQDEMO", "Wanjiru"),
         "booking ref kqbiz1 under the name Wambui": ("KQBIZ1", "Wambui"),
         "PNR: AB12CD, last name Wambui-Kanja": ("AB12CD", "Wambui-Kanja"),
     }
@@ -68,23 +68,23 @@ def test_reference_and_surname_detection():
 
 def test_demo_lookup_needs_reference_and_surname():
     s = new_session()
-    found = booking.lookup(s, "kqdemo", "kanja")
+    found = booking.lookup(s, "kqdemo", "wanjiru")
     assert found["available"] and found["source"] == "demo" and not found["is_live"]
     assert found["segments"][0]["flight_number"] == "KQ100"
     wrong = booking.lookup(s, "KQDEMO", "Wambui")
     assert not wrong["available"] and wrong["reason"] == "not_found"
     # Same wording whichever half was wrong, so neither can be confirmed alone.
     assert booking.describe(wrong, "KQDEMO") == booking.describe(
-        booking.lookup(s, "ZZ99ZZ", "Kanja"), "ZZ99ZZ")
+        booking.lookup(s, "ZZ99ZZ", "Wanjiru"), "ZZ99ZZ")
 
 
 def test_guessing_is_locked_per_session():
     s, other = new_session(), new_session()
     for i in range(config.BOOKING_LOOKUP_MAX_FAILURES):
         assert booking.lookup(s, f"AAAA{i:02d}", "Delight")["reason"] == "not_found"
-    locked = booking.lookup(s, "KQDEMO", "Kanja")
+    locked = booking.lookup(s, "KQDEMO", "Wanjiru")
     assert not locked["available"] and locked["reason"] == "locked", "even a correct guess is refused"
-    assert booking.lookup(other, "KQDEMO", "Kanja")["available"], "other sessions unaffected"
+    assert booking.lookup(other, "KQDEMO", "Wanjiru")["available"], "other sessions unaffected"
 
 
 def test_live_booking_adapter():
@@ -134,7 +134,7 @@ def test_live_booking_adapter():
 # ------------------------------------------------------------------ the trip in answers
 
 def test_trip_fills_in_cabin_route_and_journey_type():
-    economy = booking._DEMO[("KQDEMO", "KANJA")]
+    economy = booking._DEMO[("KQDEMO", "WANJIRU")]
     assert booking.enrich("How many bags can I check?", economy) == \
         "How many bags can I check in Economy from Nairobi to London?"
     assert booking.enrich("When does check-in close?", economy) == \
@@ -151,11 +151,11 @@ def test_agent_answers_for_the_booked_trip():
     s = new_session()
     asked = agent.run_agent_turn(s, "My booking reference is KQDEMO")
     assert "surname" in asked["answer"] and asked["sources"] == []
-    found = agent.run_agent_turn(s, "My booking reference is KQDEMO and my surname is Kanja")
+    found = agent.run_agent_turn(s, "My booking reference is KQDEMO and my surname is Wanjiru")
     assert "demonstration booking KQDEMO" in found["answer"]
     lookup = next(t for t in found["trace"] if t.get("tool") == "lookup_booking")
-    assert "Kanja" not in json.dumps(lookup), "names are not copied into the booking tool's record"
-    assert "Passenger: Wambui Kanja" in found["answer"], "the passenger sees the name on their booking"
+    assert "Wanjiru" not in json.dumps(lookup), "names are not copied into the booking tool's record"
+    assert "Passenger: Delight Wanjiru" in found["answer"], "the passenger sees the name on their booking"
     bags = agent.run_agent_turn(s, "How many bags can I check?")
     assert bags["answer"].startswith("Your booking on KQ100 (Economy, Economy Classic fare) includes 2")
     assert "two pieces of up to 23kg" in bags["answer"]

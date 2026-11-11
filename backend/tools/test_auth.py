@@ -4,12 +4,16 @@ Each check asserts the *server* enforces the rule. Hiding a control in the
 browser is not a security boundary, so every assertion here is made against
 the HTTP API directly.
 """
+import os
 import sys
 
 import requests
 
 BASE = "http://127.0.0.1:8000"
-PASSWORD = "Frankaren123."
+# The local admin password, never written into the repository.
+PASSWORD = os.environ.get("KQ_TEST_ADMIN_PASSWORD", "")
+if not PASSWORD:
+    sys.exit("Set KQ_TEST_ADMIN_PASSWORD to the local admin password first.")
 
 passed, failed = [], []
 

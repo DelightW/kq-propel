@@ -24,7 +24,7 @@ for real payment records.
 |---|---|
 | `ADMIN_PASSWORD_HASH` | the same value as in your local `.env` |
 | `ALLOWED_ORIGINS` | `https://kq-propel.onrender.com` |
-| `DARAJA_SANDBOX_TEST_NUMBERS` | `0704136123` |
+| `DARAJA_SANDBOX_TEST_NUMBERS` | the phone number you test with (only listed numbers get a real prompt) |
 | `DARAJA_CONSUMER_KEY`, `DARAJA_CONSUMER_SECRET`, `DARAJA_PASSKEY` | from your local `.env` |
 | `DARAJA_CALLBACK_TOKEN` | a new long random string |
 | `DARAJA_CALLBACK_URL` | `https://kq-propel.onrender.com/api/payments/daraja/callback/<the token above>` |
@@ -36,7 +36,7 @@ for real payment records.
 
 1. `https://kq-propel.onrender.com/api/health` shows `{"status":"ok","app":"KQ-Propel"}`.
 2. Ask a question in the chat; sign in at `/admin` with your usual staff password.
-3. M-Pesa: ask what a name correction costs, say yes, choose M-Pesa, give 0704136123, enter the PIN. It should
+3. M-Pesa: ask what a name correction costs, say yes, choose M-Pesa, give your listed test number, enter the PIN. It should
    show as paid (Ksh 1, real money to Safaricom's test Paybill).
 
 ## 3. Updating

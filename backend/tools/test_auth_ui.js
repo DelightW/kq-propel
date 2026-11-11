@@ -3,7 +3,12 @@
 const { JSDOM } = require("jsdom");
 
 const BASE = "http://127.0.0.1:8000";
-const PASSWORD = "Frankaren123.";
+// The local admin password, never written into the repository.
+const PASSWORD = process.env.KQ_TEST_ADMIN_PASSWORD || "";
+if (!PASSWORD) {
+  console.error("Set KQ_TEST_ADMIN_PASSWORD to the local admin password first.");
+  process.exit(1);
+}
 let pass = 0, fail = 0;
 
 function check(name, cond, detail) {
@@ -98,7 +103,7 @@ async function load(path) {
     "login error said: " + (doc.getElementById("login-error").textContent || "(none)"));
   check("login screen hidden after sign-in", login && login.hidden === true);
   check("operator identity shown",
-    (doc.getElementById("who").textContent || "").indexOf("admin") !== -1,
+    (doc.getElementById("who").textContent || "").toLowerCase().indexOf("admin") !== -1,
     doc.getElementById("who").textContent);
   check("KPI cards rendered", doc.querySelectorAll("#kpis .card").length > 0,
     String(doc.querySelectorAll("#kpis .card").length));
