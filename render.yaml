@@ -32,6 +32,12 @@ services:
         value: "true"
       - key: DARAJA_SANDBOX
         value: "true"
+      # Render's proxies add three X-Forwarded-For entries (Cloudflare adds the
+      # caller, then Cloudflare and Render's internal network are added), so the
+      # real caller is third from the right. Measured 11 Nov 2026; see
+      # docs/deploy_render.md. Entries further left are written by the caller.
+      - key: TRUSTED_PROXY_HOPS
+        value: "3"
       # Entered in the Render dashboard when the Blueprint is created (sync: false
       # means the value is never stored in this file).
       - key: ADMIN_PASSWORD_HASH

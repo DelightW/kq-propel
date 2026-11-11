@@ -54,5 +54,8 @@ Every push to the `priority-1-hardening` branch redeploys automatically.
   `X-Forwarded-For`, whose left-hand entries the caller can forge. Set `TRUSTED_PROXY_HOPS` to the number of
   entries Render's proxies add (the address used is that many places from the right). To check it, make one
   failed sign-in and read the "login failed" row in the access log: its detail shows the forwarded chain.
+  Measured on 11 November 2026 with a forged header: `203.0.113.77, 41.90.137.104, 172.71.141.37, 10.24.59.156`,
+  that is, the forged entry, the real caller (added by Cloudflare), a Cloudflare address and Render's internal
+  network. `render.yaml` therefore sets `TRUSTED_PROXY_HOPS=3`.
 - Staff accounts other than the first administrator live in the database, so on the free plan they are lost when
   the service restarts; the administrator from `ADMIN_PASSWORD_HASH` is recreated at every start.
