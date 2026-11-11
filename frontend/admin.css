@@ -480,3 +480,5 @@ td.empty {
                       color: var(--ink-soft); flex: 1 1 200px; }
 .erase-fields input { font: inherit; font-size: 14px; padding: 9px 10px; border: 1px solid var(--border);
                       border-radius: 10px; }
+
+.receipt-link { font-size: 12px; font-weight: 700; color: var(--red-dark, #8f0c20); margin-left: 4px; }

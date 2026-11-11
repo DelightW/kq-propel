@@ -205,6 +205,18 @@
     line.className = "pay-status " + status;
   }
 
+  /* A confirmed payment gets a PDF receipt. The link is served only to this
+     session, and only once the ledger says paid. */
+  function addReceiptLink(card, reference) {
+    if (card.querySelector(".pay-receipt")) { return; }
+    var link = document.createElement("a");
+    link.className = "pay-receipt";
+    link.href = "/api/chat/payments/" + encodeURIComponent(reference) + "/receipt";
+    link.setAttribute("download", "KQ-Propel-receipt-" + reference + ".pdf");
+    link.textContent = "Download receipt (PDF)";
+    card.appendChild(link);
+  }
+
   function pollPayment(reference, line, card) {
     var started = Date.now();
     var LIMIT_MS = 15 * 60 * 1000;
@@ -216,6 +228,7 @@
         return r.json();
       }).then(function (d) {
         showPaymentStatus(line, d.status);
+        if (d.status === "paid") { addReceiptLink(card, reference); }
         if (d.status === "failed" || d.status === "needs_review") {
           card.classList.add("failed");
         }
@@ -363,6 +376,8 @@
       showPaymentStatus(statusLine, simulated ? "simulated" : (p.status || "pending"));
       if (!simulated && p.reference && (p.status || "pending") === "pending") {
         pollPayment(p.reference, statusLine, card);
+      } else if (!simulated && p.reference && p.status === "paid") {
+        addReceiptLink(card, p.reference);
       }
     } else {
       var err = document.createElement("div");

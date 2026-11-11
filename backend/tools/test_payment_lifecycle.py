@@ -310,6 +310,29 @@ def test_http_endpoints():
     assert stranger.get(f"/api/chat/payments/{mine['reference']}").status_code == 404
 
 
+def test_receipts_only_for_paid_payments_and_their_owner():
+    from fastapi.testclient import TestClient
+    from app.main import app as fastapi_app
+    owner = TestClient(fastapi_app)
+    sid = owner.post("/api/chat/session").json()["session_id"]
+    _, waiting = pending_attempt(sid)
+    QUERY_ANSWER["status"] = None
+    try:
+        assert owner.get(f"/api/chat/payments/{waiting['reference']}/receipt").status_code == 409
+    finally:
+        QUERY_ANSWER["status"] = "paid"
+    payments.apply_mpesa_outcome(daraja.parse_callback(
+        callback(waiting["checkout_request_id"], 0, 9675, receipt="SKR123TEST")))
+    r = owner.get(f"/api/chat/payments/{waiting['reference']}/receipt")
+    assert r.status_code == 200 and r.headers["content-type"] == "application/pdf", r.status_code
+    assert r.content.startswith(b"%PDF") and waiting["reference"] in r.headers["content-disposition"]
+    stranger = TestClient(fastapi_app)
+    stranger.post("/api/chat/session")
+    assert stranger.get(f"/api/chat/payments/{waiting['reference']}/receipt").status_code == 404
+    staff = TestClient(fastapi_app)
+    assert staff.get(f"/api/admin/transactions/{waiting['reference']}/receipt").status_code == 401
+
+
 def main() -> int:
     tests = [(n, f) for n, f in globals().items() if n.startswith("test_") and callable(f)]
     failures = 0

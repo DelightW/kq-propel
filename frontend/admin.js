@@ -357,6 +357,13 @@
         var look = STATUS_LOOK[r.status] || STATUS_LOOK.unknown;
         st.appendChild(el("span", "pill " + look[0], look[1]));
         if (r.status_detail) { st.title = r.status_detail; }
+        if (r.status === "paid" && r.reference) {
+          var receipt = el("a", "receipt-link", "Receipt");
+          receipt.href = "/api/admin/transactions/" + encodeURIComponent(r.reference) + "/receipt";
+          receipt.setAttribute("download", "");
+          st.appendChild(document.createTextNode(" "));
+          st.appendChild(receipt);
+        }
         tr.appendChild(st);
         tr.appendChild(el("td", null, r.checkout_request_id || r.reference || "-"));
         txBody.appendChild(tr);

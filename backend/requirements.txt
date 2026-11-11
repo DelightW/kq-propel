@@ -14,3 +14,6 @@ python-multipart>=0.0.9
 #   pip install --index-url https://download.pytorch.org/whl/cpu \
 #       --extra-index-url https://pypi.org/simple sentence-transformers
 sentence-transformers>=3.0
+
+# PDF receipts for paid payments (app/receipts.py); pure Python, about 1 MB.
+fpdf2>=2.7

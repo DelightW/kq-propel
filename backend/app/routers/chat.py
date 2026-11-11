@@ -11,7 +11,7 @@ from typing import Optional
 from fastapi import APIRouter, Cookie, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
-from app import auth, config, database, handover, memory, payments, privacy
+from app import auth, config, database, handover, memory, payments, privacy, receipts
 from app.agent import run_agent_turn
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -93,6 +93,24 @@ def payment_status(reference: str, kq_session: Optional[str] = Cookie(default=No
         "amount": payments.from_minor(row["amount_minor"]),
         "receipt": row.get("provider_receipt"),
     }
+
+
+@router.get("/payments/{reference}/receipt")
+def payment_receipt(reference: str, kq_session: Optional[str] = Cookie(default=None)):
+    """PDF receipt for one of this session's payments, once it is paid."""
+    if not auth.chat_session_is_valid(kq_session):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No session.")
+    row = payments.for_passenger(kq_session, reference)
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payment not found.")
+    try:
+        pdf = receipts.build(row)
+    except receipts.NotReceiptable:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="A receipt is available once the payment is confirmed.")
+    return Response(pdf, media_type="application/pdf", headers={
+        "Content-Disposition": f'attachment; filename="{receipts.filename(row)}"',
+        "Cache-Control": "no-store"})
 
 
 @router.get("/handover")

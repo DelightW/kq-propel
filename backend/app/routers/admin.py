@@ -15,7 +15,7 @@ from typing import Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
-from app import auth, config, database, handover, payments, privacy, sentiment
+from app import auth, config, database, handover, payments, privacy, receipts, sentiment
 from app.llm import compare_models, comparison_mode
 from app.vectorstore import get_vector_store
 from app import retrieval
@@ -153,6 +153,27 @@ def transactions(request: Request, session: Dict = Depends(auth.require_staff)):
     # Staff see the last digits only; the full number stays with the payment
     # code that needs it to send the STK push.
     return privacy.mask_rows(database.fetch_transactions(limit=100))
+
+
+@router.get("/transactions/{reference}/receipt")
+def transaction_receipt(reference: str, request: Request,
+                        session: Dict = Depends(auth.require_staff)):
+    """PDF receipt for a paid transaction, for staff answering a passenger.
+    Recorded in the audit log like any other read of payment data."""
+    with database._connect() as conn:
+        row = conn.execute("SELECT * FROM transactions WHERE reference = ?", (reference,)).fetchone()
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such payment.")
+    row = dict(row)
+    try:
+        pdf = receipts.build(row)
+    except receipts.NotReceiptable:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This payment is not paid.")
+    database.record_admin_audit(session.get("username"), "download_receipt", reference,
+                                auth.client_ip(request))
+    return Response(pdf, media_type="application/pdf", headers={
+        "Content-Disposition": f'attachment; filename="{receipts.filename(row)}"',
+        "Cache-Control": "no-store"})
 
 
 @router.get("/audit")

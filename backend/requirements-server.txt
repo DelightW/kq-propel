@@ -17,3 +17,5 @@ numpy>=2.1.1
 onnxruntime>=1.20
 tokenizers>=0.20
 huggingface_hub>=0.25
+# PDF receipts for paid payments (app/receipts.py).
+fpdf2>=2.7
