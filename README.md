@@ -1,116 +1,122 @@
 # KQ-Propel
 
-An agentic retrieval-augmented generation (RAG) assistant for Kenya Airways customer support. It answers passenger questions from airline policy with a citation, checks flight status, looks up a booking, takes payment by M-Pesa or card, and hands a conversation to a member of staff when asked. Built as a final-year project at Strathmore University.
+KQ-Propel is a customer-support chat assistant for Kenya Airways, built as my final-year project at Strathmore University. Passengers can ask about baggage, refunds and other policies and get an answer taken straight from the airline's published policy, with the section it came from. They can also check a flight, look up a booking, pay for a name correction, or ask to speak to a person.
 
-**Live demonstration:** https://kq-propel.onrender.com (chat) and https://kq-propel.onrender.com/admin (staff dashboard). It runs on Render's free plan, so the first visit after a quiet spell takes about a minute to wake, and its data is reset whenever it restarts.
+**Try it:** [kq-propel.onrender.com](https://kq-propel.onrender.com). The staff dashboard is at [/admin](https://kq-propel.onrender.com/admin).
 
-> This is a research prototype, not a Kenya Airways service. Bookings and flights shown without a live source are labelled as demonstration data, and M-Pesa runs in Safaricom's sandbox.
+It runs on Render's free plan, so the first visit after a quiet period can take about a minute while the server wakes up. Its data is wiped whenever it restarts.
 
-## What it does
+> This is a student research prototype. It is not affiliated with or run by Kenya Airways. Bookings and flights that don't come from a live source are marked as demo data, and M-Pesa payments go through Safaricom's sandbox.
 
-| For passengers | |
+## Things to try in the chat
+
+- "How many bags can I check in Economy to London?" and then "What about Business class?" (the follow-up keeps the context)
+- "Check my booking KQDEMO, surname Kanja" (a demo booking)
+- "I need to correct the spelling of my name", then "booking KQDLW1, surname Wambiu", then the corrected name "Delight Wambui". The demo booking is deliberately misspelt. The assistant counts the characters changed and quotes the fee.
+
+Each reply has a **reasoning trace** you can open to see what the assistant checked, what it retrieved and why it answered the way it did.
+
+## How it works
+
+When a message comes in, the assistant goes through a fixed sequence of checks. It doesn't let a language model decide which tools to call. First it reads the tone of the message. Then it checks whether the passenger wants a person, a booking or a service request. Only after that does it fall back to answering from policy.
+
+For policy questions:
+
+1. **Retrieval.** The question is matched against 53 chunks from 10 policy documents. Ranking combines BM25 keyword matching with all-MiniLM-L6-v2 sentence embeddings. On top of that, it boosts results whose headings match and down-ranks rules for the wrong route or the wrong kind of baggage (checked, hand, delayed or special). It then keeps the top four, chosen with MMR so they don't repeat each other.
+2. **Grounding check.** If nothing retrieved actually covers the question, the assistant says so instead of guessing.
+3. **Answer.** By default an extractive composer picks sentences from the retrieved policy, so it can't make anything up. A live model (OpenAI or Ollama) can be switched on. Its answer is used only if every number in it appears in the source text.
+
+A small frustration classifier (TF-IDF features and logistic regression, trained on 499 messages) softens the tone when someone is clearly upset. A fairness test checks that tone never changes what the policy answer says.
+
+Eight of the policy documents are Kenya Airways' published information. Two are synthetic and labelled as such. The details are in [backend/data/policies/provenance.json](backend/data/policies/provenance.json).
+
+### Payments
+
+Name corrections carry a fee, which is read from Section 5 of the refund policy. The fee depends on how many characters change and whether the route is domestic or international. The passenger can pay by M-Pesa (STK Push through Safaricom's Daraja API) or by card (PayPal). A payment counts as paid only once the provider confirms it. A PDF receipt is then available, and the request goes to staff.
+
+The amount always comes from the policy, never from anything the passenger types. Money owed to the passenger, such as a refund, is never offered as a payment. Safaricom's sandbox still takes real money, so in sandbox mode prompts go only to whitelisted test numbers, for Ksh 1.
+
+### Staff dashboard
+
+Staff sign in with individual accounts. There are three roles:
+
+- **Admin:** everything.
+- **Agent:** handovers, name corrections and payments.
+- **Analyst:** quality metrics only, with no access to passenger records.
+
+The dashboard holds:
+
+- the queues of passengers waiting for a person and of paid corrections to carry out;
+- answer-quality scores (RAG Triad) and frustration levels;
+- the payment ledger;
+- an access log of who viewed passenger data.
+
+Phone numbers are masked, and a passenger can erase their own conversation.
+
+## Results
+
+These figures come from the 30-question evaluation set, using the offline composer:
+
+| Metric | Score |
 |---|---|
-| Policy answers | Retrieves the relevant policy section and answers from it, citing the section and edition. Declines when nothing it retrieved matches the question. |
-| Follow-up questions | "What about Business class?" or "Is that flight delayed?" keep the context of the previous turn for 30 minutes. |
-| Flight status | Kenya Airways' own feed when configured, then AviationStack. A status is never invented. |
-| Booking lookup | Booking reference and surname give answers for the passenger's own trip. Five failed lookups in an hour lock the conversation. |
-| Name corrections | Shows the name on the booking, asks for the new one, counts the characters changed, quotes the fee from the refund policy and, once paid, sends the request to staff. |
-| Payments | M-Pesa (Daraja STK Push) or card (PayPal), only for a fee quoted from policy and only after the passenger confirms. A payment counts as paid only when the provider confirms it. |
-| Receipts | A PDF receipt for every paid payment. |
-| A person | Opens a case that staff answer from the dashboard (when handover is switched on). |
-| Privacy | A passenger can delete their conversation from the chat. See [the privacy notice](frontend/privacy.html). |
+| Groundedness | 1.000 |
+| Answer relevance | 0.633 |
+| Context relevance | 0.405 |
+| Right document in the top results (any@k) | 1.000 |
+| All needed documents in the top results (all@k) | 0.967 |
 
-| For staff (`/admin`) | |
-|---|---|
-| Individual accounts and roles | **Administrator** (everything), **customer service agent** (handovers, name corrections, payments) or **analyst** (quality metrics only, no passenger records). New accounts receive a one-time password that must be changed at first sign-in. |
-| Work queues | Passengers waiting for a person, and paid name corrections to carry out and mark done. |
-| Monitoring | RAG-Triad scores, frustration levels, classifier performance, payment ledger and an access log of who read passenger data. |
-| Data protection | Phone numbers shown masked; erasure on request; configurable retention. |
+Every follow-up, unanswerable and handover case in the conversation test set passes. So do all 49 sentiment-fairness pairs. Both interfaces pass axe-core's WCAG 2.1 A/AA checks and can be used with the keyboard alone.
 
-Behind the scenes:
+### Known limitations
 
-- **Hybrid retrieval.** BM25 combined with all-MiniLM-L6-v2 embeddings, Maximal Marginal Relevance and policy-aware ranking (route exceptions; checked versus hand baggage).
-- **ReAct agent.** Each answer shows the agent's reasoning trace.
-- **Frustration classifier.** A self-trained TF-IDF and logistic-regression classifier. It changes only the tone of a reply, never the policy answer.
-- **Rate limits.** Per conversation, per network address and per phone number.
-- **Accessible interfaces.** Both pass the WCAG 2.1 A/AA rules checked by axe-core.
+- Questions in Swahili are declined.
+- Vague questions get a best guess instead of a clarifying question.
+- A few baggage questions still pick the wrong policy sentence. For example, "How many bags can I check from Nairobi to Mumbai?" is answered from the excess-baggage rules.
+- No live language model has been evaluated yet. All the figures above are for the offline composer.
+- Rate limits are kept in memory. On the free hosting plan, all data resets on restart.
 
-All API keys are optional. Without them the assistant uses its offline answer composer, local embeddings and labelled demonstration data.
+## Running it yourself
 
-## Running it locally
+You need Python 3.12.
 
-```powershell
-cd kq-propel\backend
+```bash
+cd backend
 pip install -r requirements.txt
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+python -m uvicorn app.main:app --port 8000
 ```
 
-| What | URL |
-|---|---|
-| Chat | http://127.0.0.1:8000/ |
-| Staff dashboard | http://127.0.0.1:8000/admin |
-| API documentation | http://127.0.0.1:8000/docs |
+Then open `localhost:8000` for the chat, `/admin` for the dashboard or `/docs` for the API. The search index and the classifier are built on first start.
 
-The policy index and the classifier are built automatically on first start.
+No API keys are needed. Without them, the assistant uses its offline composer, local embeddings and labelled demo data. To add keys or change settings, copy [.env.example](.env.example) to `.env`. Every option is explained in that file.
 
-**Staff sign-in.** Create a password hash and put it in `.env` at the repository root:
+To sign in to the dashboard, generate a password hash and add it to `.env`:
 
-```powershell
-python -m app.auth "your-password"      # prints ADMIN_PASSWORD_HASH=scrypt$...
+```bash
+python -m app.auth "your-password"   # prints ADMIN_PASSWORD_HASH=...
 ```
 
-That account (`ADMIN_USERNAME`, default `admin`) is the first administrator; other staff are added from the dashboard's Staff Accounts panel. If no credential is set, a one-time password is printed at start-up and changes on every restart. There is no default password in the source code.
+If you don't set one, a one-time password is printed when the server starts.
 
-**On a phone.** With `--host 0.0.0.0`, open `http://<laptop's Wi-Fi address>:8000/` on a phone on the same network (allow TCP port 8000 through Windows Firewall for Private networks). In a desktop browser, Ctrl+Shift+I and then Ctrl+Shift+M shows the phone layout.
+### Tests
 
-## Hosting
-
-The live copy is deployed from this repository with the Render Blueprint in [render.yaml](render.yaml). The server installs [backend/requirements-server.txt](backend/requirements-server.txt), which runs the same embedding model on ONNX Runtime instead of PyTorch so that it fits the free plan's 512 MB. Secrets are entered in Render's dashboard, never in the repository. Every push to the deployed branch redeploys it. Step-by-step instructions: [docs/deploy_render.md](docs/deploy_render.md).
-
-## Payments
-
-| | M-Pesa (Daraja STK Push) | Card (PayPal Orders) |
-|---|---|---|
-| Currency | Kenya shillings, converted at `USD_TO_KES_RATE` and disclosed every time | The currency the fee is published in |
-| Confirmation | Callback to a secret URL, double-checked with Safaricom's status query | Order captured on the server |
-
-Safaricom's sandbox takes real money when the PIN is entered. In sandbox mode, prompts therefore go only to numbers listed in `DARAJA_SANDBOX_TEST_NUMBERS`, always for Ksh 1. Any other number receives a labelled demonstration. Money owed to the passenger, such as refunds, is never offered as a payment.
-
-## Testing
-
-```powershell
-cd kq-propel\backend
-python tools/quality_gate.py             # release gate: groundedness, relevance, conversation cases, fairness
-python tools/test_priority5.py           # each suite in tools/ runs on its own
+```bash
+python tools/quality_gate.py      # the release gate: grounding, relevance, conversation cases, fairness
+python tools/test_<name>.py       # each of the 19 suites runs on its own
 ```
 
-There are 19 suites with 340 checks. `test_auth.py` and `test_payment_session.py` need a running server; the others use a temporary database and stubbed providers.
+`test_auth.py` and `test_payment_session.py` need the server running. The rest use a temporary database and stubbed providers.
 
-## Configuration
+## Deployment
 
-Copy [.env.example](.env.example) to `.env`; it documents every setting. The main ones:
+The live copy is deployed to Render from [render.yaml](render.yaml). On the server, the embedding model runs on ONNX Runtime instead of PyTorch. This gives the same vectors and keeps memory use around 285 MB, under the free plan's 512 MB limit. Setup notes are in [docs/deploy_render.md](docs/deploy_render.md).
 
-| Variable | Purpose |
-|---|---|
-| `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH` | First administrator account |
-| `OPENAI_API_KEY`, `OPEN_SOURCE_MODEL_NAME`, `OLLAMA_BASE_URL` | Live language models for answers and the model comparison |
-| `AVIATIONSTACK_API_KEY` | Live flight status |
-| `KQ_BOOKING_API_URL`, `KQ_FLIGHT_API_URL` (+ tokens) | Kenya Airways booking and flight services, when provided ([specification](docs/kq_integration_spec.md)) |
-| `DARAJA_CONSUMER_KEY`, `DARAJA_CONSUMER_SECRET`, `DARAJA_PASSKEY`, `DARAJA_CALLBACK_URL`, `DARAJA_CALLBACK_TOKEN` | M-Pesa |
-| `DARAJA_SANDBOX_TEST_NUMBERS` | The only numbers sandbox prompts may go to |
-| `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` | Card checkout |
-| `HANDOVER_ENABLED` | Lets passengers reach a person (off by default) |
-| `PRIVACY_RETENTION_ENABLED` | Automatic deletion by age (off until retention periods are agreed) |
-| `RATE_LIMIT_*`, `TRUSTED_PROXY_HOPS` | Rate limits, and how many proxies sit in front of the app |
-| `SECURE_COOKIES`, `ALLOWED_ORIGINS` | Cookie and browser-origin security for HTTPS deployments |
-
-## Project layout
+## Repository layout
 
 ```
-backend/app/        FastAPI app: agent, retrieval, payments, staff, privacy, rate limits
-backend/data/       Policy corpus, evaluation sets, classifier data
-backend/tools/      Test suites, quality gate and evaluation tools
-frontend/           Chat, staff dashboard and privacy notice
-docs/               Deployment guide, Kenya Airways integration spec, draft DPIA
-docgen/             How the synthetic datasets were generated
+backend/app/     the FastAPI app: agent, retrieval, payments, staff, privacy
+backend/data/    policy documents, evaluation sets, classifier training data
+backend/tools/   tests, the quality gate and evaluation scripts
+frontend/        chat, staff dashboard and privacy notice (plain HTML/CSS/JS)
+docs/            deployment guide, Kenya Airways integration spec, draft DPIA
+docgen/          how the synthetic datasets were generated
 ```

@@ -127,7 +127,7 @@ def test_staff_reply_reaches_only_that_passenger():
     s = "ho-reply"
     case = turn(s, "talk to a human please")["handover"]
     case_id = int(case["reference"].split("-")[1])
-    handover.staff_reply(case_id, "agent.wanjiru", "Hello, I'm looking at your booking now.")
+    handover.staff_reply(case_id, "agent.wambui", "Hello, I'm looking at your booking now.")
     msgs = handover.messages_since(s, 0)
     assert [m["message"] for m in msgs] == ["Hello, I'm looking at your booking now."]
     assert handover.get(case_id)["status"] == handover.CLAIMED
@@ -195,11 +195,11 @@ def test_http_handover_flow():
     detail = staff.get(f"/api/admin/handovers/{case_id}").json()
     assert any(m["role"] == "user" for m in detail["transcript"]), detail
     assert staff.post(f"/api/admin/handovers/{case_id}/reply",
-                      json={"message": "Hi, this is Achieng from customer care."}).status_code == 200
+                      json={"message": "Hi, this is Wambui from customer care."}).status_code == 200
 
     update = passenger.get("/api/chat/handover?after=0").json()
     assert update["handover"]["status"] == "claimed"
-    assert update["messages"][0]["message"] == "Hi, this is Achieng from customer care."
+    assert update["messages"][0]["message"] == "Hi, this is Wambui from customer care."
 
     stranger = TestClient(fastapi_app)
     stranger.post("/api/chat/session")

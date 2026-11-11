@@ -13,7 +13,7 @@ Two modes, like the flight tool:
   * Live (KQ_BOOKING_API_URL set). The reference and surname are POSTed to
     Kenya Airways' booking service; nothing is invented on failure.
   * Demo (no URL). Three fixed demonstration bookings, labelled as such:
-    KQDEMO / Wanjiru, KQBIZ1 / Otieno and KQDLW1 / Wangui.
+    KQDEMO / Kanja, KQBIZ1 / Wambui and KQDLW1 / Wambiu.
 
 Safeguards, because a booking holds personal data:
 
@@ -29,7 +29,7 @@ Safeguards, because a booking holds personal data:
 
 Proposed live request and response (docs/kq_integration_spec.md):
 
-  POST {KQ_BOOKING_API_URL}/orders/retrieve   {"pnr": "ABC12D", "surname": "Wanjiru"}
+  POST {KQ_BOOKING_API_URL}/orders/retrieve   {"pnr": "ABC12D", "surname": "Kanja"}
   200 {"pnr": "ABC12D", "segments": [{"flightNumber": "KQ100",
         "origin": {"iata": "NBO", "city": "Nairobi"},
         "destination": {"iata": "LHR", "city": "London"},
@@ -51,26 +51,27 @@ SOURCE_LIVE = "kenya_airways_booking"
 SOURCE_DEMO = "demo"
 
 _DEMO = {
-    ("KQDEMO", "WANJIRU"): [{
+    ("KQDEMO", "KANJA"): [{
         "flight_number": "KQ100", "origin": "Nairobi", "origin_code": "NBO",
         "destination": "London", "destination_code": "LHR", "departure_utc": "2026-12-12T22:40Z",
         "cabin": "Economy", "fare_brand": "Economy Classic",
         "checked_baggage": {"pieces": 2, "weight_kg": 23}}],
-    ("KQBIZ1", "OTIENO"): [{
+    ("KQBIZ1", "WAMBUI"): [{
         "flight_number": "KQ203", "origin": "Nairobi", "origin_code": "NBO",
         "destination": "Amsterdam", "destination_code": "AMS", "departure_utc": "2026-12-20T08:15Z",
         "cabin": "Business", "fare_brand": "Business Flex",
         "checked_baggage": {"pieces": 2, "weight_kg": 32}}],
-    ("KQDLW1", "WANGUI"): [{
+    ("KQDLW1", "WAMBIU"): [{
         "flight_number": "KQ100", "origin": "Nairobi", "origin_code": "NBO",
         "destination": "London", "destination_code": "LHR", "departure_utc": "2026-12-18T22:40Z",
         "cabin": "Economy", "fare_brand": "Economy Classic",
         "checked_baggage": {"pieces": 2, "weight_kg": 23}}],
 }
 _DEMO_PASSENGERS = {
-    ("KQDEMO", "WANJIRU"): ["Grace Wanjiru"],
-    ("KQBIZ1", "OTIENO"): ["Brian Otieno"],
-    ("KQDLW1", "WANGUI"): ["Delight Wangui"],
+    ("KQDEMO", "KANJA"): ["Wambui Kanja"],
+    ("KQBIZ1", "WAMBUI"): ["Kanja Wambui"],
+    # Deliberately misspelt, so a name correction can be demonstrated.
+    ("KQDLW1", "WAMBIU"): ["Delight Wambiu"],
 }
 
 # "booking reference ABC12D", "my PNR is abc12d", "ref: KQDEMO". The words

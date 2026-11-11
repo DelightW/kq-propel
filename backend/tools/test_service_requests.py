@@ -43,13 +43,13 @@ def say(sid, message):
 
 
 def test_name_parsing_and_counting():
-    assert service_requests.characters_changed("Delight Wangui", "Delight Wambui") == 2
-    assert service_requests.characters_changed("Delight Wangui", "Delight Kamau") > 3
-    assert service_requests.parse_new_name("change it to Delight Wambui", "Delight Wangui") == "Delight Wambui"
-    assert service_requests.parse_new_name("Wambui", "Delight Wangui") == "Delight Wambui"
-    assert service_requests.parse_new_name("mary-jane o'neil", "X Y") == "Mary-Jane O'Neil"
+    assert service_requests.characters_changed("Delight Wambiu", "Delight Wambui") == 2
+    assert service_requests.characters_changed("Delight Wambiu", "Delight Kanja") > 3
+    assert service_requests.parse_new_name("change it to Delight Wambui", "Delight Wambiu") == "Delight Wambui"
+    assert service_requests.parse_new_name("Wambui", "Delight Wambiu") == "Delight Wambui"
+    assert service_requests.parse_new_name("delight wambui-kanja", "X Y") == "Delight Wambui-Kanja"
     for not_a_name in ("How much is it?", "no thanks", "wait", "KQDLW1", "12345"):
-        assert service_requests.parse_new_name(not_a_name, "Delight Wangui") is None, not_a_name
+        assert service_requests.parse_new_name(not_a_name, "Delight Wambiu") is None, not_a_name
 
 
 def test_fee_comes_from_policy_text():
@@ -65,8 +65,8 @@ def test_fee_comes_from_policy_text():
 def test_full_name_correction_flow():
     s = session()
     assert "booking reference" in say(s, "I want to correct my name")
-    found = say(s, "booking reference KQDLW1, surname Wangui")
-    assert "Delight Wangui" in found and "What should the name be?" in found
+    found = say(s, "booking reference KQDLW1, surname Wambiu")
+    assert "Delight Wambiu" in found and "What should the name be?" in found
     summary = say(s, "Delight Wambui")
     assert "Delight Wambui" in summary and "USD 75.00" in summary and "2 character(s)" in summary
     req = service_requests.latest(s)
@@ -78,7 +78,7 @@ def test_full_name_correction_flow():
     assert req["status"] == service_requests.AWAITING_PAYMENT and req["quote_id"]
     with database._connect() as conn:
         tx = dict(conn.execute("SELECT * FROM transactions WHERE quote_id = ?", (req["quote_id"],)).fetchone())
-    assert tx["description"] == "Name correction on booking KQDLW1: Delight Wangui to Delight Wambui (SR-00001)"
+    assert tx["description"] == "Name correction on booking KQDLW1: Delight Wambiu to Delight Wambui (SR-00001)"
     payments.transition(tx["id"], payments.PAID, receipt="UKTEST123")
     req = service_requests.latest(s)
     assert req["status"] == service_requests.SUBMITTED and req["payment_reference"] == tx["reference"]
@@ -89,9 +89,9 @@ def test_full_name_correction_flow():
 
 def test_full_name_change_costs_more():
     s = session()
-    say(s, "booking ref KQDLW1 surname Wangui")
+    say(s, "booking ref KQDLW1 surname Wambiu")
     assert "What should the name be?" in say(s, "My name is misspelt on the booking")
-    summary = say(s, "Delight Kamau")
+    summary = say(s, "Delight Kanja")
     assert "full name change" in summary and "USD 150.00" in summary
 
 

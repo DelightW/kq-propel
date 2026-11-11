@@ -2,7 +2,7 @@
 
 **Status:** proposal. KQ-Propel already contains adapters for the two services below, tested against stubbed responses in exactly these shapes (`backend/tools/test_kq_integration.py`). If Kenya Airways' services differ, only the mapping function in each adapter changes; the assistant itself does not.
 
-Until the services are provided, the assistant uses clearly labelled demonstration data: two sample bookings (`KQDEMO` / Wanjiru and `KQBIZ1` / Otieno) and three sample flights.
+Until the services are provided, the assistant uses clearly labelled demonstration data: three sample bookings (`KQDEMO` / Kanja, `KQBIZ1` / Wambui and `KQDLW1` / Wambiu) and three sample flights.
 
 ## 1. Booking lookup (`backend/app/booking.py`)
 
@@ -11,7 +11,7 @@ Until the services are provided, the assistant uses clearly labelled demonstrati
 **Request.** `POST {KQ_BOOKING_API_URL}/orders/retrieve`, header `Authorization: Bearer {KQ_BOOKING_API_TOKEN}`
 
 ```json
-{ "pnr": "AB12CD", "surname": "Kamau" }
+{ "pnr": "AB12CD", "surname": "Kanja" }
 ```
 
 POST is used so that the surname never appears in a URL or access log.
@@ -21,7 +21,7 @@ POST is used so that the surname never appears in a URL or access log.
 ```json
 {
   "pnr": "AB12CD",
-  "passengers": [{ "givenName": "Jane", "surname": "Kamau" }],
+  "passengers": [{ "givenName": "Delight", "surname": "Kanja" }],
   "segments": [{
     "flightNumber": "KQ412",
     "origin":      { "iata": "NBO", "city": "Nairobi" },

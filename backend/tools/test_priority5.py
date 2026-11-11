@@ -61,30 +61,30 @@ def test_first_admin_comes_from_the_environment():
 
 def test_new_account_must_change_its_one_time_password():
     admin, _ = signed_in("admin", "first-admin-password")
-    created = admin.post("/api/admin/staff", json={"username": "wanjiku", "display_name": "Wanjiku M.",
+    created = admin.post("/api/admin/staff", json={"username": "wambui", "display_name": "Wambui K.",
                                                    "role": "agent"}).json()
     otp = created["one_time_password"]
     assert created["must_change_password"] and "password_hash" not in created
     listed = admin.get("/api/admin/staff").json()["staff"]
     assert all("password_hash" not in s for s in listed) and all(otp not in str(s) for s in listed)
 
-    agent_c, who = signed_in("wanjiku", otp)
+    agent_c, who = signed_in("wambui", otp)
     assert who["must_change_password"]
     assert agent_c.get("/api/admin/requests").status_code == 403, "nothing else until it is changed"
     short = agent_c.post("/api/admin/password", json={"current_password": otp, "new_password": "short"})
     assert short.status_code == 400
     ok = agent_c.post("/api/admin/password", json={"current_password": otp,
-                                                   "new_password": "wanjiku-own-pass"})
+                                                   "new_password": "wambui-own-pass"})
     assert ok.status_code == 200 and not ok.json()["must_change_password"]
     assert agent_c.get("/api/admin/requests").status_code == 200
 
 
 def test_roles_limit_what_each_person_can_reach():
     admin, _ = signed_in("admin", "first-admin-password")
-    otp = admin.post("/api/admin/staff", json={"username": "otieno", "role": "analyst"}).json()["one_time_password"]
-    analyst, _ = signed_in("otieno", otp)
-    analyst.post("/api/admin/password", json={"current_password": otp, "new_password": "otieno-own-pass"})
-    agent_c, who = signed_in("wanjiku", "wanjiku-own-pass")
+    otp = admin.post("/api/admin/staff", json={"username": "kanja", "role": "analyst"}).json()["one_time_password"]
+    analyst, _ = signed_in("kanja", otp)
+    analyst.post("/api/admin/password", json={"current_password": otp, "new_password": "kanja-own-pass"})
+    agent_c, who = signed_in("wambui", "wambui-own-pass")
     assert who["panels"] == staff.PANELS["agent"]
 
     for path in ADMIN_ONLY:
@@ -101,26 +101,26 @@ def test_roles_limit_what_each_person_can_reach():
 
 def test_disabling_signs_out_at_once_and_is_audited():
     admin, _ = signed_in("admin", "first-admin-password")
-    agent_c, _ = signed_in("wanjiku", "wanjiku-own-pass")
-    assert admin.post("/api/admin/staff/wanjiku/disable").status_code == 200
+    agent_c, _ = signed_in("wambui", "wambui-own-pass")
+    assert admin.post("/api/admin/staff/wambui/disable").status_code == 200
     assert agent_c.get("/api/admin/requests").status_code == 401, "existing session ends"
-    assert TestClient(app).post("/api/admin/login", json={"username": "wanjiku",
-                                                          "password": "wanjiku-own-pass"}).status_code == 401
-    admin.post("/api/admin/staff/wanjiku/enable")
-    signed_in("wanjiku", "wanjiku-own-pass")
+    assert TestClient(app).post("/api/admin/login", json={"username": "wambui",
+                                                          "password": "wambui-own-pass"}).status_code == 401
+    admin.post("/api/admin/staff/wambui/enable")
+    signed_in("wambui", "wambui-own-pass")
     actions = [(e["username"], e["action"]) for e in admin.get("/api/admin/audit").json()["entries"]]
     for expected in [("admin", "create_staff"), ("admin", "disable_staff"), ("admin", "enable_staff"),
-                     ("wanjiku", "change_own_password"), ("wanjiku", "login_success")]:
+                     ("wambui", "change_own_password"), ("wambui", "login_success")]:
         assert expected in actions, expected
 
 
 def test_role_change_applies_immediately():
     admin, _ = signed_in("admin", "first-admin-password")
-    agent_c, _ = signed_in("wanjiku", "wanjiku-own-pass")
+    agent_c, _ = signed_in("wambui", "wambui-own-pass")
     assert agent_c.get("/api/admin/audit").status_code == 403
-    admin.post("/api/admin/staff/wanjiku/role", json={"role": "admin"})
+    admin.post("/api/admin/staff/wambui/role", json={"role": "admin"})
     assert agent_c.get("/api/admin/audit").status_code == 200, "same session, new role"
-    admin.post("/api/admin/staff/wanjiku/role", json={"role": "agent"})
+    admin.post("/api/admin/staff/wambui/role", json={"role": "agent"})
     assert agent_c.get("/api/admin/audit").status_code == 403
 
 
@@ -135,10 +135,10 @@ def test_there_is_always_an_administrator():
 
 def test_password_reset_revokes_sessions():
     admin, _ = signed_in("admin", "first-admin-password")
-    agent_c, _ = signed_in("wanjiku", "wanjiku-own-pass")
-    otp = admin.post("/api/admin/staff/wanjiku/reset-password").json()["one_time_password"]
+    agent_c, _ = signed_in("wambui", "wambui-own-pass")
+    otp = admin.post("/api/admin/staff/wambui/reset-password").json()["one_time_password"]
     assert agent_c.get("/api/admin/requests").status_code == 401
-    _, who = signed_in("wanjiku", otp)
+    _, who = signed_in("wambui", otp)
     assert who["must_change_password"]
 
 

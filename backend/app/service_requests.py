@@ -188,7 +188,7 @@ def parse_new_name(message: str, current: str) -> Optional[str]:
         words = given + words
         if len(words) < 2:
             return None
-    # Capitalise each part, so Mary-Jane and O'Neil keep their capitals.
+    # Capitalise each part, so hyphenated names such as Wambui-Kanja keep their capitals.
     return " ".join(re.sub(r"[A-Za-z]+", lambda m: m.group(0).capitalize(), w) for w in words)
 
 

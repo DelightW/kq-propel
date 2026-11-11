@@ -742,7 +742,7 @@ def _start_name_request(session_id: str, trace: List[Dict]) -> Optional[str]:
     if not names:
         service_requests.start(session_id, service_requests.AWAITING_BOOKING)
         return ("To correct a name I need to look the booking up again. Please send the booking "
-                "reference and surname, for example \"booking KQDLW1, surname Wangui\".")
+                "reference and surname, for example \"booking KQDLW1, surname Wambiu\".")
     # The policy: name changes apply to Kenya Airways operated flights only.
     if not all(str(s.get("flight_number") or "").startswith("KQ") for s in segments):
         return ("Name changes apply to Kenya Airways operated flights only, and this booking includes "
@@ -790,7 +790,7 @@ def _service_request_turn(session_id: str, message: str, trace: List[Dict],
             service_requests.start(session_id, service_requests.AWAITING_BOOKING)
             question = ("I can help you correct the name on your booking. First, please send your "
                         "booking reference and the surname on the booking, for example "
-                        "\"booking KQDLW1, surname Wangui\".")
+                        "\"booking KQDLW1, surname Wambiu\".")
         return _finalize_direct(session_id, message, _apply_empathy(question, sentiment_result),
                                 trace, sentiment_result)
 
@@ -882,7 +882,7 @@ def _booking_turn(session_id: str, message: str, trace: List[Dict],
                        "content": "Booking reference given without a surname; both are required."})
         return _finalize_direct(session_id, message, _apply_empathy(
             f"To look up booking {reference} I also need the surname on the booking. Please send "
-            f"both together, for example \"booking {reference}, surname Kamau\".", sentiment_result),
+            f"both together, for example \"booking {reference}, surname Kanja\".", sentiment_result),
             trace, sentiment_result)
     result = booking.lookup(session_id, reference, surname)
     # The surname is not copied into the trace, which staff can see.
