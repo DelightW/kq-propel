@@ -18,27 +18,59 @@
 <!-- Staff sign-in. The dashboard exposes the transaction ledger, which holds
      passenger phone numbers, so nothing below renders until the API confirms
      an authenticated session. -->
-<main id="login-screen" class="login-screen" hidden>
-  <form id="login-form" class="login-card" autocomplete="on">
-    <div class="login-brand">
-      <span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg></span>
-      <span class="login-product">KQ-Propel</span>
+<main id="login-screen" class="login-screen login-split" hidden>
+  <div class="brand-panel">
+    <div class="bp-top">
+      <span class="mark mark-on-dark" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg></span>
+      <span class="bp-name">KQ-Propel</span>
     </div>
-    <h1>Staff sign-in</h1>
-    <p class="login-sub">The dashboard holds passenger payment records. Authorised staff only.</p>
+    <div class="bp-middle">
+      <p class="bp-title">The staff console for a support assistant that shows its sources.</p>
+      <ul class="bp-points">
+        <li>Answers grounded in published policy, each with the section it came from</li>
+        <li>M-Pesa and card payments with a complete audit trail</li>
+        <li>Individual staff accounts with role-based access</li>
+      </ul>
+    </div>
+    <p class="bp-foot">Research prototype &middot; Strathmore University<br />Not a Kenya Airways system</p>
+  </div>
 
-    <label for="login-user">Username</label>
-    <input id="login-user" name="username" type="text" autocomplete="username"
-           required autocapitalize="none" spellcheck="false" />
+  <div class="login-pane">
+    <form id="login-form" class="login-card" autocomplete="on">
+      <div class="login-brand">
+        <span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg></span>
+        <span class="login-product">KQ-Propel</span>
+      </div>
+      <h1>Staff sign-in</h1>
+      <p class="login-sub">The dashboard holds passenger payment records. Authorised staff only.</p>
 
-    <label for="login-pass">Password</label>
-    <input id="login-pass" name="password" type="password"
-           autocomplete="current-password" required />
+      <label for="login-user">Username</label>
+      <input id="login-user" name="username" type="text" autocomplete="username"
+             required autocapitalize="none" spellcheck="false" />
 
-    <button id="login-submit" class="btn" type="submit">Sign in</button>
-    <p id="login-error" class="login-error" role="alert" aria-live="assertive"></p>
-    <p class="login-foot">Research prototype &middot; not a Kenya Airways system</p>
-  </form>
+      <label for="login-pass">Password</label>
+      <div class="pw-field">
+        <input id="login-pass" name="password" type="password"
+               autocomplete="current-password" required aria-describedby="caps-warning" />
+        <button id="pw-toggle" class="pw-toggle" type="button" aria-label="Show password" aria-pressed="false">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+        </button>
+      </div>
+      <p id="caps-warning" class="caps-warning" hidden>Caps Lock is on.</p>
+
+      <button id="login-submit" class="btn" type="submit">
+        <span class="spinner" aria-hidden="true"></span><span class="btn-text">Sign in</span>
+      </button>
+      <p id="login-error" class="login-error" role="alert" aria-live="assertive"></p>
+      <p class="login-links">
+        <a href="/">Passenger chat</a>
+        <span aria-hidden="true">&middot;</span>
+        <a href="/privacy">Privacy notice</a>
+        <span aria-hidden="true">&middot;</span>
+        <a href="https://github.com/DelightW/kq-propel" rel="noopener">Source code</a>
+      </p>
+    </form>
+  </div>
 </main>
 
 <!-- A new account's one-time password must be replaced before anything else. -->

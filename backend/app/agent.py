@@ -1047,6 +1047,72 @@ def _finalize_direct(session_id: str, message: str, answer: str, trace: List[Dic
 
 
 def run_agent_turn(session_id: str, message: str) -> Dict:
+    """One passenger turn. The reply text is unchanged by the cards; they are
+    a structured copy of parts of it that the chat can draw as cards."""
+    result = _run_agent_turn(session_id, message)
+    result["cards"] = _cards_for_turn(session_id, result)
+    return result
+
+
+# ------------------------------------------------------------------ answer cards
+
+def _cards_for_turn(session_id: str, result: Dict) -> List[Dict]:
+    """Structured versions of a flight status, a found booking and a name-change
+    summary in this turn's reply. Each card names the exact passage of the
+    answer it stands for ("replaces"), so the chat can show the card in its
+    place; the stored answer, the trace and the staff transcript keep the text.
+    A card is only produced when that passage is really in the answer."""
+    answer = result.get("answer") or ""
+    cards: List[Dict] = []
+    for step in result.get("trace") or []:
+        tool = step.get("tool")
+        obs = step.get("observation")
+        if tool == "get_flight_status" and isinstance(obs, dict) and obs.get("available"):
+            text = aviationstack.describe(obs)
+            if text in answer:
+                cards.append({
+                    "type": "flight", "replaces": text,
+                    "flight_number": obs.get("flight_number"), "route": obs.get("route"),
+                    "status": obs.get("status"), "gate": obs.get("gate"),
+                    "delay_minutes": obs.get("delay_minutes"),
+                    "estimated_departure_utc": obs.get("estimated_departure_utc"),
+                    "retrieved_at_utc": obs.get("retrieved_at_utc"),
+                    "is_live": bool(obs.get("is_live")),
+                    "source_label": (aviationstack.LIVE_SOURCES.get(obs.get("source"), "Live data")
+                                     if obs.get("is_live") else "Demonstration data, not live"),
+                })
+        elif tool == "lookup_booking" and isinstance(obs, dict) and obs.get("available"):
+            trip = booking.remembered_booking(session_id)
+            if not trip.get("reference"):
+                continue
+            is_live = obs.get("source") == booking.SOURCE_LIVE
+            full = booking.describe({"available": True, "segments": trip["segments"],
+                                     "passengers": trip.get("passengers") or [], "is_live": is_live},
+                                    trip["reference"])
+            block = full.rsplit("\n\nYou can now ask", 1)[0]
+            if block in answer:
+                cards.append({"type": "booking", "replaces": block, "reference": trip["reference"],
+                              "passengers": trip.get("passengers") or [],
+                              "segments": trip["segments"], "is_live": is_live})
+    request = service_requests.latest(session_id)
+    if request and request.get("status") == service_requests.AWAITING_CONFIRMATION \
+            and request.get("fee_amount") is not None:
+        summary = _name_request_summary(request)
+        if summary in answer:
+            cards.append({
+                "type": "name_change", "replaces": summary,
+                "reference": service_requests.reference(request),
+                "booking_reference": request["booking_reference"], "scope": request["scope"],
+                "current_name": request["current_name"], "new_name": request["new_name"],
+                "characters_changed": request["characters_changed"],
+                "change_kind": request["change_kind"],
+                "fee_currency": request["fee_currency"], "fee_amount": request["fee_amount"],
+                "fee_source": request["fee_source"],
+            })
+    return cards
+
+
+def _run_agent_turn(session_id: str, message: str) -> Dict:
     message = (message or "").strip()
     trace: List[Dict] = []
 

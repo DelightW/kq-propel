@@ -89,9 +89,40 @@
       });
   }
 
+  /* Sign-in button: a spinner while the request is out, and a countdown when
+     the server has locked sign-in after repeated failures. */
+  var lockTimer = null;
+
+  function setSigningIn(on) {
+    loginSubmit.classList.toggle("loading", on);
+    loginSubmit.setAttribute("aria-busy", on ? "true" : "false");
+    loginSubmit.querySelector(".btn-text").textContent = on ? "Signing in…" : "Sign in";
+  }
+
+  function startLockCountdown(seconds) {
+    clearInterval(lockTimer);
+    var left = seconds;
+    loginSubmit.disabled = true;
+    function tick() {
+      if (left <= 0) {
+        clearInterval(lockTimer);
+        loginSubmit.disabled = false;
+        loginError.textContent = "You can try again now.";
+        return;
+      }
+      loginError.textContent = "Too many failed attempts. Try again in " + left + " second" +
+        (left === 1 ? "" : "s") + ".";
+      left -= 1;
+    }
+    tick();
+    lockTimer = setInterval(tick, 1000);
+  }
+
   function submitLogin(ev) {
     ev.preventDefault();
+    if (loginSubmit.disabled) { return; }
     loginSubmit.disabled = true;
+    setSigningIn(true);
     loginError.textContent = "";
     fetch("/api/admin/login", {
       method: "POST",
@@ -110,13 +141,51 @@
           throw new Error((res.body && res.body.detail) || "Sign-in failed.");
         }
         loginPass.value = "";
+        hidePassword();
+        setSigningIn(false);
+        loginSubmit.disabled = false;
         showDashboard(res.body);
       })
       .catch(function (err) {
+        setSigningIn(false);
+        var locked = /Try again in (\d+) seconds?/i.exec(err.message || "");
+        if (locked) {
+          startLockCountdown(parseInt(locked[1], 10));   // re-enables the button at zero
+          return;
+        }
         loginError.textContent = err.message;
-      })
-      .then(function () { loginSubmit.disabled = false; });
+        loginSubmit.disabled = false;
+      });
   }
+
+  function hidePassword() {
+    var t = document.getElementById("pw-toggle");
+    loginPass.type = "password";
+    if (t) {
+      t.setAttribute("aria-pressed", "false");
+      t.setAttribute("aria-label", "Show password");
+    }
+  }
+
+  /* Show or hide the password, and warn when Caps Lock is on. */
+  var pwToggle = document.getElementById("pw-toggle");
+  var capsWarning = document.getElementById("caps-warning");
+  if (pwToggle) {
+    pwToggle.addEventListener("click", function () {
+      var show = loginPass.type === "password";
+      loginPass.type = show ? "text" : "password";
+      pwToggle.setAttribute("aria-pressed", show ? "true" : "false");
+      pwToggle.setAttribute("aria-label", show ? "Hide password" : "Show password");
+      loginPass.focus();
+    });
+  }
+  function checkCaps(e) {
+    if (!capsWarning || !e.getModifierState) { return; }
+    capsWarning.hidden = !e.getModifierState("CapsLock");
+  }
+  loginPass.addEventListener("keydown", checkCaps);
+  loginPass.addEventListener("keyup", checkCaps);
+  loginPass.addEventListener("blur", function () { if (capsWarning) { capsWarning.hidden = true; } });
 
   function doLogout() {
     logoutBtn.disabled = true;

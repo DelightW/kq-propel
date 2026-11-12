@@ -107,69 +107,313 @@
   }
 
   function splitOutSources(text) {
-    // The cited source can appear anywhere in the answer, not only at the end
-    // - a payment offer is appended after it. Pulling every "Source:" line out
-    // by position rather than assuming it is last keeps the remaining prose
-    // formatted instead of dumping it into the citation.
+    // The cited sources can appear anywhere in the answer, not only at the end
+    // - a payment offer is appended after them. The "Source:" lines are taken
+    // out by position, and the text before and after them is kept apart so
+    // the source list can sit between the answer and anything that follows.
     var cited = [];
-    var kept = [];
+    var before = [];
+    var after = [];
     String(text).split("\n").forEach(function (line) {
       if (/^\s*Sources?:/i.test(line)) {
-        cited.push(line.replace(/^\s*Sources?:\s*/i, "").trim());
+        splitCitations(line.replace(/^\s*Sources?:\s*/i, "")).forEach(function (c) {
+          if (cited.indexOf(c) === -1) { cited.push(c); }
+        });
+      } else if (cited.length) {
+        after.push(line);
       } else {
-        kept.push(line);
+        before.push(line);
       }
     });
-    return { body: kept.join("\n").replace(/\n{3,}/g, "\n\n").trim(), cited: cited };
+    function tidy(lines) { return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim(); }
+    return { before: tidy(before), after: tidy(after), cited: cited };
   }
 
-  function buildSourceDisclosure(cited, retrieved) {
-    // Citations stay one click away rather than on screen permanently. They
-    // are never removed: an answer the user cannot trace back to a policy
-    // section is the exact failure mode this project is built to avoid.
-    var details = document.createElement("details");
-    details.className = "src-details";
+  // "A (version 1.0, ...); B (version 1.0, ...)" -> ["A (...)", "B (...)"]
+  function splitCitations(line) {
+    var parts = String(line).split(/\)\s*;\s*/);
+    return parts.map(function (p, i) {
+      p = p.trim();
+      return i < parts.length - 1 ? p + ")" : p;
+    }).filter(function (p) { return p; });
+  }
 
-    var summary = document.createElement("summary");
-    summary.className = "src-summary";
-    summary.textContent = cited.length
-      ? (cited.length === 1 ? "Source" : cited.length + " sources")
-      : "Sources retrieved";
-    details.appendChild(summary);
+  // "Baggage Allowance Policy - Section 1: Free Checked ... (version 1.0, as published 23 Sep 2026)"
+  function parseSource(s) {
+    var m = /^(.*?)\s+-\s+(Section\s+\d+:.*?)\s*\(([^()]*)\)\s*$/.exec(s);
+    if (!m) { return { doc: s, section: "", edition: "" }; }
+    return { doc: m[1], section: m[2], edition: m[3] };
+  }
 
-    var body = document.createElement("div");
-    body.className = "src-body";
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) { n.className = cls; }
+    if (text !== undefined && text !== null) { n.textContent = text; }
+    return n;
+  }
 
-    cited.forEach(function (c) {
-      var row = document.createElement("div");
-      row.className = "src-cited";
-      row.textContent = c;
-      body.appendChild(row);
+  /* Draws `text`, putting each card where the passage it stands for was. */
+  function renderWithCards(parent, text, cards) {
+    var pieces = [{ text: text }];
+    (cards || []).forEach(function (card) {
+      if (!card || !card.replaces) { return; }
+      for (var i = 0; i < pieces.length; i++) {
+        var p = pieces[i];
+        if (p.text === undefined) { continue; }
+        var at = p.text.indexOf(card.replaces);
+        if (at === -1) { continue; }
+        pieces.splice(i, 1, { text: p.text.slice(0, at) }, { card: card },
+                      { text: p.text.slice(at + card.replaces.length) });
+        card.placed = true;
+        break;
+      }
     });
-
-    var others = (retrieved || []).filter(function (r) {
-      return cited.indexOf(r) === -1;
+    pieces.forEach(function (p) {
+      if (p.card) {
+        var built = buildCard(p.card);
+        if (built) { parent.appendChild(built); }
+      } else if (p.text && p.text.trim()) {
+        appendRichText(parent, p.text.trim());
+      }
     });
-    if (others.length) {
-      var lab = document.createElement("div");
-      lab.className = "src-other-label";
-      lab.textContent = "Also retrieved, not quoted";
-      body.appendChild(lab);
-      others.forEach(function (o) {
-        var row = document.createElement("div");
-        row.className = "src-other";
-        row.textContent = o;
-        body.appendChild(row);
-      });
+  }
+
+  function addCitationMarkers(parent, count, idBase) {
+    var paras = parent.querySelectorAll(".msg-p, .msg-list li");
+    if (!paras.length || !count) { return; }
+    var last = paras[paras.length - 1];
+    for (var i = 1; i <= count; i++) {
+      var a = el("a", "cite", String(i));
+      a.href = "#" + idBase + "-" + i;
+      a.setAttribute("aria-label", "Source " + i);
+      last.appendChild(a);
     }
+  }
 
+  function buildSources(cited, idBase) {
+    var box = el("div", "sources");
+    box.appendChild(el("div", "sources-label", cited.length === 1 ? "Source" : "Sources"));
+    cited.forEach(function (c, i) {
+      var s = parseSource(c);
+      var card = el("div", "source-card");
+      card.id = idBase + "-" + (i + 1);
+      card.appendChild(el("span", "source-num", String(i + 1)));
+      var body = el("div");
+      var doc = el("div", "source-doc", s.doc);
+      if (/prototype/i.test(s.edition)) { doc.appendChild(el("span", "source-badge", "Prototype document")); }
+      body.appendChild(doc);
+      if (s.section) { body.appendChild(el("div", "source-sec", s.section)); }
+      if (s.edition) {
+        body.appendChild(el("div", "source-ed",
+          s.edition.charAt(0).toUpperCase() + s.edition.slice(1)));
+      }
+      card.appendChild(body);
+      box.appendChild(card);
+    });
+    return box;
+  }
+
+  function buildOthers(others, anyCited) {
+    var details = el("details", "src-details");
+    details.appendChild(el("summary", "src-summary",
+      (anyCited ? "Also retrieved, not quoted" : "Sections retrieved") + " (" + others.length + ")"));
+    var body = el("div", "src-body");
+    others.forEach(function (o) { body.appendChild(el("div", "src-other", o)); });
     details.appendChild(body);
     return details;
   }
 
+  /* ------------------------------- cards ------------------------------- */
+
+  var PLANE_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" ' +
+    'd="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>';
+  var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  function fmtUtc(s) {
+    if (!s) { return "-"; }
+    var d = new Date(s);   // "2026-11-12T08:36Z" and "2026-11-11T09:10:00+00:00" both parse
+    if (isNaN(d.getTime())) { return String(s); }
+    var hh = ("0" + d.getUTCHours()).slice(-2), mm = ("0" + d.getUTCMinutes()).slice(-2);
+    return d.getUTCDate() + " " + MONTHS[d.getUTCMonth()] + ", " + hh + ":" + mm + " UTC";
+  }
+
+  function fmtTimeUtc(s) {
+    var full = fmtUtc(s);
+    var m = /, (\d\d:\d\d UTC)$/.exec(full);
+    return m ? m[1] : full;
+  }
+
+  function fmtDelay(min) {
+    if (min === null || min === undefined) { return "-"; }
+    if (Number(min) === 0) { return "None"; }
+    var h = Math.floor(min / 60), m = min % 60;
+    return h ? h + " h " + (m ? m + " min" : "") : m + " min";
+  }
+
+  function parseRoute(route) {
+    return String(route || "").split(/\s*->\s*/).map(function (x) {
+      var m = /^(.*?)\s*\((\w{3})\)\s*$/.exec(x.trim());
+      return m ? { city: m[1], code: m[2] } : { city: x.trim(), code: "" };
+    });
+  }
+
+  function statusPill(status, delay) {
+    var s = String(status || "").toLowerCase();
+    var late = Number(delay) > 0;
+    var look = {
+      landed: ["ok", "Landed"], arrived: ["ok", "Arrived"],
+      active: ["info", "In the air"], "en-route": ["info", "In the air"], airborne: ["info", "In the air"],
+      boarding: ["info", "Boarding"], departed: ["info", "Departed"],
+      cancelled: ["bad", "Cancelled"], canceled: ["bad", "Cancelled"], diverted: ["bad", "Diverted"],
+      delayed: ["warn", "Delayed"], scheduled: late ? ["warn", "Delayed"] : ["ok", "On time"]
+    }[s] || ["", s ? s.charAt(0).toUpperCase() + s.slice(1) : "Unknown"];
+    var pill = el("span", "pill " + look[0]);
+    pill.appendChild(el("span", "pulse"));
+    pill.appendChild(document.createTextNode(look[1]));
+    return pill;
+  }
+
+  function routeBlock(fromCode, fromCity, toCode, toCity) {
+    var route = el("div", "route");
+    var a = el("div", "route-end");
+    a.appendChild(el("span", "iata", fromCode || "-"));
+    a.appendChild(el("span", "city", fromCity || ""));
+    var path = el("div", "route-path");
+    path.innerHTML = PLANE_SVG;
+    var b = el("div", "route-end");
+    b.appendChild(el("span", "iata", toCode || "-"));
+    b.appendChild(el("span", "city", toCity || ""));
+    route.appendChild(a);
+    route.appendChild(path);
+    route.appendChild(b);
+    route.setAttribute("aria-label", "From " + (fromCity || fromCode) + " to " + (toCity || toCode));
+    return route;
+  }
+
+  function facts(pairs) {
+    var dl = el("dl", "facts");
+    pairs.forEach(function (p) {
+      var d = el("div");
+      d.appendChild(el("dt", null, p[0]));
+      d.appendChild(el("dd", null, p[1]));
+      dl.appendChild(d);
+    });
+    return dl;
+  }
+
+  function cardShell(label, strong, right) {
+    var card = el("section", "kq-card");
+    card.setAttribute("aria-label", label + " " + strong);
+    var head = el("div", "kq-card-head");
+    var title = el("div", "kq-card-title");
+    title.appendChild(document.createTextNode(label));
+    title.appendChild(el("strong", null, strong));
+    head.appendChild(title);
+    if (right) { head.appendChild(right); }
+    card.appendChild(head);
+    var body = el("div", "kq-card-body");
+    card.appendChild(body);
+    return { card: card, body: body };
+  }
+
+  function flightCard(c) {
+    var shell = cardShell("Flight", c.flight_number || "", statusPill(c.status, c.delay_minutes));
+    var ends = parseRoute(c.route);
+    var from = ends[0] || {}, to = ends[1] || {};
+    shell.body.appendChild(routeBlock(from.code, from.city, to.code, to.city));
+    shell.body.appendChild(facts([
+      ["Gate", c.gate || "-"],
+      ["Delay", fmtDelay(c.delay_minutes)],
+      ["Est. departure", fmtUtc(c.estimated_departure_utc)]
+    ]));
+    var foot = el("div", "kq-card-foot");
+    if (c.is_live) {
+      foot.appendChild(el("span", "pill ok", "Live"));
+      foot.appendChild(document.createTextNode(c.source_label +
+        (c.retrieved_at_utc ? " · retrieved " + fmtTimeUtc(c.retrieved_at_utc) : "")));
+    } else {
+      foot.appendChild(el("span", "pill warn", "Demo"));
+      foot.appendChild(document.createTextNode("Demonstration data, not live flight information"));
+    }
+    shell.card.appendChild(foot);
+    return shell.card;
+  }
+
+  function bookingCard(c) {
+    var shell = cardShell("Booking", c.reference || "",
+      el("span", "pill " + (c.is_live ? "ok" : "warn"), c.is_live ? "Confirmed" : "Demo booking"));
+    if (c.passengers && c.passengers.length) {
+      var who = el("p", "passenger");
+      who.appendChild(document.createTextNode("Passenger "));
+      who.appendChild(el("strong", null, c.passengers.join(", ")));
+      shell.body.appendChild(who);
+    }
+    (c.segments || []).forEach(function (s) {
+      var seg = el("div", "segment");
+      seg.appendChild(routeBlock(s.origin_code, s.origin, s.destination_code, s.destination));
+      var bag = s.checked_baggage || {};
+      seg.appendChild(facts([
+        ["Flight", s.flight_number || "-"],
+        ["Departs", fmtUtc(s.departure_utc)],
+        ["Checked bags", bag.pieces && bag.weight_kg ? bag.pieces + " × " + bag.weight_kg + " kg" : "-"]
+      ]));
+      seg.appendChild(el("div", "segment-meta",
+        [s.cabin, s.fare_brand].filter(Boolean).join(" · ")));
+      shell.body.appendChild(seg);
+    });
+    if (!c.is_live) {
+      var foot = el("div", "kq-card-foot");
+      foot.appendChild(document.createTextNode("Sample data for the demonstration, not a real booking"));
+      shell.card.appendChild(foot);
+    }
+    return shell.card;
+  }
+
+  function nameChangeCard(c) {
+    var shell = cardShell("Name correction", c.reference || "",
+      el("span", "pill info", "Waiting for you"));
+    var names = el("div", "nc-names");
+    names.appendChild(el("span", "nc-old", c.current_name));
+    names.appendChild(el("span", "nc-arrow", "→"));
+    names.appendChild(el("span", "nc-new", c.new_name));
+    names.setAttribute("aria-label", "From " + c.current_name + " to " + c.new_name);
+    shell.body.appendChild(names);
+    shell.body.appendChild(el("div", "nc-detail",
+      "Booking " + c.booking_reference + " (" + c.scope + ") · " + c.characters_changed +
+      " character(s) changed, so " + (c.change_kind === "correction"
+        ? "a correction of up to three characters" : "a full name change")));
+    var fee = el("div", "nc-fee");
+    fee.appendChild(el("span", "nc-fee-label", "Fee"));
+    fee.appendChild(el("span", "nc-amount", c.fee_currency + " " + Number(c.fee_amount).toFixed(2)));
+    shell.body.appendChild(fee);
+    shell.body.appendChild(el("div", "nc-source", "From " + c.fee_source));
+    shell.body.appendChild(el("p", "nc-question", "Shall I go ahead?"));
+    var actions = el("div", "nc-actions");
+    var yes = el("button", "card-btn primary", "Yes, pay and submit");
+    var no = el("button", "card-btn", "Cancel");
+    yes.type = no.type = "button";
+    yes.addEventListener("click", function () { send("yes"); });
+    no.addEventListener("click", function () { send("no"); });
+    actions.appendChild(yes);
+    actions.appendChild(no);
+    shell.body.appendChild(actions);
+    return shell.card;
+  }
+
+  function buildCard(card) {
+    if (card.type === "flight") { return flightCard(card); }
+    if (card.type === "booking") { return bookingCard(card); }
+    if (card.type === "name_change") { return nameChangeCard(card); }
+    return null;
+  }
+
+  var bubbleSeq = 0;
+
   function addBubble(role, text, meta) {
     var bubble = document.createElement("div");
     bubble.className = "bubble " + role;
+    bubbleSeq += 1;
+    var idBase = "src-" + bubbleSeq;
 
     var speaker = document.createElement("span");
     speaker.className = "sr-only";
@@ -183,12 +427,19 @@
       bubble.appendChild(who);
     }
 
-    var split = splitOutSources(text || "");
-    appendRichText(bubble, split.body);
-
-    var retrieved = (meta && meta.sources) || [];
-    if (split.cited.length || retrieved.length) {
-      bubble.appendChild(buildSourceDisclosure(split.cited, retrieved));
+    if (role === "user") {
+      appendRichText(bubble, text || "");
+    } else {
+      var split = splitOutSources(text || "");
+      var cards = (meta && meta.cards) || [];
+      renderWithCards(bubble, split.before, cards);
+      addCitationMarkers(bubble, split.cited.length, idBase);
+      if (split.cited.length) { bubble.appendChild(buildSources(split.cited, idBase)); }
+      var others = ((meta && meta.sources) || []).filter(function (r) {
+        return split.cited.indexOf(r) === -1;
+      });
+      if (others.length) { bubble.appendChild(buildOthers(others, split.cited.length > 0)); }
+      if (split.after) { renderWithCards(bubble, split.after, cards); }
     }
 
     if (meta && meta.sentiment && meta.sentiment.label === "frustrated") {
@@ -586,6 +837,9 @@
     if (!message || busy) { return; }
 
     showWelcome(false);
+    Array.prototype.forEach.call(document.querySelectorAll(".nc-actions button"), function (b) {
+      b.disabled = true;
+    });
     addBubble("user", message);
     input.value = "";
     setBusy(true);
@@ -704,13 +958,9 @@
 
   /* ------------------------------ greeting ------------------------------ */
 
-  addBubble("bot",
-    "Hello, I'm KQ-Propel. I answer questions about baggage, check-in, delays and refunds " +
-    "from the airline's published policies, and I can look up a booking, check a flight " +
-    "or take payment for a name correction.\n\n" +
-    "What would you like to know?");
-  // Start at the top, so the greeting and the suggestions are read in order.
-  chatScroll.scrollTop = 0;
+  // The welcome screen (index.html) greets the passenger; it is shown until
+  // the first message and again after the conversation is deleted.
+  showWelcome(true);
 
   /* The composer stays disabled until the server has issued a session, so a
      message can never be sent without one. */

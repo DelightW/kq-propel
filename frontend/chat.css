@@ -173,15 +173,18 @@ body {
 
 .chat-inner {
   max-width: 780px;
+  min-height: 100%;
   margin: 0 auto;
   padding: 20px 16px 12px;
+  display: flex;
+  flex-direction: column;
 }
 
 /* -------------------------------- messages ------------------------------- */
 .chat-window {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 20px;
 }
 
 .bubble {
@@ -216,8 +219,26 @@ body {
 .bubble.agent {
   position: relative;
   align-self: flex-start;
-  margin-left: 40px;
-  max-width: calc(100% - 40px);
+  margin-left: 42px;
+  max-width: calc(100% - 42px);
+}
+
+/* The assistant's replies read as plain text beside its avatar, the way
+   modern assistants present answers; only the passenger's own messages and
+   staff replies sit in bubbles. */
+.bubble.bot {
+  width: calc(100% - 42px);
+  padding: 4px 0 2px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  font-size: 15.5px;
+  line-height: 1.65;
+  color: var(--ink);
+}
+.bubble.bot .msg-p { margin-bottom: 12px; }
+
+.bubble.agent {
   background: var(--surface);
   border: 1px solid var(--border);
   border-top-left-radius: 6px;
@@ -228,7 +249,7 @@ body {
 .bubble.agent::before {
   content: "";
   position: absolute;
-  left: -40px; top: 0;
+  left: -42px; top: 2px;
   width: 30px; height: 30px;
   border-radius: 9px;
   background-color: var(--accent);
@@ -254,65 +275,240 @@ body {
   color: var(--ink-2);
 }
 
-/* Citations are collapsed by default but never removed: an answer the reader
-   cannot trace back to a policy section is the failure mode this whole
-   project is built to avoid. */
-.src-details {
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border);
+/* ------------------------------- citations ------------------------------- */
+/* Every quoted section is listed under the answer as a numbered source, and
+   the answer carries matching markers. An answer the reader cannot trace back
+   to a policy section is the failure this project is built to avoid. */
+.cite {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 3px;
+  padding: 0 4px;
+  border-radius: 6px;
+  background: #eef0f3;
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+  vertical-align: 2px;
+}
+.cite:hover { background: var(--accent-soft); color: var(--accent-hover); }
+
+.sources { margin: 14px 0 4px; display: grid; gap: 8px; }
+.sources-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.source-card {
+  display: flex;
+  gap: 11px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  scroll-margin: 80px;
+}
+.source-card:target { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.source-num {
+  flex: 0 0 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.source-doc { font-size: 13.5px; font-weight: 600; color: var(--ink); line-height: 1.4; }
+.source-sec { font-size: 13px; color: var(--ink-2); line-height: 1.45; }
+.source-ed { margin-top: 2px; font-size: 12px; color: var(--muted); }
+.source-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--warn);
+  background: var(--warn-soft);
+  vertical-align: 1px;
 }
 
+.src-details { margin-top: 8px; }
+/* Text that follows the sources, such as a payment offer, starts a new block. */
+.sources + .msg-p, .sources + .msg-list, .src-details + .msg-p, .src-details + .msg-list,
+.src-details + .kq-card, .sources + .kq-card { margin-top: 18px; }
 .src-summary {
   cursor: pointer;
-  list-style: none;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   font-size: 12.5px;
-  font-weight: 600;
-  color: var(--ink-2);
-  padding: 3px 9px 3px 7px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface-2);
+  font-weight: 500;
+  color: var(--muted);
+  list-style: none;
   user-select: none;
 }
 .src-summary::-webkit-details-marker { display: none; }
-.src-summary::before {
-  content: "";
-  width: 14px; height: 14px;
-  background: no-repeat center / 14px 14px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='%23344054' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M9 13h6M9 17h6'/%3E%3C/svg%3E");
-}
-.src-summary:hover { border-color: var(--border-strong); background: var(--surface); }
-
-.src-body { margin-top: 9px; display: flex; flex-direction: column; gap: 6px; }
-
-.src-cited {
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: var(--ink-2);
-  padding: 7px 10px;
-  border-left: 3px solid var(--accent);
-  background: var(--surface-2);
-  border-radius: 0 8px 8px 0;
-}
-
-.src-other-label {
-  margin-top: 4px;
-  font-size: 11.5px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-}
-
+.src-summary::before { content: "\25B8"; font-size: 10px; transition: transform 0.15s ease; }
+.src-details[open] .src-summary::before { transform: rotate(90deg); }
+.src-summary:hover { color: var(--ink); }
+.src-body { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
 .src-other {
-  font-size: 12px;
+  font-size: 12.5px;
   line-height: 1.5;
   color: var(--muted);
   padding: 2px 0 2px 10px;
   border-left: 2px solid var(--border);
+}
+
+/* --------------------------------- cards ---------------------------------- */
+/* Flight status, a found booking and a name-change summary are drawn as cards
+   in place of the sentences that state them. */
+.kq-card {
+  max-width: 540px;
+  margin: 4px 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  animation: rise 0.25s ease-out;
+}
+.kq-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 16px 0;
+}
+.kq-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.kq-card-title strong { color: var(--ink); font-size: 15px; }
+.kq-card-body { padding: 12px 16px 16px; }
+.kq-card-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 9px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.route { display: flex; align-items: center; gap: 14px; }
+.route-end { min-width: 0; }
+.route-end:last-child { text-align: right; }
+.iata { display: block; font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+.city { display: block; font-size: 12.5px; color: var(--muted); }
+.route-path {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 40px;
+  height: 2px;
+  border-top: 2px dashed var(--border-strong);
+}
+.route-path svg {
+  position: absolute;
+  left: 50%; top: -11px;
+  margin-left: -10px;
+  color: var(--accent);
+  transform: rotate(90deg);
+  background: var(--surface);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 12px;
+  margin: 14px 0 0;
+}
+.facts div { min-width: 0; }
+.facts dt { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.facts dd { margin: 2px 0 0; font-size: 14px; font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: #eef0f3;
+  color: var(--ink-2);
+}
+.pill.ok { background: var(--success-soft); color: #11632f; }
+.pill.warn { background: var(--warn-soft); color: var(--warn); }
+.pill.bad { background: var(--danger-soft); color: var(--danger); }
+.pill.info { background: #eef4ff; color: #1d4ed8; }
+.pill .pulse { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+
+.segment + .segment { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+.segment-meta { margin-top: 10px; font-size: 13.5px; color: var(--ink-2); }
+.passenger { margin: 0 0 12px; font-size: 14px; color: var(--ink-2); }
+.passenger strong { color: var(--ink); }
+
+.nc-names { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; font-size: 16px; }
+.nc-old { color: var(--muted); text-decoration: line-through; text-decoration-color: #b8bec8; }
+.nc-new { font-weight: 700; color: var(--ink); }
+.nc-arrow { color: var(--muted); }
+.nc-detail { margin-top: 8px; font-size: 13.5px; color: var(--ink-2); }
+.nc-fee {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.nc-fee-label { font-size: 13px; color: var(--muted); }
+.nc-amount { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.nc-source { margin-top: 4px; font-size: 12px; color: var(--muted); }
+.nc-question { margin: 14px 0 0; font-size: 14px; color: var(--ink-2); }
+.nc-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.card-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.card-btn:hover:not(:disabled) { background: var(--surface-2); }
+.card-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.card-btn.primary:hover:not(:disabled) { background: var(--accent-hover); }
+.card-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+@media (max-width: 480px) {
+  .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .iata { font-size: 24px; }
 }
 
 .bubble .tone {
@@ -339,15 +535,62 @@ body {
 @keyframes blink { 0%, 60%, 100% { opacity: 0.25; transform: none; } 30% { opacity: 0.9; transform: translateY(-2px); } }
 
 /* --------------------------------- welcome -------------------------------- */
-.welcome { margin: 22px 0 8px 40px; }
+/* Shown until the first message: centred in the window, then replaced by the
+   conversation. */
+.welcome {
+  margin: auto 0;
+  padding: 12px 0 8px;
+  text-align: center;
+  animation: rise 0.3s ease-out;
+}
 
-.welcome-title {
-  margin: 0 0 10px;
+.hero-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px; height: 56px;
+  border-radius: 16px;
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(200, 16, 46, 0.25);
+}
+
+.hero-title {
+  margin: 18px 0 8px;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+  color: var(--ink);
+}
+
+.hero-sub {
+  max-width: 520px;
+  margin: 0 auto;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.suggest-label {
+  margin: 28px 0 10px;
   font-size: 12.5px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   color: var(--muted);
+}
+
+.s-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: 1px;
+  color: var(--warn);
+  background: var(--warn-soft);
 }
 
 .suggestions {
@@ -381,7 +624,8 @@ body {
 .s-q { font-size: 13px; color: var(--muted); line-height: 1.45; }
 
 .welcome-note {
-  margin: 14px 0 0;
+  max-width: 520px;
+  margin: 18px auto 0;
   font-size: 12.5px;
   line-height: 1.55;
   color: var(--muted);
@@ -468,8 +712,8 @@ body {
 /* ------------------------------ payment card ------------------------------ */
 .pay-card {
   align-self: flex-start;
-  margin-left: 40px;
-  width: min(420px, calc(100% - 40px));
+  margin-left: 42px;
+  width: min(420px, calc(100% - 42px));
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);

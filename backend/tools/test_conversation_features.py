@@ -112,6 +112,34 @@ def test_status_question_gets_only_the_status():
     assert "Source:" in result["answer"], result["answer"][:300]
 
 
+def test_cards_stand_in_for_exact_passages_of_the_answer():
+    # The chat draws these as cards in place of the passage named by
+    # "replaces"; the stored answer keeps the full text for the transcript.
+    flight = turn("card-flight", "What is the status of flight KQ100?")
+    [card] = flight["cards"]
+    assert card["type"] == "flight" and card["flight_number"] == "KQ100" and not card["is_live"]
+    assert card["replaces"] in flight["answer"] and "not live" in card["source_label"].lower()
+
+    found = turn("card-booking", "My booking reference is KQDEMO and my surname is Wanjiru")
+    [card] = found["cards"]
+    assert card["type"] == "booking" and card["reference"] == "KQDEMO" and not card["is_live"]
+    assert card["passengers"] == ["Delight Wanjiru"] and card["segments"][0]["flight_number"] == "KQ100"
+    assert card["replaces"] in found["answer"] and "sample data" in card["replaces"]
+    assert "You can now ask" not in card["replaces"], "the follow-up sentence stays as text"
+
+    s = "card-name"
+    turn(s, "I want to correct my name")
+    turn(s, "booking KQDLW1, surname Wangui")
+    summary = turn(s, "Delight Wambui")
+    card = next(c for c in summary["cards"] if c["type"] == "name_change")
+    assert card["current_name"] == "Delight Wangui" and card["new_name"] == "Delight Wambui"
+    assert card["fee_currency"] == "USD" and card["fee_amount"] == 75 and card["characters_changed"] == 2
+    assert card["replaces"] in summary["answer"]
+
+    policy = turn("card-none", "When does check-in close for international flights?")
+    assert policy["cards"] == [], "an ordinary policy answer has no card"
+
+
 def test_sessions_do_not_share_memory():
     turn("mem-a", "How many bags can I check in Economy on a flight from Nairobi to London?")
     assert memory.resolve_query("mem-b", "What about Business class?") is None

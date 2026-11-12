@@ -523,6 +523,138 @@ td.empty {
 .row-actions { white-space: nowrap; }
 .row-actions .btn + .btn { margin-left: 6px; }
 
+/* --------------------------- split sign-in screen -------------------------- */
+/* Brand panel on the left, form on the right; stacked on phones, where the
+   panel is hidden and the form keeps its own small brand line. */
+.login-screen.login-split {
+  padding: 0;
+  align-items: stretch;
+  justify-content: stretch;
+  background: var(--surface);
+}
+
+.brand-panel { display: none; }
+
+.login-pane {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 20px;
+  padding-top: calc(24px + env(safe-area-inset-top));
+  background: var(--bg);
+  overflow-y: auto;
+}
+
+.login-split .login-card { max-width: 400px; }
+
+.pw-field { position: relative; margin-bottom: 6px; }
+.login-card .pw-field input { width: 100%; margin-bottom: 0; padding-right: 46px; }
+.pw-toggle {
+  position: absolute;
+  right: 4px; top: 50%;
+  transform: translateY(-50%);
+  width: 38px; height: 38px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.pw-toggle:hover { color: var(--ink); background: var(--surface-2); }
+.pw-toggle[aria-pressed="true"] { color: var(--accent-hover); }
+
+.caps-warning {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--warn);
+}
+
+.login-card #login-submit { margin-top: 16px; }
+.spinner {
+  display: none;
+  width: 16px; height: 16px;
+  margin-right: 8px;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+.btn.loading .spinner { display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.login-links {
+  margin: 18px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+.login-links a { color: var(--ink-2); text-decoration: none; margin: 0 4px; white-space: nowrap; }
+.login-links a:hover { color: var(--accent-hover); text-decoration: underline; }
+
+@media (min-width: 900px) {
+  .brand-panel {
+    position: relative;
+    flex: 0 0 44%;
+    max-width: 620px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 40px 48px;
+    color: #fff;
+    background-color: #0f172a;
+    /* A soft red glow and faint dashed flight paths. */
+    background-image:
+      radial-gradient(circle at 18% 12%, rgba(200, 16, 46, 0.55), transparent 46%),
+      radial-gradient(circle at 92% 96%, rgba(200, 16, 46, 0.28), transparent 42%),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 800' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='white' stroke-opacity='0.13' stroke-width='1.5' stroke-dasharray='6 9'%3E%3Cpath d='M-40 620 Q 260 240 660 330'/%3E%3Cpath d='M-40 760 Q 320 420 660 560'/%3E%3Cpath d='M-40 420 Q 220 120 660 120'/%3E%3C/g%3E%3Cg fill='white' fill-opacity='0.35'%3E%3Ccircle cx='300' cy='342' r='3'/%3E%3Ccircle cx='420' cy='548' r='3'/%3E%3Ccircle cx='190' cy='238' r='3'/%3E%3C/g%3E%3C/svg%3E");
+    background-size: auto, auto, 100% 100%;
+    background-repeat: no-repeat;
+  }
+  .bp-top { display: flex; align-items: center; gap: 12px; }
+  .mark-on-dark { background: #fff; color: var(--accent); }
+  .bp-name { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+  .bp-title {
+    max-width: 440px;
+    margin: 0 0 26px;
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.025em;
+  }
+  .bp-points { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; max-width: 420px; }
+  .bp-points li {
+    position: relative;
+    padding-left: 32px;
+    font-size: 15px;
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.86);
+  }
+  .bp-points li::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 1px;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.12) no-repeat center / 12px 12px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' d='M5 12l5 5 9-10'/%3E%3C/svg%3E");
+  }
+  .bp-foot { margin: 0; font-size: 13px; line-height: 1.6; color: rgba(255, 255, 255, 0.7); }
+
+  .login-split .login-pane { background: var(--surface); }
+  .login-split .login-card {
+    border: 0;
+    box-shadow: none;
+    padding: 0;
+    background: transparent;
+  }
+  .login-split .login-brand { display: none; }
+  .login-split .login-card h1 { font-size: 28px; }
+}
+
 /* ============================ tablet / laptop ============================ */
 @media (min-width: 600px) {
   .cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }

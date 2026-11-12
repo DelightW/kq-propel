@@ -45,15 +45,21 @@
           <div id="chat-window" class="chat-window" role="log" aria-live="polite" aria-label="Conversation"></div>
 
           <section id="welcome" class="welcome" aria-labelledby="welcome-title">
-            <h2 id="welcome-title" class="welcome-title">Try asking</h2>
-            <div class="suggestions" id="chips" role="group" aria-labelledby="welcome-title">
+            <span class="hero-mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="28" height="28"><path fill="currentColor" d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>
+            </span>
+            <h2 id="welcome-title" class="hero-title">How can I help with your trip?</h2>
+            <p class="hero-sub">I answer from the airline's published policies and show the section each answer
+              comes from. I can also look up a booking, check a flight or take payment for a name correction.</p>
+            <p class="suggest-label" id="suggest-label">Try asking</p>
+            <div class="suggestions" id="chips" role="group" aria-labelledby="suggest-label">
               <button type="button" data-q="How many bags can I check in Economy to London?">
                 <span class="s-title">Checked baggage</span>
                 <span class="s-q">How many bags can I check in Economy to London?</span>
               </button>
-              <button type="button" data-q="How much hand luggage can I take in Economy?">
-                <span class="s-title">Cabin baggage</span>
-                <span class="s-q">How much hand luggage can I take in Economy?</span>
+              <button type="button" data-q="My booking reference is KQDEMO and my surname is Wanjiru">
+                <span class="s-title">Your booking <span class="s-tag">Demo</span></span>
+                <span class="s-q">Booking KQDEMO, surname Wanjiru</span>
               </button>
               <button type="button" data-q="My bag didn't arrive. What can I claim?">
                 <span class="s-title">Delayed bag</span>
@@ -72,8 +78,7 @@
                 <span class="s-q">I need to correct the name on my booking</span>
               </button>
             </div>
-            <p class="welcome-note">Answers are quoted from Kenya Airways' published policies, with the section
-              they came from. This is a student research prototype, not a Kenya Airways service; bookings and
+            <p class="welcome-note">A student research prototype, not a Kenya Airways service. Bookings and
               flights without a live source are demonstration data and are labelled as such.</p>
           </section>
         </div>

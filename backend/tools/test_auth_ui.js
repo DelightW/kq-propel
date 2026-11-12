@@ -132,8 +132,11 @@ async function load(path) {
   const c = await load("/");
   await wait(3000);
   const cdoc = c.w.document;
+  // The welcome screen greets the passenger until the first message.
+  const welcome = cdoc.getElementById("welcome");
   const bubbles = cdoc.querySelectorAll(".bubble, .msg, .message");
-  check("greeting rendered", bubbles.length > 0, String(bubbles.length));
+  check("greeting rendered", (welcome && !welcome.hidden) || bubbles.length > 0,
+    "welcome hidden=" + (welcome ? welcome.hidden : "missing") + ", bubbles=" + bubbles.length);
   const input = cdoc.querySelector("#input, input[type=text], textarea");
   check("composer enabled after session starts",
     input && input.disabled === false,
