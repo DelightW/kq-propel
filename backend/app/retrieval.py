@@ -76,7 +76,9 @@ _SYNONYMS = {
     "wheelchair": ["assistance", "wheelchair"],
     "child": ["minor", "infant"],
     "baby": ["infant"],
-    "pet": ["special"],
+    # No "pet" entry: the corpus says nothing about pets, and mapping "pet" to
+    # "special" let "what is the fee for a pet?" pass the grounding guard and
+    # be answered with the booking fees.
     "change": ["change", "rebooking", "changes"],
     "reschedule": ["rebooking", "change"],
     # Duration phrasing ("how long does X take?") must reach the policy
@@ -485,6 +487,33 @@ def chunk_baggage_kind(record: dict) -> Optional[str]:
     if "special baggage" in title:
         return "special"
     return None
+
+
+_BAG_WORD_RE = re.compile(r"\b(bags?|baggage|luggage|suitcases?|cases?)\b", re.I)
+_FLIGHT_WORD_RE = re.compile(r"\b(flights?|planes?|aircraft|departures?|depart\w*)\b", re.I)
+_FEE_WORD_RE = re.compile(r"\b(fees?|cost\w*|charge\w*|pay\w*|price\w*|how\s+much|excess|overweight|"
+                          r"heavy|extra|additional|over\s+the\s+(limit|allowance)|kg|kilo\w*)\b", re.I)
+
+
+def topic_mismatch(query: str, record: dict) -> bool:
+    """True for a section on a neighbouring topic the question is not about.
+
+    - A delayed or lost *bag* is not a delayed flight: "my bag is delayed 4
+      hours" was answered from the flight-delay care bands, because "delayed"
+      and "4 hours" matched them better than the delayed-baggage policy.
+    - "How many bags can I check to Mumbai?" asks for the free allowance, not
+      the excess-baggage charges, unless it mentions a fee or extra weight.
+    """
+    title = (record.get("doc_title") or "").lower()
+    kind = baggage_kind(query)
+    # "My flight is delayed and my bag is overweight" is about both, so the
+    # flight-delay bands stay whenever the flight itself is mentioned.
+    if kind == "delayed" and "delay care" in title and _BAG_WORD_RE.search(query or "") \
+            and not _FLIGHT_WORD_RE.search(query or ""):
+        return True
+    if kind == "checked" and "excess" in title and not _FEE_WORD_RE.search(query or ""):
+        return True
+    return False
 
 
 def baggage_kind_mismatch(want: Optional[str], record: dict) -> bool:

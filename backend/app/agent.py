@@ -16,7 +16,7 @@ from typing import Dict, List, Optional, Tuple
 
 from app import (aviationstack, booking, composer, config, daraja, database, evaluation, ratelimit,
                   handover, kq_flights, memory, payments, paypal, retrieval, sentiment,
-                  service_requests)
+                  service_requests, swahili)
 from app.llm import generate_answer
 from app.vectorstore import get_vector_store
 
@@ -251,6 +251,14 @@ def _is_grounded_in_context(message: str, chunks: List[Dict]) -> bool:
 
     topical = list(dict.fromkeys(retrieval.topical_tokens(message)))
     evidence = [t for t in topical if forms(t) & vocab]
+    # "What is the fee for a pet?": "fee" is in the policies and "pet" is not,
+    # which is exactly half and was answered with the booking fees. A word
+    # such as "fee" or "allowed" says what kind of answer is wanted, not what
+    # it is about, so it cannot be the only evidence when the question does
+    # name a subject.
+    subject = [t for t in topical if t not in _VAGUE_WORDS]
+    if subject and not any(t not in _VAGUE_WORDS for t in evidence):
+        return False
     # A question mostly about things the policies never mention ("exchange
     # rate of the shilling", "translate hello") is off-topic even when one of
     # its words happens to appear somewhere in the corpus.
@@ -822,6 +830,22 @@ def _service_request_turn(session_id: str, message: str, trace: List[Dict],
     if request["status"] == service_requests.AWAITING_BOOKING:
         return None            # the booking lookup (or another question) handles this message
 
+    # A different booking reference part-way through means the passenger wants
+    # to correct that booking instead (the request may have started from one
+    # looked up earlier in the conversation). Go back to waiting for a booking
+    # and let the lookup step check it; the same request then carries on.
+    other = booking.find_reference(message)
+    if other and other != (request.get("booking_reference") or "").upper():
+        service_requests.update(
+            request["id"], status=service_requests.AWAITING_BOOKING, booking_reference=None,
+            current_name=None, scope=None, new_name=None, characters_changed=None,
+            change_kind=None, fee_amount=None, fee_currency=None, fee_source=None)
+        trace.append({"step": "thought",
+                      "content": f"Passenger gave booking {other} for name correction "
+                                 f"{service_requests.reference(request)}, not "
+                                 f"{request.get('booking_reference')}; looking that booking up instead."})
+        return None
+
     if request["status"] == service_requests.AWAITING_NEW_NAME:
         new_name = service_requests.parse_new_name(message, request["current_name"])
         if new_name is None:
@@ -974,6 +998,44 @@ def _handover_turn(session_id: str, message: str, trace: List[Dict],
              "If you'd rather carry on with me, say \"back to assistant\".")
     return _finalize_direct(session_id, message, reply, trace, sentiment_result,
                             handover_case=handover.status_for_passenger(session_id))
+
+
+# Words that say what kind of thing is asked ("fee", "allowed") but not about
+# what. A question whose subject words are all of these names no subject.
+_VAGUE_WORDS = frozenset({
+    "fee", "cost", "charge", "price", "rate", "amount", "allowed", "allow", "permitted", "permit",
+    "possible", "ok", "okay", "fine", "rule", "policy", "claim", "entitled", "owe", "owed",
+    "bring", "take", "carry",
+})
+_VAGUE_FEE_RE = re.compile(r"\b(fees?|costs?|charges?|prices?|rates?|amount|how\s+much|pay)\b", re.I)
+_VAGUE_ALLOWED_RE = re.compile(r"\b(allowed|allow|permitted|permit|possible|ok|okay|fine|bring|take|carry)\b", re.I)
+_VAGUE_CLAIM_RE = re.compile(r"\b(claim|entitled|owed?|compensat\w*)\b", re.I)
+_QUESTION_RE = re.compile(r"\?\s*$|^(how|what|which|is|are|can|could|do|does|will|may|am)\b", re.I)
+
+
+def _vague_question(message: str) -> Optional[str]:
+    """A clarifying question when the message asks something without saying
+    about what; None when it names a subject."""
+    if not _QUESTION_RE.search(message.strip()) or len(message.split()) > 12:
+        return None
+    topical = retrieval.topical_tokens(message)
+    if any(t not in _VAGUE_WORDS for t in topical):
+        return None
+    if _VAGUE_CLAIM_RE.search(message):
+        return ("What happened? For example, a checked bag that has not arrived, a delayed flight, "
+                "or a cancelled trip you want a refund for. Tell me and I'll check what the policy says.")
+    if _VAGUE_FEE_RE.search(message):
+        return ("Which fee do you mean? For example, an extra or overweight bag, sporting equipment "
+                "such as golf clubs, changing or cancelling a booking, or correcting the name on a "
+                "booking.")
+    if _VAGUE_ALLOWED_RE.search(message):
+        return ("What would you like to bring or do? For example, a second cabin bag, golf clubs "
+                "or other sporting equipment, a stroller, or a wheelchair. Tell me and I'll check "
+                "the rules.")
+    if topical:
+        return ("Could you tell me a little more about what you need? I can help with baggage, "
+                "check-in, delays, refunds and changes, and paying fees.")
+    return None
 
 
 def _small_talk_reply(message: str) -> Optional[str]:
@@ -1189,7 +1251,23 @@ def _run_agent_turn(session_id: str, message: str) -> Dict:
     # A follow-up ("what about Business class?") is first rewritten into the
     # complete question it stands for, using the previous answered question.
     search_text = message
-    resolved = memory.resolve_query(session_id, message)
+    # A Swahili question is searched in English through a small glossary and
+    # answered in English, with a line in Swahili saying so (app/swahili.py).
+    swahili_english = None
+    if swahili.is_swahili(message):
+        swahili_english = swahili.to_english(message)
+        if not swahili_english:
+            trace.append({"step": "thought",
+                          "content": ("The question is in Swahili and the glossary recognises too few of "
+                                      "its words to search the English policy. Declining in Swahili and "
+                                      "English rather than guessing.")})
+            return _finalize_direct(session_id, message, swahili.DECLINE, trace, sentiment_result)
+        search_text = swahili_english
+        trace.append({"step": "thought",
+                      "content": (f"The question is in Swahili. The policy documents are in English, so "
+                                  f"its travel terms were looked up in the glossary: searching for "
+                                  f"\"{swahili_english}\" and answering in English.")})
+    resolved = None if swahili_english else memory.resolve_query(session_id, message)
     if resolved:
         search_text = resolved
         trace.append({"step": "thought",
@@ -1202,6 +1280,27 @@ def _run_agent_turn(session_id: str, message: str) -> Dict:
         search_text = enriched
         trace.append({"step": "thought",
                        "content": f"Answering for the booked trip. Searching for \"{enriched}\"."})
+    # --- Thought: a question with no subject ("How much is the fee?", "Is it
+    # allowed?") used to be answered with whichever section matched a generic
+    # word. Read it against the previous question if there is one; otherwise
+    # ask what the passenger means rather than guess. ---
+    if not resolved and not enriched and not flight_number:
+        clarify = _vague_question(message)
+        if clarify:
+            previous = memory.recall(session_id).get("last_query")
+            if previous:
+                # One sentence, so it is not split back into two questions.
+                search_text = f"{previous.rstrip('?.! ')}, {message[0].lower()}{message[1:]}"
+                trace.append({"step": "thought",
+                              "content": (f"The question names no subject, so it is read as being about "
+                                          f"the previous one. Searching for \"{search_text}\".")})
+            else:
+                trace.append({"step": "thought",
+                              "content": ("The question names no subject and there is no earlier question "
+                                          "to read it against. Asking what is meant instead of guessing.")})
+                return _finalize_direct(session_id, message,
+                                        _apply_empathy(clarify, sentiment_result),
+                                        trace, sentiment_result)
     query = retrieval.focus_query(search_text)
     if query != search_text:
         trace.append({"step": "thought",
@@ -1234,6 +1333,7 @@ def _run_agent_turn(session_id: str, message: str) -> Dict:
                         "Declining to answer rather than risk an ungrounded response."),
         })
         return _finalize_direct(session_id, message,
+                                 swahili.DECLINE if swahili_english else
                                  _apply_empathy(OUT_OF_SCOPE_REPLY, sentiment_result),
                                  trace, sentiment_result)
 
@@ -1398,10 +1498,14 @@ def _run_agent_turn(session_id: str, message: str) -> Dict:
         if cited_synthetic:
             answer += "\n\n" + composer.SYNTHETIC_SOURCE_NOTE
 
+    if swahili_english:
+        answer = swahili.ANSWER_NOTE.format(english=swahili_english) + "\n\n" + answer
+
     trace.append({"step": "final_answer", "model": model_name, "content": answer})
     memory.remember(session_id, query=query)
 
-    metrics = evaluation.evaluate_response(message, answer, retrieved)
+    # Relevance is judged against the English question the answer was built for.
+    metrics = evaluation.evaluate_response(swahili_english or message, answer, retrieved)
     sources = []
     for r in retrieved:
         label = composer._section_label(r)

@@ -145,6 +145,53 @@ def test_sessions_do_not_share_memory():
     assert memory.resolve_query("mem-b", "What about Business class?") is None
 
 
+# --------------------------------------------- vague questions and Swahili
+
+def test_vague_question_gets_a_clarifying_question():
+    # Known issue: "How much is the fee?" was answered with the booking fees.
+    fee = turn("cs_vague_1", "How much is the fee?")
+    assert fee["answer"].startswith("Which fee do you mean?"), fee["answer"][:120]
+    assert not any(s.get("tool") == "retrieve_policy_documents" for s in fee["trace"])
+    allowed = turn("cs_vague_2", "Is it allowed?")["answer"]
+    assert allowed.startswith("What would you like to bring or do?"), allowed[:120]
+    claim = turn("cs_vague_3", "What can I claim?")["answer"]
+    assert claim.startswith("What happened?"), claim[:120]
+    # A question that names its subject is answered as before.
+    assert "Which fee" not in turn("cs_vague_4", "What is the fee to change my booking?")["answer"]
+
+
+def test_vague_question_is_read_against_the_previous_one():
+    turn("cs_vague_5", "Can I bring my golf clubs?")
+    result = turn("cs_vague_5", "How much is the fee?")
+    assert "golf" in searched_for(result).lower(), searched_for(result)
+    assert "golf" in result["answer"].lower(), result["answer"][:200]
+
+
+def test_subject_outside_the_policies_is_declined():
+    # "fee" alone used to ground a question about something the policies never mention.
+    for question in ("What is the fee for a pet?", "Can I bring my dog?"):
+        answer = turn("cs_vague_6", question)["answer"]
+        assert answer.startswith(agent.OUT_OF_SCOPE_REPLY[:40]), (question, answer[:120])
+
+
+def test_swahili_question_is_answered_in_english_with_a_note():
+    # Known issue: Swahili questions were declined.
+    result = turn("cs_sw_1", "Ninaweza kubeba mizigo mingapi kwenye Economy kwenda London?")
+    answer = result["answer"]
+    assert answer.startswith("Kwa sasa ninajibu kwa Kiingereza pekee."), answer[:120]
+    assert "two pieces" in answer, answer[:300]
+    assert "Economy" in searched_for(result) and "London" in searched_for(result)
+    checkin = turn("cs_sw_2", "Kaunta za kuingia kwa safari za kimataifa hufungwa saa ngapi?")["answer"]
+    assert "one hour before departure" in checkin, checkin[:300]
+
+
+def test_swahili_the_glossary_cannot_read_is_declined_in_swahili():
+    answer = turn("cs_sw_3", "Habari yako, hali ya hewa ikoje leo?")["answer"]
+    assert answer.startswith("Samahani"), answer[:120]
+    # English with a stray Swahili word is still English.
+    assert "stroller" in turn("cs_sw_4", "Can I bring a stroller na wheelchair?")["answer"]
+
+
 # ---------------------------------------------------------------- handover
 
 def test_request_opens_one_case():

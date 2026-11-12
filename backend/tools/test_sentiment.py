@@ -181,6 +181,17 @@ class EmpathyGate(unittest.TestCase):
         self.assertNotEqual(out, body)
         self.assertIn(body, out)
 
+    def test_plain_questions_get_no_apology(self):
+        # Known issue: these were scored 0.56 and answered with an apology.
+        from app import agent
+        for question in ("Which routes have a one-piece allowance?", "How long does a refund take?"):
+            result = sentiment.classify_frustration(question)
+            self.assertLess(result["frustration_score"], agent.EMPATHY_THRESHOLD, question)
+        # A complaint phrased as a question is not a plain question.
+        for complaint in ("Why is my bag still not here?", "Where is my bag?! Nobody is answering",
+                          "Can someone help me, nobody answers the phone?"):
+            self.assertFalse(sentiment._plain_question(complaint), complaint)
+
     def test_score_just_below_threshold_stays_silent(self):
         from app import agent
         body = "Answer."

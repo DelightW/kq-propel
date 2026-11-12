@@ -224,6 +224,12 @@ def classify_frustration(message: str) -> Dict:
     # emotion (exclamation marks or shouting) such a reply is treated as calm.
     if _too_short_to_judge(message):
         frustration_score = min(frustration_score, SHORT_REPLY_CEILING)
+    # A single plain question ("Which routes have a one-piece allowance?",
+    # "How long does a refund take?") was scored 0.56 frustrated and answered
+    # with an apology. With no exclamation, no shouting and no complaint words
+    # it is a request for information, and is kept below the empathy threshold.
+    elif _plain_question(message):
+        frustration_score = min(frustration_score, PLAIN_QUESTION_CEILING)
     label = "frustrated" if frustration_score >= 0.5 else "calm"
     return {
         "label": label,
@@ -233,6 +239,30 @@ def classify_frustration(message: str) -> Dict:
 
 
 SHORT_REPLY_CEILING = 0.3
+PLAIN_QUESTION_CEILING = 0.45
+
+# "Why" is left out: "why is my bag still not here?" is usually a complaint.
+_PLAIN_START_RE = re.compile(r"^(how|what|which|when|where|who|can|could|may|do|does|is|are|will|would|should)\b",
+                             re.I)
+_COMPLAINT_RE = re.compile(
+    r"\b(still|never|nobody|no\s+one|useless|ridiculous|terrible|awful|horrible|worst|unacceptable|"
+    r"angry|furious|annoy\w*|frustrat\w*|disappoint\w*|upset|fed\s+up|again|waiting|waited|wait|"
+    r"ages|forever|seriously|joke|scam|rubbish|nonsense|stupid|hopeless|disgust\w*|complain\w*|"
+    r"lost|missing|damaged|broken|stolen|cancell?ed|rude|ignor\w*|refus\w*|"
+    r"not\s+(arrived|received|working|helpful|happy)|hasn'?t|haven'?t|didn'?t|won'?t|can'?t)\b",
+    re.I)
+
+
+def _plain_question(message: str) -> bool:
+    text = (message or "").strip()
+    if not text.endswith("?") or text.count("?") > 1 or "!" in text:
+        return False
+    if re.search(r"[.;]\s+\S", text[:-1]):        # more than one sentence
+        return False
+    words = re.findall(r"[A-Za-z']+", text)
+    if any(len(w) >= 3 and w.isupper() for w in words if w not in ("KQ", "USD", "KES")):
+        return False
+    return bool(_PLAIN_START_RE.match(text)) and not _COMPLAINT_RE.search(text)
 
 
 def _too_short_to_judge(message: str) -> bool:

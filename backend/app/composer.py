@@ -31,7 +31,22 @@ _RANGE_RE = re.compile(
     r"between\s+(\d+)\s*(kg|hours?|hrs?|days?|characters?)?\s+and\s+(\d+)\s*(kg|hours?|hrs?|days?|characters?)?",
     re.IGNORECASE,
 )
-_OVER_RE = re.compile(r"(?:more than|over|exceeding|greater than)\s+(\d+)\s*(kg|hours?|hrs?|days?)", re.IGNORECASE)
+_OVER_RE = re.compile(r"(?:more than|over|exceeding|greater than|beyond)\s+(\d+)\s*(kg|hours?|hrs?|days?)", re.IGNORECASE)
+# "a delay of four to eight hours": a band written as "X to Y", the unit after Y.
+_TO_RANGE_RE = re.compile(r"\b(\d+)\s+to\s+(\d+)\s*(kg|hours?|hrs?|days?)\b", re.IGNORECASE)
+# Policy text writes small numbers in words; the bands compare digits.
+_NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
+                 "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "twenty-four": 24,
+                 "twenty four": 24, "forty-eight": 48, "seventy-two": 72}
+_NUMBER_WORD_RE = re.compile(r"\b(" + "|".join(sorted(_NUMBER_WORDS, key=len, reverse=True)) + r")\b",
+                             re.IGNORECASE)
+# "Section 4: Size and Weight Conditions" - the number orders the sections; it
+# says nothing about the subject, and matched "delayed 4 hours".
+_SECTION_NUMBER_RE = re.compile(r"^\s*section\s+\d+\s*:\s*", re.IGNORECASE)
+
+
+def _digits(text: str) -> str:
+    return _NUMBER_WORD_RE.sub(lambda m: str(_NUMBER_WORDS[m.group(1).lower()]), text)
 _NEGATED_OVER_RE = re.compile(r"\b(?:not|never|without)\s+(?:\w+\s+){0,2}?(?:more than|over|exceeding|greater than)\s+(\d+)",
                                 re.IGNORECASE)
 _QUERY_NUM_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(kg|kilos?|kilograms?|hours?|hrs?|days?)", re.IGNORECASE)
@@ -62,7 +77,15 @@ def _numeric_band_bonus(sentence: str, quantities: List[Dict]) -> float:
     passenger mentioned, and penalises bands that explicitly exclude it."""
     if not quantities:
         return 0.0
+    sentence = _digits(sentence)
     bonus = 0.0
+    for r_match in _TO_RANGE_RE.finditer(sentence):
+        low, high = float(r_match.group(1)), float(r_match.group(2))
+        unit = _canon_unit(r_match.group(3))
+        for q in quantities:
+            if unit and q["unit"] and unit != q["unit"]:
+                continue
+            bonus += 6.0 if low <= q["value"] <= high else -2.0
     for r_match in _RANGE_RE.finditer(sentence):
         low = float(r_match.group(1))
         high = float(r_match.group(3))
@@ -130,7 +153,7 @@ def _select(question: str, chunks: List[Dict], max_sentences: int) -> List[Dict]
         # sentence that actually answers "what is the baggage allowance?" is
         # "...one checked bag not exceeding 23kg", which shares no words with
         # the question at all - only its heading does.
-        section_tokens = set(retrieval.tokenize(chunk.get("section") or ""))
+        section_tokens = set(retrieval.tokenize(_SECTION_NUMBER_RE.sub("", chunk.get("section") or "")))
         section_expanded = set(retrieval.expand_query(section_tokens))
         heading_hits = len(q_tokens & section_tokens)
         heading_coverage = len(base_q_tokens & section_expanded) / max(len(base_q_tokens), 1)

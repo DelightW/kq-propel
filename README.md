@@ -65,13 +65,12 @@ These figures come from the 30-question evaluation set, using the offline compos
 | Right document in the top results (any@k) | 1.000 |
 | All needed documents in the top results (all@k) | 0.967 |
 
-Every follow-up, unanswerable and handover case in the conversation test set passes. So do all 49 sentiment-fairness pairs. Both interfaces pass axe-core's WCAG 2.1 A/AA checks and can be used with the keyboard alone.
+Every follow-up, unanswerable and handover case in the conversation test set passes, as do the two Swahili and two vague-question cases. So do all 49 sentiment-fairness pairs. Both interfaces pass axe-core's WCAG 2.1 A/AA checks and can be used with the keyboard alone.
 
 ### Known limitations
 
-- Questions in Swahili are declined.
-- Vague questions get a best guess instead of a clarifying question.
-- A few baggage questions still pick the wrong policy sentence. For example, "How many bags can I check from Nairobi to Mumbai?" is answered from the excess-baggage rules.
+- Swahili questions are read through a small glossary of travel terms and answered in English. Anything outside the glossary is declined.
+- Vague questions ("How much is the fee?") get a clarifying question chosen by keywords, which is a simple rule rather than real understanding.
 - No live language model has been evaluated yet. All the figures above are for the offline composer.
 - Rate limits are kept in memory. On the free hosting plan, all data resets on restart.
 

@@ -95,6 +95,39 @@ def test_full_name_change_costs_more():
     assert "full name change" in summary and "USD 150.00" in summary
 
 
+def test_a_different_booking_mid_request_is_looked_up():
+    # Regression: a request started from a booking looked up earlier treated
+    # another booking reference as an invalid name and kept the first booking.
+    s = session()
+    say(s, "My booking reference is KQDEMO and my surname is Wanjiru")
+    asked = say(s, "I want to correct my name")
+    assert "KQDEMO" in asked and "Delight Wanjiru" in asked
+    first = service_requests.latest(s)
+    switched = say(s, "Sorry, it's booking KQDLW1, surname Wangui")
+    assert "Delight Wangui" in switched and "What should the name be?" in switched, switched
+    req = service_requests.latest(s)
+    assert req["id"] == first["id"], "the same request carries on"
+    assert req["booking_reference"] == "KQDLW1" and req["current_name"] == "Delight Wangui"
+    summary = say(s, "Delight Wambui")
+    assert "KQDLW1" in summary and "USD 75.00" in summary and "KQDEMO" not in summary
+    # Repeating the booking already in use does not restart anything.
+    say(s, "booking KQDLW1")
+    req = service_requests.latest(s)
+    assert req["id"] == first["id"] and req["status"] == service_requests.AWAITING_CONFIRMATION
+    assert req["new_name"] == "Delight Wambui"
+
+
+def test_wrong_surname_for_the_new_booking_changes_nothing_yet():
+    s = session()
+    say(s, "booking KQDEMO, surname Wanjiru")
+    say(s, "I want to correct my name")
+    say(s, "booking KQDLW1, surname Kanja")
+    req = service_requests.latest(s)
+    assert req["status"] == service_requests.AWAITING_BOOKING and req["booking_reference"] is None
+    assert "Delight Wangui" in say(s, "booking KQDLW1, surname Wangui")
+    assert service_requests.latest(s)["status"] == service_requests.AWAITING_NEW_NAME
+
+
 def test_cancel_and_policy_question_untouched():
     s = session()
     say(s, "please change the name on my booking")

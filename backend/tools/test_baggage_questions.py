@@ -74,6 +74,35 @@ def test_hand_and_delayed_questions_keep_their_policies():
     assert "First Needs Allowance" in delayed, delayed[:160]
 
 
+def test_one_piece_route_is_not_answered_with_excess_charges():
+    # Known issue: the Mumbai allowance began with an excess-baggage sentence.
+    answer = ask("How many bags can I check from Nairobi to Mumbai?")["answer"]
+    assert answer.startswith("Kenya Airways applies the piece concept"), answer[:160]
+    assert "one piece of up to 23kg" in answer and "per-kilogram" not in answer, answer[:300]
+    # Asking about a fee still reaches the excess-baggage policy.
+    fee = ask("How much does an extra bag cost from Nairobi to Mumbai?")["answer"]
+    assert "heavy bag fee" in fee, fee[:200]
+
+
+def test_a_delayed_bag_is_not_a_delayed_flight():
+    # Known issue: "my bag is delayed 4 hours" was answered from the flight-delay bands.
+    bag = ask("My bag is delayed 4 hours, what can I get?")["answer"]
+    assert "First Needs Allowance" in bag and "meal voucher" not in bag, bag[:200]
+    # And a delayed flight is matched to its band, not to the over-eight-hours refund rule.
+    flight = ask("My flight is delayed 4 hours, what can I get?")["answer"]
+    assert "four to eight hours" in flight and "more than eight hours may claim" not in flight, flight[:200]
+    # A message about both keeps both documents (evaluation question q26).
+    both = ask("My flight is delayed four hours and my bag is one piece over the allowance to Europe. "
+               "What am I owed and what do I owe?")
+    sources = " ".join(both["sources"])
+    assert "Delay Care" in sources or "Delay" in sources, sources
+
+
+def test_golf_clubs_get_the_sporting_equipment_rates():
+    answer = ask("Can I bring my golf clubs?")["answer"]
+    assert "Golf equipment" in answer and "First Needs" not in answer, answer[:200]
+
+
 def main() -> int:
     tests = [(n, f) for n, f in globals().items() if n.startswith("test_") and callable(f)]
     failures = 0

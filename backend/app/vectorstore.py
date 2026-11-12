@@ -132,6 +132,10 @@ _ROUTE_UNASKED_FACTOR = float(os.getenv("RETRIEVAL_ROUTE_UNASKED_FACTOR", "0.85"
 # Applied to a hand-baggage section when the passenger asked about checked bags,
 # and the reverse (see retrieval.baggage_kind). Also a penalty, not removal.
 _BAGGAGE_KIND_MISMATCH_FACTOR = float(os.getenv("RETRIEVAL_BAGGAGE_KIND_FACTOR", "0.35"))
+# A section on a neighbouring topic: the flight-delay care bands for a delayed
+# bag, or the excess-baggage charges for a free-allowance question
+# (retrieval.topic_mismatch). Set to 1.0 to switch off.
+_TOPIC_MISMATCH_FACTOR = float(os.getenv("RETRIEVAL_TOPIC_FACTOR", "0.35"))
 
 # How redundant an additional chunk of an already-represented document is.
 # The first repeat is plausibly useful - a long policy often answers a question
@@ -322,6 +326,9 @@ class _HybridSearchMixin:
             if retrieval.baggage_kind_mismatch(want_kind, rec):
                 boosted *= _BAGGAGE_KIND_MISMATCH_FACTOR
                 item["baggage_kind_mismatch"] = True
+            if _TOPIC_MISMATCH_FACTOR != 1.0 and retrieval.topic_mismatch(query, rec):
+                boosted *= _TOPIC_MISMATCH_FACTOR
+                item["topic_mismatch"] = True
             item["score"] = round(boosted, 4)
             item["lexical_score"] = round(lex, 4)
             item["dense_score"] = round(dense, 4)
