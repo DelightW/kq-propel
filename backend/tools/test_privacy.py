@@ -84,6 +84,17 @@ def test_mask_phone_keeps_only_prefix_and_last_digits():
     assert privacy.mask_phone(None) is None and privacy.mask_phone("") == ""
 
 
+def test_checkout_id_does_not_reveal_the_number():
+    # Real Safaricom IDs end with the payer's number (here Safaricom's
+    # published sandbox number, 254708374149).
+    masked = privacy.mask_checkout_id("ws_CO_11112026124017474708374149")
+    assert masked == "ws_CO_11112026124017************", masked
+    assert "708374149" not in privacy.mask_checkout_id("ws_CO_101120261807405708374149")
+    assert "374149" not in privacy.mask_checkout_id("ws_CO_SIM_254708374149")
+    assert privacy.mask_checkout_id("5O190127TN364715T") == "5O190127TN364715T"   # PayPal: untouched
+    assert privacy.mask_checkout_id(None) is None and privacy.mask_checkout_id("") == ""
+
+
 def test_mask_text_finds_numbers_in_messages():
     for raw in ("Send it to 0712 345 678 please", "my line is +254712345678.", "use 0112-345-678"):
         masked = privacy.mask_text(raw)
@@ -188,9 +199,23 @@ def test_staff_see_masked_numbers_and_erasure_is_audited():
     assert staff.post("/api/admin/privacy/erase", json={"phone": "0799888777"}).status_code == 401
     assert staff.post("/api/admin/login", json={"username": config.ADMIN_USERNAME,
                                                 "password": config.ADMIN_PASSWORD}).status_code == 200
+    # A real-shaped checkout ID ends with the payer's number; staff must not
+    # be able to read the number from it on the dashboard or a receipt.
+    with database._connect() as conn:
+        conn.execute("UPDATE transactions SET checkout_request_id = ? WHERE session_id = ?",
+                     ("ws_CO_11112026124017474799888777", "cs_staff"))
     rows = staff.get("/api/admin/transactions").json()
     assert all("888" not in (r["phone_number"] or "")[4:-3] for r in rows), rows
     assert any(r["phone_number"] == "2547*****777" for r in rows), rows
+    assert all("799888777" not in (r["checkout_request_id"] or "") for r in rows), rows
+    overview = staff.get("/api/admin/overview").json()
+    assert "799888777" not in str(overview), "the overview's recent payments are masked too"
+    import io
+    from pypdf import PdfReader
+    receipt = staff.get(f"/api/admin/transactions/{tx('cs_staff')['reference']}/receipt")
+    assert receipt.status_code == 200, receipt.text
+    text = "".join(p.extract_text() for p in PdfReader(io.BytesIO(receipt.content)).pages)
+    assert "799888777" not in text and "ws_CO_11112026124017" in text, text
     cases = staff.get("/api/admin/handovers").json()["cases"]
     case = next(c for c in cases if c["session_id"] == "cs_staff")
     detail = staff.get(f"/api/admin/handovers/{case['id']}").json()

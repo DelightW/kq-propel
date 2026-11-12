@@ -17,3 +17,6 @@ sentence-transformers>=3.0
 
 # PDF receipts for paid payments (app/receipts.py); pure Python, about 1 MB.
 fpdf2>=2.7
+# Tests only: tools/test_privacy.py reads a receipt's text to check the
+# payer's number is masked. Not needed on the server.
+pypdf>=4.0

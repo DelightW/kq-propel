@@ -70,14 +70,43 @@ def mask_text(text: Optional[str]) -> Optional[str]:
     return PHONE_RE.sub(lambda m: mask_phone(m.group(0)), text)
 
 
+# Safaricom's checkout request ID is "ws_CO_", a 14-digit timestamp, and then
+# digits that end with the payer's phone number (ws_CO_111120261240174747
+# 08374149 for 254708374149), so showing it in full undoes the phone mask.
+_CHECKOUT_RE = re.compile(r"^(ws_CO_\d{14})(\d+)$")
+_TRAILING_DIGITS_RE = re.compile(r"^(.*?\D)?(\d{9,})$")
+
+
+def mask_checkout_id(value: Optional[str]) -> Optional[str]:
+    """ws_CO_11112026124017474708374149 -> ws_CO_11112026124017************.
+    The timestamp is kept so staff can still match a payment to Safaricom's
+    records by time and reference; the digits that hold the number are not."""
+    if not value:
+        return value
+    value = str(value)
+    m = _CHECKOUT_RE.match(value)
+    if m:
+        return m.group(1) + "*" * len(m.group(2))
+    # Any other identifier that ends in a phone-length run of digits.
+    m = _TRAILING_DIGITS_RE.match(value)
+    if m:
+        digits = m.group(2)
+        return (m.group(1) or "") + digits[:-9] + "*" * 9
+    return value
+
+
 def mask_rows(rows: Iterable[Dict], phone_fields=("phone_number",),
-              text_fields=("message", "last_passenger_message")) -> List[Dict]:
+              text_fields=("message", "last_passenger_message"),
+              id_fields=("checkout_request_id",)) -> List[Dict]:
     out = []
     for row in rows:
         row = dict(row)
         for f in phone_fields:
             if f in row:
                 row[f] = mask_phone(row[f])
+        for f in id_fields:
+            if f in row:
+                row[f] = mask_checkout_id(row[f])
         for f in text_fields:
             if f in row:
                 row[f] = mask_text(row[f])

@@ -90,7 +90,9 @@ def build(row: Dict) -> bytes:
         ("Paid from", privacy.mask_phone(row.get("phone_number")) if row.get("phone_number") else "-"),
         ("Requested", _when(row.get("created_at"))),
         ("Confirmed", _when(row.get("updated_at"))),
-        ("Checkout ID", row.get("checkout_request_id")),
+        # The checkout ID ends with the payer's number; staff can download
+        # receipts too, so it is masked like the number above.
+        ("Checkout ID", privacy.mask_checkout_id(row.get("checkout_request_id"))),
     ]
     pdf.set_draw_color(*LINE)
     for label, value in fields:
