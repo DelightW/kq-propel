@@ -136,6 +136,50 @@ def handover_updates(after: int = 0, kq_session: Optional[str] = Cookie(default=
     }
 
 
+@router.get("/history")
+def conversation_history(kq_session: Optional[str] = Cookie(default=None)):
+    """The caller's own conversation, so a reloaded page shows it again.
+
+    Scoped to the session cookie. Only what the passenger saw is returned:
+    their messages, the answers (with their own rating) and staff replies.
+    """
+    if not auth.chat_session_is_valid(kq_session):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No session.")
+    ratelimit.check_http("poll_session", kq_session)
+    rows = database.fetch_conversation(kq_session)
+    return {"messages": [
+        {"id": r["id"], "role": r["role"], "message": r["message"], "created_at": r["created_at"],
+         "feedback": r.get("feedback")}
+        for r in rows if r["role"] in ("user", "assistant", "agent")
+    ][-200:]}
+
+
+class FeedbackRequest(BaseModel):
+    message_id: int
+    rating: str = Field(pattern="^(up|down)$")
+    note: Optional[str] = Field(default=None, max_length=300)
+
+
+@router.post("/feedback")
+def answer_feedback(req: FeedbackRequest, kq_session: Optional[str] = Cookie(default=None)):
+    """A passenger's rating of one answer: helpful or not, with an optional
+    short note. Only an answer in the caller's own conversation can be rated,
+    and rating again replaces the earlier rating."""
+    if not auth.chat_session_is_valid(kq_session):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No session.")
+    ratelimit.check_http("chat_session", kq_session)
+    note = (req.note or "").strip() or None
+    with database._connect() as conn:
+        changed = conn.execute(
+            "UPDATE conversations SET feedback = ?, feedback_note = ?, feedback_at = ? "
+            "WHERE id = ? AND session_id = ? AND role = 'assistant'",
+            (req.rating, note, database.datetime.utcnow().isoformat(), req.message_id, kq_session),
+        ).rowcount
+    if not changed:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such answer.")
+    return {"message_id": req.message_id, "rating": req.rating}
+
+
 class ForgetRequest(BaseModel):
     # A JSON body (rather than a bare POST) means a cross-site form cannot
     # trigger erasure: the browser must send a CORS preflight first.

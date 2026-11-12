@@ -35,10 +35,10 @@ ROLE_LABELS = {
 # What each role's dashboard shows. The server enforces the same rules on every
 # route (auth.require_role); this list only decides which panels to draw.
 PANELS = {
-    ADMIN: ["metrics", "requests", "handovers", "transactions", "comparison", "audit",
-            "privacy", "staff"],
-    AGENT: ["metrics", "requests", "handovers", "transactions"],
-    ANALYST: ["metrics", "comparison"],
+    ADMIN: ["metrics", "requests", "handovers", "conversations", "transactions", "comparison",
+            "knowledge", "audit", "privacy", "staff"],
+    AGENT: ["metrics", "requests", "handovers", "conversations", "transactions", "knowledge"],
+    ANALYST: ["metrics", "comparison", "knowledge"],
 }
 
 # A real hash of a random string, verified against when the username does not

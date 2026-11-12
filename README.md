@@ -46,12 +46,14 @@ Staff sign in with individual accounts. There are three roles:
 
 The dashboard holds:
 
-- the queues of passengers waiting for a person and of paid corrections to carry out;
-- answer-quality scores (RAG Triad) and frustration levels;
-- the payment ledger;
-- an access log of who viewed passenger data.
+- the queues of passengers waiting for a person and of paid corrections to carry out, with optional sound and browser alerts;
+- answer-quality scores (RAG Triad), frustration levels and 14-day trends;
+- a conversation review that finds answers passengers rated unhelpful, declined questions and weakly grounded answers;
+- the payment ledger, filterable and exportable as CSV;
+- the policy documents exactly as the assistant searches them;
+- an access log of who viewed passenger data, also exportable.
 
-Phone numbers are masked, and a passenger can erase their own conversation.
+Passengers can rate each answer, and a reloaded chat keeps the conversation. Phone numbers are masked, and a passenger can erase their own conversation.
 
 ## Results
 

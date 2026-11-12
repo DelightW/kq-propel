@@ -116,6 +116,9 @@
       <li data-panel="metrics"><a href="#overview" data-view="overview">
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg>
         <span class="nav-label">Overview</span></a></li>
+      <li data-panel="knowledge"><a href="#knowledge" data-view="knowledge">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5zM13 4h5.5A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5H13z"/></svg>
+        <span class="nav-label">Knowledge base</span></a></li>
       <li data-panel="comparison"><a href="#comparison" data-view="comparison">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/></svg>
         <span class="nav-label">Model comparison</span></a></li>
@@ -128,6 +131,9 @@
       <li data-panel="requests"><a href="#requests" data-view="requests">
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2.2"/><path d="M5.8 16.2c.6-1.5 1.8-2.2 3.2-2.2s2.6.7 3.2 2.2M14.5 10h4M14.5 13.5h3"/></svg>
         <span class="nav-label">Name corrections</span><span class="nav-count" id="count-requests" hidden></span></a></li>
+      <li data-panel="conversations"><a href="#conversations" data-view="conversations">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h11v8H8l-4 3z"/><path d="M15 9h5v8l-3-2.5h-6V13"/></svg>
+        <span class="nav-label">Conversations</span><span class="nav-count" id="count-flagged" hidden></span></a></li>
       <li data-panel="transactions"><a href="#payments" data-view="payments">
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 10h19M6.5 15h4"/></svg>
         <span class="nav-label">Payments</span></a></li>
@@ -198,6 +204,11 @@
         <span class="att-text"><span class="att-num" id="att-requests">–</span><span class="att-label">Paid name corrections to make</span></span>
         <svg class="att-go" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
       </a>
+      <a class="att" href="#conversations" data-panel="conversations">
+        <span class="att-icon slate"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h11v8H8l-4 3z"/><path d="M15 9h5v8l-3-2.5h-6V13"/></svg></span>
+        <span class="att-text"><span class="att-num" id="att-flagged">–</span><span class="att-label">Answers rated unhelpful</span></span>
+        <svg class="att-go" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+      </a>
       <a class="att" href="#payments" data-panel="transactions">
         <span class="att-icon blue"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 10h19M6.5 15h4"/></svg></span>
         <span class="att-text"><span class="att-num" id="att-payments">–</span><span class="att-label">Payments still pending</span></span>
@@ -206,6 +217,17 @@
     </section>
 
     <section class="cards" id="kpis" aria-label="Key metrics"></section>
+
+    <section class="panel trends-panel" aria-labelledby="trends-h">
+      <div class="panel-title">
+        <h2 id="trends-h">Last 14 days</h2>
+        <button id="trends-table-toggle" class="btn btn-small btn-quiet" type="button" aria-pressed="false">Show as table</button>
+      </div>
+      <p class="hint">Daily activity and answer quality. Hover or focus a day for its figures. Days with no
+        answers have no quality score.</p>
+      <div id="trends" class="trends"></div>
+      <div id="trends-table" class="table-scroll" tabindex="0" role="region" aria-label="Daily figures" hidden></div>
+    </section>
 
     <section class="grid" aria-label="Quality metrics">
       <article class="panel">
@@ -243,8 +265,14 @@
         <p class="hint" id="handover-hint">Cases opened when a passenger asks for a member of staff.
           Your reply appears in their chat window.</p>
       </div>
-      <label class="switch"><input type="checkbox" id="handover-closed" /><span class="switch-ui" aria-hidden="true"></span> Show closed</label>
+      <div class="head-actions">
+        <button id="alerts-toggle" class="btn btn-small btn-quiet" type="button" aria-pressed="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>
+          <span>Alerts off</span></button>
+        <label class="switch"><input type="checkbox" id="handover-closed" /><span class="switch-ui" aria-hidden="true"></span> Show closed</label>
+      </div>
     </div>
+    <p id="alerts-status" class="sr-only" role="status" aria-live="polite"></p>
 
     <div class="inbox">
       <div class="inbox-list panel flush">
@@ -305,6 +333,60 @@
     <p id="requests-status" class="status-line" role="status"></p>
   </section>
 
+  <!-- ============================ Conversations =========================== -->
+  <section class="view" id="conversations-panel" data-view="conversations" data-panel="conversations" aria-labelledby="conv-h">
+    <div class="view-head">
+      <div>
+        <h2 id="conv-h">Conversations</h2>
+        <p class="hint">Every passenger conversation with its weakest answer scores, passenger ratings and
+          frustration. "Low score" means an answer's groundedness is under 0.9: part of it was not found in
+          the policy text. Phone numbers are masked.</p>
+      </div>
+    </div>
+    <div class="filter-bar">
+      <div class="chip-group" role="group" aria-label="Show conversations">
+        <button type="button" class="filter-chip" data-flag="" aria-pressed="true">All</button>
+        <button type="button" class="filter-chip" data-flag="low" aria-pressed="false">Low scores</button>
+        <button type="button" class="filter-chip" data-flag="down" aria-pressed="false">Rated unhelpful</button>
+        <button type="button" class="filter-chip" data-flag="declined" aria-pressed="false">Declined</button>
+        <button type="button" class="filter-chip" data-flag="frustrated" aria-pressed="false">Frustrated</button>
+        <button type="button" class="filter-chip" data-flag="handover" aria-pressed="false">Handed over</button>
+      </div>
+      <form id="conv-search-form" class="search-box" role="search">
+        <label for="conv-search" class="sr-only">Search messages</label>
+        <input id="conv-search" type="search" placeholder="Search messages" maxlength="100" />
+      </form>
+    </div>
+    <div class="inbox">
+      <div class="inbox-list panel flush">
+        <ul id="conv-list" class="case-list" aria-label="Conversations"></ul>
+        <div class="pager" id="conv-pager"></div>
+      </div>
+      <div class="inbox-detail panel flush">
+        <div id="conv-empty" class="empty-state">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h11v8H8l-4 3z"/><path d="M15 9h5v8l-3-2.5h-6V13"/></svg>
+          <p>Select a conversation to read it with each answer's scores.</p>
+        </div>
+        <div id="conv-detail" class="handover-detail" hidden>
+          <div class="detail-head">
+            <div>
+              <h3 id="conv-title"></h3>
+              <p id="conv-meta" class="sub"></p>
+            </div>
+            <div class="head-actions">
+              <button id="conv-erase" class="btn btn-small btn-danger" type="button" hidden>Erase</button>
+              <button id="conv-hide" class="icon-btn" type="button" aria-label="Close conversation">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+              </button>
+            </div>
+          </div>
+          <div id="conv-transcript" class="transcript review" tabindex="0" role="log" aria-label="Conversation"></div>
+          <p id="conv-status" class="status-line pad" role="status"></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- =============================== Payments ============================= -->
   <section class="view" id="transactions-panel" data-view="payments" data-panel="transactions" aria-labelledby="payments-h">
     <div class="view-head">
@@ -315,6 +397,22 @@
       </div>
     </div>
     <div class="cards cards-3" id="pay-summary" aria-label="Payment totals"></div>
+    <form id="tx-filters" class="filter-bar">
+      <div class="filter-fields">
+        <label>Status
+          <select id="tx-status">
+            <option value="">All</option><option value="paid">Paid</option><option value="pending">Pending</option>
+            <option value="failed">Failed</option><option value="cancelled">Cancelled</option>
+            <option value="expired">Expired</option><option value="needs_review">Needs review</option>
+            <option value="simulated">Simulated</option>
+          </select></label>
+        <label>Method
+          <select id="tx-method"><option value="">All</option><option value="mpesa">M-Pesa</option><option value="card">Card</option></select></label>
+        <label>Reference or session
+          <input id="tx-search" type="search" maxlength="60" placeholder="KQSR-00001" /></label>
+      </div>
+      <a id="tx-csv" class="btn btn-small btn-quiet" href="/api/admin/ledger.csv" download>Download CSV</a>
+    </form>
     <div class="panel flush">
       <div class="table-scroll" tabindex="0" role="region" aria-label="Payments">
         <table id="tx-table">
@@ -324,6 +422,7 @@
           <tbody></tbody>
         </table>
       </div>
+      <div class="pager" id="tx-pager"></div>
     </div>
   </section>
 
@@ -351,6 +450,24 @@
     </div>
   </section>
 
+  <!-- ============================ Knowledge base ========================== -->
+  <section class="view" id="knowledge-panel" data-view="knowledge" data-panel="knowledge" aria-labelledby="kb-h">
+    <div class="view-head">
+      <div>
+        <h2 id="kb-h">Knowledge base</h2>
+        <p class="hint">The policy documents the assistant answers from, split into sections exactly as they
+          are indexed. Read-only: a policy is changed by editing its file, which rebuilds the index when the
+          server next starts.</p>
+      </div>
+      <form id="kb-search-form" class="search-box" role="search">
+        <label for="kb-search" class="sr-only">Search policies</label>
+        <input id="kb-search" type="search" placeholder="Search policies" maxlength="80" />
+      </form>
+    </div>
+    <p id="kb-summary" class="status-line" role="status"></p>
+    <div id="kb-docs" class="kb-docs"></div>
+  </section>
+
   <!-- ============================== Access log ============================ -->
   <section class="view" id="audit-panel" data-view="access-log" data-panel="audit" aria-labelledby="audit-h">
     <div class="view-head">
@@ -360,6 +477,13 @@
           the payment ledger contains personal information.</p>
       </div>
     </div>
+    <form id="audit-filters" class="filter-bar">
+      <div class="filter-fields">
+        <label>Staff member <select id="audit-user"><option value="">Everyone</option></select></label>
+        <label>Action <select id="audit-action"><option value="">All actions</option></select></label>
+      </div>
+      <a id="audit-csv" class="btn btn-small btn-quiet" href="/api/admin/audit.csv" download>Download CSV</a>
+    </form>
     <div class="panel flush">
       <div class="table-scroll" tabindex="0" role="region" aria-label="Access log">
         <table id="audit-table">
@@ -369,6 +493,7 @@
           <tbody></tbody>
         </table>
       </div>
+      <div class="pager" id="audit-pager"></div>
     </div>
   </section>
 

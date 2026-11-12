@@ -280,6 +280,23 @@ def _migrate(conn):
     if "booking" not in context_columns:
         conn.execute("ALTER TABLE conversation_context ADD COLUMN booking TEXT")
 
+    # --- Answer feedback and conversation review ---
+    # A passenger can rate an answer; the rating lives on the answer's row,
+    # so erasing the conversation erases it too. Each answer's scores are
+    # linked to its conversation and message, so staff can find the answers
+    # that scored worst instead of seeing averages only.
+    conv_columns = {r["name"] for r in conn.execute("PRAGMA table_info(conversations)")}
+    for column in ("feedback", "feedback_note", "feedback_at"):
+        if column not in conv_columns:
+            conn.execute(f"ALTER TABLE conversations ADD COLUMN {column} TEXT")
+    eval_columns = {r["name"] for r in conn.execute("PRAGMA table_info(rag_evaluations)")}
+    if "session_id" not in eval_columns:
+        conn.execute("ALTER TABLE rag_evaluations ADD COLUMN session_id TEXT")
+    if "message_id" not in eval_columns:
+        conn.execute("ALTER TABLE rag_evaluations ADD COLUMN message_id INTEGER")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_rag_evaluations_session ON rag_evaluations(session_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_rag_evaluations_message ON rag_evaluations(message_id)")
+
 
 # ---------------------------------------------------------------------------
 # Staff sessions and audit
@@ -384,14 +401,16 @@ def get_chat_session(session_id: str) -> Optional[Dict]:
 def log_message(session_id: str, role: str, message: str,
                  sentiment_label: Optional[str] = None,
                  frustration_score: Optional[float] = None,
-                 sources: Optional[str] = None):
+                 sources: Optional[str] = None) -> int:
+    """Stores one message and returns its id."""
     with _connect() as conn:
-        conn.execute(
+        cur = conn.execute(
             "INSERT INTO conversations (session_id, role, message, sentiment_label, "
             "frustration_score, sources, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
             (session_id, role, message, sentiment_label, frustration_score, sources,
              datetime.utcnow().isoformat()),
         )
+        return cur.lastrowid
 
 
 def log_transaction(session_id: str, checkout_request_id: str, phone_number: str,
@@ -409,13 +428,15 @@ def log_transaction(session_id: str, checkout_request_id: str, phone_number: str
 
 def log_rag_evaluation(query_id: str, query: str, context_relevance: float,
                         groundedness: float, answer_relevance: float, model: str,
-                        metric_version: int = METRIC_VERSION):
+                        metric_version: int = METRIC_VERSION, session_id: Optional[str] = None,
+                        message_id: Optional[int] = None):
     with _connect() as conn:
         conn.execute(
             "INSERT INTO rag_evaluations (query_id, query, context_relevance, groundedness, "
-            "answer_relevance, model, metric_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "answer_relevance, model, metric_version, created_at, session_id, message_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (query_id, query, context_relevance, groundedness, answer_relevance, model,
-             metric_version, datetime.utcnow().isoformat()),
+             metric_version, datetime.utcnow().isoformat(), session_id, message_id),
         )
 
 

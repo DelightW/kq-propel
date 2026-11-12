@@ -142,6 +142,11 @@ def erase_sessions(session_ids: Iterable[str]) -> Dict[str, int]:
             counts["evaluation_texts"] = conn.execute(
                 f"UPDATE rag_evaluations SET query = NULL WHERE query IN ({qmarks})",
                 questions).rowcount
+        # Scores linked to the conversation keep their numbers (they are not
+        # personal) but lose the question text.
+        counts["evaluation_texts"] += conn.execute(
+            f"UPDATE rag_evaluations SET query = NULL WHERE session_id IN ({marks}) "
+            f"AND query IS NOT NULL", ids).rowcount
         counts["messages"] = conn.execute(
             f"DELETE FROM conversations WHERE session_id IN ({marks})", ids).rowcount
         counts["handover_cases"] = conn.execute(

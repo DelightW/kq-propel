@@ -283,6 +283,8 @@
     overview: { panel: "metrics", title: "Overview" },
     handovers: { panel: "handovers", title: "Handovers" },
     requests: { panel: "requests", title: "Name corrections" },
+    conversations: { panel: "conversations", title: "Conversations" },
+    knowledge: { panel: "knowledge", title: "Knowledge base" },
     payments: { panel: "transactions", title: "Payments" },
     comparison: { panel: "comparison", title: "Model comparison" },
     staff: { panel: "staff", title: "Staff accounts" },
@@ -290,6 +292,7 @@
     "data-protection": { panel: "privacy", title: "Data protection" }
   };
   var currentView = "overview";
+  var waitingCount = 0;
 
   function currentViewFromHash() {
     return (location.hash || "").replace(/^#/, "");
@@ -318,7 +321,13 @@
     var link = document.querySelector('.side-nav a[data-view="' + name + '"]');
     var group = link ? link.closest("ul").previousElementSibling : null;
     document.getElementById("view-group").textContent = group ? group.textContent : "";
-    document.title = VIEWS[name].title + " | KQ-Propel staff";
+    document.title = (waitingCount ? "(" + waitingCount + ") " : "") + VIEWS[name].title + " | KQ-Propel staff";
+    // Each view loads its own data when it is opened.
+    if (name === "payments") { loadLedger(1); }
+    if (name === "access-log") { loadAudit(1); }
+    if (name === "conversations") { loadConversations(1); }
+    if (name === "knowledge") { loadKnowledge(); }
+    if (name === "overview") { setTimeout(renderTrends, 0); }
     if (focus) {
       window.scrollTo(0, 0);
       var main = document.getElementById("main");
@@ -379,7 +388,8 @@
         return r.json();
       })
       .then(renderOverview)
-      .then(function () { if (allowed("audit")) { return loadAudit(); } })
+      .then(function () { if (allowed("audit")) { return loadAudit(1); } })
+      .then(function () { loadTrends(); loadFlaggedCount(); })
       .catch(function (err) {
         if (err.message === "Not signed in") { return; }
         kpis.innerHTML = "";
@@ -394,33 +404,8 @@
     if (allowed("requests")) { loadRequests(); }
     if (allowed("privacy")) { loadPrivacy(); }
     if (allowed("staff")) { loadStaff(); }
-  }
-
-  function loadAudit() {
-    return api("/api/admin/audit")
-      .then(function (r) { return r.ok ? r.json() : { entries: [] }; })
-      .then(function (d) {
-        var entries = (d && d.entries) || [];
-        auditBody.innerHTML = "";
-        if (!entries.length) {
-          emptyRow(auditBody, 5, "No administrative activity recorded yet.");
-          return;
-        }
-        entries.forEach(function (e) {
-          var tr = el("tr");
-          tr.appendChild(timeCell(e.created_at));
-          tr.appendChild(td(e.username || "-", "strong"));
-          var action = (e.action || "-").replace(/_/g, " ");
-          var ac = td();
-          ac.appendChild(el("span", "action " + (/fail|lock|disable|erase/.test(e.action || "") ? "bad" : ""),
-            action.charAt(0).toUpperCase() + action.slice(1)));
-          tr.appendChild(ac);
-          tr.appendChild(td(e.detail || "-", "muted"));
-          tr.appendChild(td(e.ip || "-", "mono"));
-          auditBody.appendChild(tr);
-        });
-      })
-      .catch(function () { /* audit is supplementary; never block the view */ });
+    if (currentView === "payments") { loadLedger(txPage); }
+    if (currentView === "conversations") { loadConversations(1); if (openConv) { openConversation(openConv); } }
   }
 
   // Exact mapping from ledger status to pill style and label. Matching on
@@ -582,41 +567,6 @@
       });
     }
 
-    txBody.innerHTML = "";
-    var recent = tx.recent || [];
-    if (!recent.length) {
-      emptyRow(txBody, 7, "No transactions recorded yet.");
-    } else {
-      recent.forEach(function (r) {
-        var method = r.method || "mpesa";
-        var currency = r.currency || "KES";
-        var tr = el("tr");
-        tr.appendChild(timeCell(r.created_at));
-        var sess = td(shortId(r.session_id), "mono");
-        if (r.session_id) { sess.title = r.session_id; }
-        tr.appendChild(sess);
-        var mc = td();
-        mc.appendChild(el("span", "method " + (method === "card" ? "m-card" : "m-mpesa"), method === "card" ? "Card" : "M-Pesa"));
-        tr.appendChild(mc);
-        tr.appendChild(td(r.phone_number || "-", "mono"));
-        tr.appendChild(td(money(currency, r.amount), "num strong"));
-        var st = el("td");
-        var look = STATUS_LOOK[r.status] || STATUS_LOOK.unknown;
-        st.appendChild(el("span", "pill " + look[0], look[1]));
-        if (r.status_detail) { st.title = r.status_detail; }
-        if (r.status === "paid" && r.reference) {
-          var receipt = el("a", "receipt-link", "Receipt");
-          receipt.href = "/api/admin/transactions/" + encodeURIComponent(r.reference) + "/receipt";
-          receipt.setAttribute("download", "");
-          receipt.setAttribute("aria-label", "Receipt for " + r.reference);
-          st.appendChild(document.createTextNode(" "));
-          st.appendChild(receipt);
-        }
-        tr.appendChild(st);
-        tr.appendChild(td(r.checkout_request_id || r.reference || "-", "mono"));
-        txBody.appendChild(tr);
-      });
-    }
   }
 
   /* -------------------------- model comparison -------------------------- */
@@ -827,8 +777,9 @@
             "assistant gives passengers the airline's contact details instead of opening cases.";
         }
         var cases = d.cases || [];
-        setCount("count-handovers", "att-handovers",
-          cases.filter(function (c) { return c.status === "open"; }).length);
+        waitingCount = cases.filter(function (c) { return c.status === "open"; }).length;
+        setCount("count-handovers", "att-handovers", waitingCount);
+        noticeNewCases(cases);
         hoList.innerHTML = "";
         if (!cases.length) {
           var li = el("li", "case-empty");
@@ -962,10 +913,11 @@
     loadHandovers();
     loadRequests();
     hoTimer = setInterval(function () {
-      if (dashboard.hidden || document.hidden) { return; }
+      if (dashboard.hidden || (document.hidden && !alertsOn)) { return; }
       if (!allowed("handovers")) { return; }
       loadHandovers();
       loadRequests();
+      loadFlaggedCount();
       if (openCaseId !== null && !hoReply.value) { openCase(openCaseId); }
     }, 15000);
   }
@@ -1197,6 +1149,651 @@
       loadStaff();
     }).catch(function (err) { staffStatus.textContent = err.message; });
   });
+
+  /* ============================== paging ============================== */
+
+  /* "1-25 of 120" with Previous / Next. `go(page)` loads a page. */
+  function renderPager(box, d, go) {
+    box.innerHTML = "";
+    var total = d.total || 0;
+    if (total <= d.size && d.page === 1) { box.hidden = true; return; }
+    box.hidden = false;
+    var first = total ? (d.page - 1) * d.size + 1 : 0;
+    var last = Math.min(total, d.page * d.size);
+    box.appendChild(el("span", "pager-text", first + "–" + last + " of " + total));
+    var prev = el("button", "btn btn-small btn-quiet", "Previous");
+    prev.type = "button";
+    prev.disabled = d.page <= 1;
+    prev.addEventListener("click", function () { go(d.page - 1); });
+    var next = el("button", "btn btn-small btn-quiet", "Next");
+    next.type = "button";
+    next.disabled = last >= total;
+    next.addEventListener("click", function () { go(d.page + 1); });
+    box.appendChild(prev);
+    box.appendChild(next);
+  }
+
+  function query(params) {
+    return Object.keys(params).filter(function (k) {
+      return params[k] !== "" && params[k] !== null && params[k] !== undefined;
+    }).map(function (k) {
+      return encodeURIComponent(k) + "=" + encodeURIComponent(params[k]);
+    }).join("&");
+  }
+
+  function debounce(fn, ms) {
+    var t = null;
+    return function () { clearTimeout(t); t = setTimeout(fn, ms); };
+  }
+
+  /* ============================== payments ============================== */
+
+  var txStatus = document.getElementById("tx-status");
+  var txMethod = document.getElementById("tx-method");
+  var txSearch = document.getElementById("tx-search");
+  var txCsv = document.getElementById("tx-csv");
+  var txPager = document.getElementById("tx-pager");
+  var txPage = 1;
+
+  function txParams() {
+    return { status_filter: txStatus.value, method: txMethod.value, q: txSearch.value.trim() };
+  }
+
+  function loadLedger(page) {
+    txPage = page || 1;
+    var params = txParams();
+    txCsv.href = "/api/admin/ledger.csv" + (query(params) ? "?" + query(params) : "");
+    params.page = txPage;
+    params.size = 25;
+    return api("/api/admin/ledger?" + query(params))
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        txBody.innerHTML = "";
+        var rows = d.transactions || [];
+        if (!rows.length) {
+          emptyRow(txBody, 7, (d.total === 0 && !query(txParams())) ? "No payments recorded yet."
+                                                                     : "No payments match these filters.");
+        }
+        rows.forEach(function (r) { txBody.appendChild(paymentRow(r)); });
+        renderPager(txPager, d, loadLedger);
+      })
+      .catch(function () {});
+  }
+
+  function paymentRow(r) {
+    var method = r.method || "mpesa";
+    var currency = r.currency || "KES";
+    var tr = el("tr");
+    tr.appendChild(timeCell(r.created_at));
+    var sess = td(shortId(r.session_id), "mono");
+    if (r.session_id) { sess.title = r.session_id; }
+    tr.appendChild(sess);
+    var mc = td();
+    mc.appendChild(el("span", "method " + (method === "card" ? "m-card" : "m-mpesa"),
+                      method === "card" ? "Card" : "M-Pesa"));
+    tr.appendChild(mc);
+    tr.appendChild(td(r.phone_number || "-", "mono"));
+    tr.appendChild(td(money(currency, r.amount), "num strong"));
+    var st = el("td");
+    var look = STATUS_LOOK[r.status] || STATUS_LOOK.unknown;
+    st.appendChild(el("span", "pill " + look[0], look[1]));
+    if (r.status_detail) { st.title = r.status_detail; }
+    if (r.status === "paid" && r.reference) {
+      var receipt = el("a", "receipt-link", "Receipt");
+      receipt.href = "/api/admin/transactions/" + encodeURIComponent(r.reference) + "/receipt";
+      receipt.setAttribute("download", "");
+      receipt.setAttribute("aria-label", "Receipt for " + r.reference);
+      st.appendChild(document.createTextNode(" "));
+      st.appendChild(receipt);
+    }
+    tr.appendChild(st);
+    tr.appendChild(td(r.checkout_request_id || r.reference || "-", "mono"));
+    return tr;
+  }
+
+  txStatus.addEventListener("change", function () { loadLedger(1); });
+  txMethod.addEventListener("change", function () { loadLedger(1); });
+  txSearch.addEventListener("input", debounce(function () { loadLedger(1); }, 350));
+  document.getElementById("tx-filters").addEventListener("submit", function (e) {
+    e.preventDefault();
+    loadLedger(1);
+  });
+
+  /* ============================= access log ============================= */
+
+  var auditUser = document.getElementById("audit-user");
+  var auditAction = document.getElementById("audit-action");
+  var auditCsv = document.getElementById("audit-csv");
+  var auditPager = document.getElementById("audit-pager");
+
+  function fillSelect(select, values, label) {
+    var keep = select.value;
+    select.innerHTML = "";
+    var all = el("option", null, label);
+    all.value = "";
+    select.appendChild(all);
+    values.forEach(function (v) {
+      var o = el("option", null, v.replace(/_/g, " "));
+      o.value = v;
+      select.appendChild(o);
+    });
+    select.value = values.indexOf(keep) !== -1 ? keep : "";
+  }
+
+  function loadAudit(page) {
+    var params = { user: auditUser.value, action: auditAction.value };
+    auditCsv.href = "/api/admin/audit.csv" + (query(params) ? "?" + query(params) : "");
+    params.page = page || 1;
+    params.size = 50;
+    return api("/api/admin/audit?" + query(params))
+      .then(function (r) { return r.ok ? r.json() : { entries: [] }; })
+      .then(function (d) {
+        if (d.users) { fillSelect(auditUser, d.users, "Everyone"); }
+        if (d.actions) { fillSelect(auditAction, d.actions, "All actions"); }
+        var entries = (d && d.entries) || [];
+        auditBody.innerHTML = "";
+        if (!entries.length) {
+          emptyRow(auditBody, 5, "No administrative activity recorded yet.");
+        }
+        entries.forEach(function (e) {
+          var tr = el("tr");
+          tr.appendChild(timeCell(e.created_at));
+          tr.appendChild(td(e.username || "-", "strong"));
+          var action = (e.action || "-").replace(/_/g, " ");
+          var ac = td();
+          ac.appendChild(el("span", "action " + (/fail|lock|disable|erase/.test(e.action || "") ? "bad" : ""),
+            action.charAt(0).toUpperCase() + action.slice(1)));
+          tr.appendChild(ac);
+          tr.appendChild(td(e.detail || "-", "muted"));
+          tr.appendChild(td(e.ip || "-", "mono"));
+          auditBody.appendChild(tr);
+        });
+        if (d.total !== undefined) { renderPager(auditPager, d, loadAudit); }
+      })
+      .catch(function () { /* audit is supplementary; never block the view */ });
+  }
+
+  auditUser.addEventListener("change", function () { loadAudit(1); });
+  auditAction.addEventListener("change", function () { loadAudit(1); });
+  document.getElementById("audit-filters").addEventListener("submit", function (e) {
+    e.preventDefault();
+    loadAudit(1);
+  });
+
+  /* ========================= conversation review ========================= */
+
+  var convList = document.getElementById("conv-list");
+  var convPager = document.getElementById("conv-pager");
+  var convSearch = document.getElementById("conv-search");
+  var convDetail = document.getElementById("conv-detail");
+  var convEmpty = document.getElementById("conv-empty");
+  var convTitle = document.getElementById("conv-title");
+  var convMeta = document.getElementById("conv-meta");
+  var convTranscript = document.getElementById("conv-transcript");
+  var convStatus = document.getElementById("conv-status");
+  var convErase = document.getElementById("conv-erase");
+  var convFlag = "";
+  var openConv = null;
+
+  var FLAG_LOOK = {
+    low: ["warn", "Low score"], down: ["fail", "Rated unhelpful"], declined: ["muted", "Declined"],
+    frustrated: ["fail", "Frustrated"], handover: ["muted", "Handed over"]
+  };
+
+  function score(v) { return v === null || v === undefined ? "–" : Number(v).toFixed(2); }
+
+  function loadConversations(page) {
+    var params = { flag: convFlag, q: convSearch.value.trim(), page: page || 1, size: 20 };
+    return api("/api/admin/conversations?" + query(params))
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        convList.innerHTML = "";
+        var rows = d.conversations || [];
+        if (!rows.length) {
+          var li = el("li", "case-empty");
+          li.appendChild(el("strong", null, convFlag || params.q ? "Nothing matches." : "No conversations yet."));
+          li.appendChild(el("span", null, convFlag || params.q ? "Try another filter."
+                                                               : "Passenger conversations appear here."));
+          convList.appendChild(li);
+        }
+        rows.forEach(function (c) {
+          var li = el("li");
+          var btn = el("button", "case" + (c.session_id === openConv ? " is-open" : ""));
+          btn.type = "button";
+          btn.setAttribute("aria-current", c.session_id === openConv ? "true" : "false");
+          btn.dataset.session = c.session_id;
+          var top = el("span", "case-top");
+          top.appendChild(el("span", "case-ref mono", c.short_id));
+          top.appendChild(el("span", "case-count", c.questions + (c.questions === 1 ? " question" : " questions")));
+          top.appendChild(el("span", "case-time", fmtTime(c.last_at)));
+          btn.appendChild(top);
+          btn.appendChild(el("span", "case-msg", c.first_question || "No question"));
+          var meta = el("span", "case-flags");
+          meta.appendChild(el("span", "case-score", "Grounded " + score(c.min_groundedness) +
+                                                    " · Relevance " + score(c.min_relevance)));
+          (c.flags || []).forEach(function (f) {
+            var look = FLAG_LOOK[f];
+            if (look) { meta.appendChild(el("span", "pill " + look[0], look[1])); }
+          });
+          btn.appendChild(meta);
+          btn.addEventListener("click", function () { openConversation(c.session_id, true); });
+          li.appendChild(btn);
+          convList.appendChild(li);
+        });
+        renderPager(convPager, d, loadConversations);
+      })
+      .catch(function () {});
+  }
+
+  function openConversation(sessionId, userAction) {
+    openConv = sessionId;
+    convStatus.textContent = "";
+    return api("/api/admin/conversations/" + encodeURIComponent(sessionId))
+      .then(function (r) {
+        if (!r.ok) { throw new Error(r.status === 404 ? "This conversation no longer exists." : "HTTP " + r.status); }
+        return r.json();
+      })
+      .then(function (c) {
+        convDetail.hidden = false;
+        convEmpty.hidden = true;
+        Array.prototype.forEach.call(convList.querySelectorAll(".case"), function (b) {
+          var mine = b.dataset.session === sessionId;
+          b.classList.toggle("is-open", mine);
+          b.setAttribute("aria-current", mine ? "true" : "false");
+        });
+        convTitle.textContent = "Conversation " + c.short_id;
+        var answers = c.messages.filter(function (m) { return m.role === "assistant"; }).length;
+        convMeta.textContent = c.messages.length ? (fmtTime(c.messages[0].created_at) + " UTC · " + answers +
+          (answers === 1 ? " answer" : " answers") +
+          (c.handover_cases.length ? " · " + c.handover_cases.join(", ") : "")) : "";
+        convErase.hidden = !(me && me.role === "admin");
+        convTranscript.innerHTML = "";
+        c.messages.forEach(function (m) {
+          var b = el("div", "t-msg " + m.role);
+          var head = el("span", "t-who");
+          head.appendChild(el("strong", null, ROLE_NAME[m.role] || m.role));
+          head.appendChild(document.createTextNode(" · " + fmtTime(m.created_at).replace(/^.*, /, "")));
+          if (m.role === "user" && m.sentiment === "frustrated") {
+            head.appendChild(document.createTextNode(" · frustrated " + score(m.frustration_score)));
+          }
+          b.appendChild(head);
+          b.appendChild(el("span", "t-text", m.message));
+          if (m.role === "assistant") {
+            var foot = el("span", "t-scores");
+            if (m.scores) {
+              [["Context", m.scores.context_relevance], ["Grounded", m.scores.groundedness],
+               ["Relevance", m.scores.answer_relevance]].forEach(function (pair) {
+                var low = pair[0] === "Grounded" && pair[1] < 0.9;
+                foot.appendChild(el("span", "score" + (low ? " low" : ""), pair[0] + " " + score(pair[1])));
+              });
+            } else {
+              foot.appendChild(el("span", "score", m.declined ? "Declined, not scored" : "Not scored (no policy text)"));
+            }
+            if (m.feedback === "up") { foot.appendChild(el("span", "pill ok", "Rated helpful")); }
+            if (m.feedback === "down") { foot.appendChild(el("span", "pill fail", "Rated unhelpful")); }
+            b.appendChild(foot);
+            if (m.feedback_note) { b.appendChild(el("span", "t-note", "Passenger: “" + m.feedback_note + "”")); }
+          }
+          convTranscript.appendChild(b);
+        });
+        convTranscript.scrollTop = 0;
+        if (userAction && window.matchMedia("(max-width: 1023px)").matches) {
+          convDetail.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      })
+      .catch(function (err) {
+        if (err.message !== "Not signed in") { convStatus.textContent = err.message; }
+      });
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll(".filter-chip"), function (chip) {
+    chip.addEventListener("click", function () {
+      convFlag = chip.getAttribute("data-flag");
+      Array.prototype.forEach.call(document.querySelectorAll(".filter-chip"), function (c) {
+        c.setAttribute("aria-pressed", c === chip ? "true" : "false");
+      });
+      loadConversations(1);
+    });
+  });
+  convSearch.addEventListener("input", debounce(function () { loadConversations(1); }, 350));
+  document.getElementById("conv-search-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    loadConversations(1);
+  });
+  document.getElementById("conv-hide").addEventListener("click", function () {
+    convDetail.hidden = true;
+    convEmpty.hidden = false;
+    openConv = null;
+    Array.prototype.forEach.call(convList.querySelectorAll(".case"), function (b) {
+      b.classList.remove("is-open");
+      b.setAttribute("aria-current", "false");
+    });
+  });
+  convErase.addEventListener("click", function () {
+    if (!openConv) { return; }
+    if (!window.confirm("Erase this conversation and everything linked to it? This cannot be undone.")) { return; }
+    convErase.disabled = true;
+    api("/api/admin/conversations/" + encodeURIComponent(openConv) + "/erase", { method: "POST" })
+      .then(function (r) { return r.json().then(function (d) { if (!r.ok) { throw new Error(d.detail || "HTTP " + r.status); } return d; }); })
+      .then(function (d) {
+        var c = d.erased || {};
+        convDetail.hidden = true;
+        convEmpty.hidden = false;
+        openConv = null;
+        convEmpty.querySelector("p").textContent = "Erased " + (c.messages || 0) + " message(s).";
+        loadConversations(1);
+      })
+      .catch(function (err) { convStatus.textContent = err.message; })
+      .then(function () { convErase.disabled = false; });
+  });
+
+  /* Count of answers rated unhelpful, for the sidebar and the overview. */
+  function loadFlaggedCount() {
+    if (!allowed("conversations")) { return; }
+    api("/api/admin/conversations?flag=down&size=1")
+      .then(function (r) { return r.json(); })
+      .then(function (d) { setCount("count-flagged", "att-flagged", d.total || 0); })
+      .catch(function () {});
+  }
+
+  /* =============================== trends =============================== */
+
+  var trendsBox = document.getElementById("trends");
+  var trendsTable = document.getElementById("trends-table");
+  var trendsToggle = document.getElementById("trends-table-toggle");
+  var trendData = null;
+  var SVGNS = "http://www.w3.org/2000/svg";
+
+  var TREND_CHARTS = [
+    { key: "conversations", title: "Conversations", type: "bar", sum: true, unit: "conversations" },
+    { key: "questions", title: "Questions", type: "bar", sum: true, unit: "questions" },
+    { key: "groundedness", title: "Groundedness", type: "line", max: 1, unit: "" },
+    { key: "answer_relevance", title: "Answer relevance", type: "line", max: 1, unit: "" },
+    { key: "frustrated", title: "Frustrated messages", type: "bar", sum: true, unit: "frustrated" },
+    { key: "declined", title: "Questions declined", type: "bar", sum: true, unit: "declined" },
+    { key: "rated_down", title: "Rated unhelpful", type: "bar", sum: true, unit: "rated unhelpful" },
+    { key: "handovers", title: "Handovers", type: "bar", sum: true, unit: "handovers" }
+  ];
+
+  function svg(tag, attrs) {
+    var n = document.createElementNS(SVGNS, tag);
+    Object.keys(attrs || {}).forEach(function (k) { n.setAttribute(k, attrs[k]); });
+    return n;
+  }
+
+  function dayLabel(iso) {
+    var p = iso.split("-");
+    return parseInt(p[2], 10) + " " + MONTHS[parseInt(p[1], 10) - 1];
+  }
+
+  function fmtValue(spec, v) {
+    if (v === null || v === undefined) { return "no answers"; }
+    return spec.max === 1 ? Number(v).toFixed(2) : String(v) + (spec.unit ? " " + spec.unit : "");
+  }
+
+  function miniChart(spec, days) {
+    var box = el("figure", "mini");
+    var head = el("figcaption", "mini-head");
+    head.appendChild(el("span", "mini-title", spec.title));
+    var values = days.map(function (d) { return d[spec.key]; });
+    var present = values.filter(function (v) { return v !== null && v !== undefined; });
+    var headline = spec.sum
+      ? present.reduce(function (a, b) { return a + b; }, 0)
+      : (present.length ? (present.reduce(function (a, b) { return a + b; }, 0) / present.length).toFixed(2) : "–");
+    head.appendChild(el("span", "mini-value", spec.sum ? headline + " total" : (present.length ? "avg " + headline : "–")));
+    box.appendChild(head);
+    trendsBox.appendChild(box);
+
+    var W = Math.max(160, box.clientWidth || 240);
+    var H = 96, top = 8, bottom = 18, left = 2, right = 2;
+    var max = spec.max || Math.max(1, Math.max.apply(null, present.length ? present : [0]));
+    var plotH = H - top - bottom;
+    var step = (W - left - right) / days.length;
+    var y = function (v) { return top + plotH - (v / max) * plotH; };
+    var s = svg("svg", { viewBox: "0 0 " + W + " " + H, width: "100%", height: H, role: "img",
+                         "aria-label": spec.title + ", last " + days.length + " days" });
+    s.appendChild(svg("line", { x1: 0, x2: W, y1: top, y2: top, class: "grid" }));
+    s.appendChild(svg("line", { x1: 0, x2: W, y1: top + plotH, y2: top + plotH, class: "axis" }));
+    var maxLabel = svg("text", { x: W - 2, y: top - 1, class: "tick", "text-anchor": "end" });
+    maxLabel.textContent = spec.max === 1 ? "1.0" : String(max);
+    s.appendChild(maxLabel);
+
+    if (spec.type === "bar") {
+      var bw = Math.max(3, Math.min(18, step * 0.62));
+      values.forEach(function (v, i) {
+        if (!v) { return; }
+        var x = left + i * step + (step - bw) / 2;
+        var h = Math.max(2, (v / max) * plotH), r = Math.min(4, bw / 2, h);
+        var yb = top + plotH;
+        // Rounded data end, square at the baseline.
+        s.appendChild(svg("path", { class: "bar", d:
+          "M" + x + "," + yb + "V" + (yb - h + r) + "Q" + x + "," + (yb - h) + " " + (x + r) + "," + (yb - h) +
+          "H" + (x + bw - r) + "Q" + (x + bw) + "," + (yb - h) + " " + (x + bw) + "," + (yb - h + r) +
+          "V" + yb + "Z" }));
+      });
+    } else {
+      var d = "", pen = false;
+      values.forEach(function (v, i) {
+        var x = left + i * step + step / 2;
+        if (v === null || v === undefined) { pen = false; return; }
+        d += (pen ? "L" : "M") + x + "," + y(v);
+        pen = true;
+      });
+      if (d) { s.appendChild(svg("path", { class: "line", d: d })); }
+      values.forEach(function (v, i) {
+        if (v === null || v === undefined) { return; }
+        s.appendChild(svg("circle", { class: "dot", cx: left + i * step + step / 2, cy: y(v), r: 3 }));
+      });
+    }
+    var first = svg("text", { x: 0, y: H - 3, class: "tick" });
+    first.textContent = dayLabel(days[0].date);
+    var last = svg("text", { x: W, y: H - 3, class: "tick", "text-anchor": "end" });
+    last.textContent = dayLabel(days[days.length - 1].date);
+    s.appendChild(first);
+    s.appendChild(last);
+
+    // Hover layer: a guide line and a tooltip for the day under the pointer.
+    var guide = svg("line", { class: "guide", y1: top, y2: top + plotH, x1: 0, x2: 0, visibility: "hidden" });
+    s.appendChild(guide);
+    var tip = el("div", "mini-tip");
+    tip.hidden = true;
+    box.appendChild(s);
+    box.appendChild(tip);
+    function show(clientX) {
+      var rect = s.getBoundingClientRect();
+      var i = Math.max(0, Math.min(days.length - 1, Math.floor((clientX - rect.left) / rect.width * days.length)));
+      var cx = left + i * step + step / 2;
+      guide.setAttribute("x1", cx);
+      guide.setAttribute("x2", cx);
+      guide.setAttribute("visibility", "visible");
+      tip.hidden = false;
+      tip.textContent = dayLabel(days[i].date) + " · " + fmtValue(spec, values[i]);
+      var px = cx / W * rect.width;
+      tip.style.left = Math.max(0, Math.min(rect.width - tip.offsetWidth, px - tip.offsetWidth / 2)) + "px";
+    }
+    s.addEventListener("pointermove", function (e) { show(e.clientX); });
+    s.addEventListener("pointerleave", function () { tip.hidden = true; guide.setAttribute("visibility", "hidden"); });
+    return box;
+  }
+
+  function renderTrends() {
+    if (!trendData) { return; }
+    var days = trendData.days || [];
+    trendsBox.innerHTML = "";
+    if (!days.length) { return; }
+    TREND_CHARTS.forEach(function (spec) { miniChart(spec, days); });
+    // The table holds every figure, for screen readers and for exact values.
+    var table = el("table");
+    var head = el("tr");
+    ["Date", "Conversations", "Questions", "Groundedness", "Answer relevance", "Frustrated", "Declined",
+     "Rated helpful", "Rated unhelpful", "Handovers"].forEach(function (h) { head.appendChild(el("th", null, h)); });
+    var thead = el("thead");
+    thead.appendChild(head);
+    table.appendChild(thead);
+    var tbody = el("tbody");
+    days.slice().reverse().forEach(function (d) {
+      var tr = el("tr");
+      tr.appendChild(td(dayLabel(d.date), "nowrap"));
+      [d.conversations, d.questions, d.groundedness === null ? "–" : d.groundedness.toFixed(2),
+       d.answer_relevance === null ? "–" : d.answer_relevance.toFixed(2), d.frustrated, d.declined,
+       d.rated_up, d.rated_down, d.handovers].forEach(function (v) { tr.appendChild(td(String(v), "num")); });
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    trendsTable.innerHTML = "";
+    trendsTable.appendChild(table);
+  }
+
+  function loadTrends() {
+    return api("/api/admin/trends?days=14")
+      .then(function (r) { return r.json(); })
+      .then(function (d) { trendData = d; renderTrends(); })
+      .catch(function () {});
+  }
+
+  trendsToggle.addEventListener("click", function () {
+    var showTable = trendsToggle.getAttribute("aria-pressed") !== "true";
+    trendsToggle.setAttribute("aria-pressed", showTable ? "true" : "false");
+    trendsToggle.textContent = showTable ? "Show as charts" : "Show as table";
+    trendsTable.hidden = !showTable;
+    trendsBox.hidden = showTable;
+  });
+  window.addEventListener("resize", debounce(function () {
+    if (currentView === "overview" && !trendsBox.hidden) { renderTrends(); }
+  }, 200));
+
+  /* =========================== knowledge base =========================== */
+
+  var kbDocs = document.getElementById("kb-docs");
+  var kbSummary = document.getElementById("kb-summary");
+  var kbSearch = document.getElementById("kb-search");
+  var kbData = null;
+
+  function loadKnowledge() {
+    if (kbData) { renderKnowledge(); return Promise.resolve(); }
+    return api("/api/admin/knowledge")
+      .then(function (r) { return r.json(); })
+      .then(function (d) { kbData = d; renderKnowledge(); })
+      .catch(function () {});
+  }
+
+  function renderKnowledge() {
+    var term = kbSearch.value.trim().toLowerCase();
+    kbDocs.innerHTML = "";
+    var shown = 0, sectionsShown = 0;
+    kbData.documents.forEach(function (doc) {
+      var sections = doc.sections.filter(function (s) {
+        return !term || (s.section + " " + s.text).toLowerCase().indexOf(term) !== -1 ||
+               doc.title.toLowerCase().indexOf(term) !== -1;
+      });
+      if (!sections.length) { return; }
+      shown += 1;
+      sectionsShown += sections.length;
+      var card = el("article", "panel kb-doc");
+      var title = el("div", "panel-title");
+      title.appendChild(el("h3", null, doc.title));
+      var published = doc.provenance === "kenya_airways_published";
+      title.appendChild(el("span", "pill " + (published ? "ok" : "warn"),
+                           published ? "Published by Kenya Airways" : "Synthetic – prototype only"));
+      card.appendChild(title);
+      var meta = el("p", "hint");
+      meta.appendChild(document.createTextNode(doc.file + " · " + doc.chunks + " chunks · " + doc.edition));
+      if (doc.source_url) {
+        meta.appendChild(document.createTextNode(" · "));
+        var a = el("a", null, "Source page");
+        a.href = doc.source_url;
+        a.target = "_blank";
+        a.rel = "noopener";
+        meta.appendChild(a);
+      }
+      card.appendChild(meta);
+      sections.forEach(function (s) {
+        var det = el("details", "kb-section");
+        if (term) { det.open = true; }
+        var sum = el("summary", null, s.section);
+        det.appendChild(sum);
+        det.appendChild(el("p", "kb-text", s.text));
+        card.appendChild(det);
+      });
+      kbDocs.appendChild(card);
+    });
+    kbSummary.textContent = term
+      ? sectionsShown + " section(s) in " + shown + " document(s) mention “" + kbSearch.value.trim() + "”."
+      : kbData.documents.length + " documents, " + kbData.total_chunks + " indexed chunks.";
+  }
+
+  kbSearch.addEventListener("input", debounce(function () { if (kbData) { renderKnowledge(); } }, 200));
+  document.getElementById("kb-search-form").addEventListener("submit", function (e) { e.preventDefault(); });
+
+  /* ============================ handover alerts =========================== */
+
+  /* Off by default: sound and notifications need the person's say-so. When
+     on, a new waiting passenger plays a short tone and, if the tab is in the
+     background, shows a browser notification. The tab title always shows the
+     number waiting. */
+  var alertsToggle = document.getElementById("alerts-toggle");
+  var alertsStatus = document.getElementById("alerts-status");
+  var alertsOn = false;
+  var knownOpen = null;
+  var audioCtx = null;
+
+  try { alertsOn = window.localStorage.getItem("kq-alerts") === "on"; } catch (e) { alertsOn = false; }
+
+  function paintAlerts() {
+    alertsToggle.setAttribute("aria-pressed", alertsOn ? "true" : "false");
+    alertsToggle.querySelector("span").textContent = alertsOn ? "Alerts on" : "Alerts off";
+  }
+  paintAlerts();
+
+  alertsToggle.addEventListener("click", function () {
+    alertsOn = !alertsOn;
+    try { window.localStorage.setItem("kq-alerts", alertsOn ? "on" : "off"); } catch (e) { /* per-viewer only */ }
+    if (alertsOn) {
+      try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { audioCtx = null; }
+      if (window.Notification && Notification.permission === "default") { Notification.requestPermission(); }
+    }
+    paintAlerts();
+    alertsStatus.textContent = alertsOn ? "Alerts turned on." : "Alerts turned off.";
+  });
+
+  function chime() {
+    if (!audioCtx) { return; }
+    try {
+      var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = "sine";
+      o.frequency.value = 880;
+      g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.15, audioCtx.currentTime + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.5);
+      o.connect(g);
+      g.connect(audioCtx.destination);
+      o.start();
+      o.stop(audioCtx.currentTime + 0.55);
+    } catch (e) { /* sound is a nicety */ }
+  }
+
+  /* Called with the open cases after every poll. */
+  function noticeNewCases(cases) {
+    var open = cases.filter(function (c) { return c.status === "open"; });
+    var ids = open.map(function (c) { return c.id; });
+    var titleBase = document.title.replace(/^\(\d+\) /, "");
+    document.title = (open.length ? "(" + open.length + ") " : "") + titleBase;
+    if (knownOpen === null) { knownOpen = ids; return; }
+    var fresh = open.filter(function (c) { return knownOpen.indexOf(c.id) === -1; });
+    knownOpen = ids;
+    if (!fresh.length || !alertsOn) { return; }
+    chime();
+    alertsStatus.textContent = fresh.length === 1 ? "New passenger waiting: " + fresh[0].reference
+                                                  : fresh.length + " new passengers waiting.";
+    if (document.hidden && window.Notification && Notification.permission === "granted") {
+      try {
+        new Notification("Passenger waiting for a person", {
+          body: fresh.map(function (c) { return c.reference + ": " + (c.last_passenger_message || ""); }).join("\n"),
+          tag: "kq-handover"
+        });
+      } catch (e) { /* notifications are a nicety */ }
+    }
+  }
 
   refreshBtn.addEventListener("click", refreshAll);
   runCmpBtn.addEventListener("click", runComparison);

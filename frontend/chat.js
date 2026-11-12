@@ -869,7 +869,8 @@
       })
       .then(function (data) {
         typing.remove();
-        addBubble("bot", data.answer || "I could not produce an answer for that.", data);
+        var answerBubble = addBubble("bot", data.answer || "I could not produce an answer for that.", data);
+        if (data.message_id) { addFeedback(answerBubble, data.message_id, null); }
 
         if (data.payment) {
           addPaymentCard(data.payment);
@@ -956,6 +957,132 @@
       });
   });
 
+
+  /* ------------------------------ feedback ------------------------------ */
+
+  /* "Was this helpful?" under an answer. A rating can be changed; after "no"
+     the passenger may say what was wrong (optional, 300 characters). Staff
+     see ratings in the dashboard's conversation review. */
+  var THUMB_UP = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M7 11v9H4v-9zM7 11l4-7c1.5 0 2.5 1 2.2 2.6L12.6 10H18a2 2 0 0 1 2 2.3l-1.1 6A2 2 0 0 1 16.9 20H7"/></svg>';
+  var THUMB_DOWN = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M17 13V4h3v9zM17 13l-4 7c-1.5 0-2.5-1-2.2-2.6l.6-3.4H6a2 2 0 0 1-2-2.3l1.1-6A2 2 0 0 1 7.1 4H17"/></svg>';
+
+  function postFeedback(messageId, rating, note) {
+    return fetch(API + "/feedback", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message_id: messageId, rating: rating, note: note || null })
+    }).then(function (r) {
+      if (!r.ok) { throw new Error("HTTP " + r.status); }
+      return r.json();
+    });
+  }
+
+  function addFeedback(bubble, messageId, current) {
+    var box = document.createElement("div");
+    box.className = "feedback";
+    var label = document.createElement("span");
+    label.className = "fb-label";
+    label.textContent = "Was this helpful?";
+    box.appendChild(label);
+    var status = document.createElement("span");
+    status.className = "fb-status";
+    status.setAttribute("role", "status");
+
+    var buttons = {};
+    [["up", "Helpful", THUMB_UP], ["down", "Not helpful", THUMB_DOWN]].forEach(function (b) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "fb-btn " + b[0];
+      btn.setAttribute("aria-label", b[1]);
+      btn.title = b[1];
+      btn.setAttribute("aria-pressed", current === b[0] ? "true" : "false");
+      btn.innerHTML = b[2];
+      btn.addEventListener("click", function () { rate(b[0]); });
+      buttons[b[0]] = btn;
+      box.appendChild(btn);
+    });
+    box.appendChild(status);
+
+    var form = document.createElement("form");
+    form.className = "fb-form";
+    form.hidden = true;
+    var inputId = "fb-note-" + messageId;
+    var noteLabel = document.createElement("label");
+    noteLabel.className = "sr-only";
+    noteLabel.setAttribute("for", inputId);
+    noteLabel.textContent = "What was wrong with this answer? (optional)";
+    var note = document.createElement("input");
+    note.type = "text";
+    note.id = inputId;
+    note.maxLength = 300;
+    note.placeholder = "What was wrong? (optional)";
+    var sendNote = document.createElement("button");
+    sendNote.type = "submit";
+    sendNote.className = "fb-send";
+    sendNote.textContent = "Send";
+    form.appendChild(noteLabel);
+    form.appendChild(note);
+    form.appendChild(sendNote);
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      sendNote.disabled = true;
+      postFeedback(messageId, "down", note.value.trim())
+        .then(function () {
+          form.hidden = true;
+          status.textContent = "Thank you, that helps us improve.";
+        })
+        .catch(function () { status.textContent = "Couldn't send that just now."; })
+        .then(function () { sendNote.disabled = false; });
+    });
+
+    function rate(rating) {
+      postFeedback(messageId, rating)
+        .then(function () {
+          buttons.up.setAttribute("aria-pressed", rating === "up" ? "true" : "false");
+          buttons.down.setAttribute("aria-pressed", rating === "down" ? "true" : "false");
+          status.textContent = rating === "up" ? "Thanks for letting us know." : "Sorry about that.";
+          form.hidden = rating !== "down";
+          if (rating === "down") { note.focus(); }
+        })
+        .catch(function () { status.textContent = "Couldn't save your rating just now."; });
+    }
+
+    bubble.appendChild(box);
+    bubble.appendChild(form);
+  }
+
+  /* ---------------------------- earlier messages ---------------------------- */
+
+  /* A reloaded page resumes the same session on the server; this shows its
+     messages again instead of an empty welcome screen. Cards and the
+     reasoning trace are not stored, so earlier answers are shown as text. */
+  function restoreHistory() {
+    return fetch(API + "/history", { credentials: "same-origin" })
+      .then(function (r) { return r.ok ? r.json() : { messages: [] }; })
+      .then(function (d) {
+        var messages = (d && d.messages) || [];
+        if (!messages.length) { return; }
+        showWelcome(false);
+        var note = document.createElement("p");
+        note.className = "history-note";
+        note.textContent = "Earlier in this conversation";
+        chatWindow.appendChild(note);
+        messages.forEach(function (m) {
+          if (m.role === "user") { addBubble("user", m.message); }
+          else if (m.role === "agent") {
+            addBubble("agent", m.message);
+            lastAgentMessageId = Math.max(lastAgentMessageId, m.id);
+          } else {
+            var b = addBubble("bot", m.message, {});
+            addFeedback(b, m.id, m.feedback);
+          }
+        });
+        scrollToBottom();
+      })
+      .catch(function () { /* the conversation still works without its history */ });
+  }
+
   /* ------------------------------ greeting ------------------------------ */
 
   // The welcome screen (index.html) greets the passenger; it is shown until
@@ -967,9 +1094,12 @@
   setBusy(true);
   startSession()
     .then(function (d) {
-      setBusy(false);
-      input.focus();
-      if (d && d.resumed) { pollHandover(); }
+      var restored = d && d.resumed ? restoreHistory() : Promise.resolve();
+      return restored.then(function () {
+        setBusy(false);
+        input.focus();
+        if (d && d.resumed) { pollHandover(); }
+      });
     })
     .catch(function (err) {
       setBusy(false);

@@ -10,12 +10,14 @@ default.
 """
 import json
 import statistics
+from datetime import datetime
 from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
-from app import auth, config, database, handover, payments, privacy, receipts, sentiment, service_requests, staff
+from app import (auth, config, database, handover, payments, privacy, receipts, review, sentiment,
+                 service_requests, staff)
 from app.llm import compare_models, comparison_mode
 from app.vectorstore import get_vector_store
 from app import retrieval
@@ -187,9 +189,105 @@ def transaction_receipt(reference: str, request: Request,
 
 
 @router.get("/audit")
-def audit(session: Dict = Depends(auth.require_role(staff.ADMIN))):
-    """Who accessed passenger data, and when."""
-    return {"entries": database.fetch_admin_audit(limit=100)}
+def audit(user: Optional[str] = None, action: Optional[str] = None, page: int = 1, size: int = 50,
+          session: Dict = Depends(auth.require_role(staff.ADMIN))):
+    """Who accessed passenger data, and when. Paged and filterable."""
+    return review.audit(user=user, action=action, page=page, size=size)
+
+
+@router.get("/audit.csv")
+def audit_csv(request: Request, user: Optional[str] = None, action: Optional[str] = None,
+              session: Dict = Depends(auth.require_role(staff.ADMIN))):
+    data = review.audit(user=user, action=action, limit=review.CSV_MAX_ROWS)
+    database.record_admin_audit(session.get("username"), "export_access_log",
+                                f"{len(data['entries'])} rows", auth.client_ip(request))
+    return _csv_response(review.to_csv(data["entries"], review.AUDIT_CSV_COLUMNS), "access-log")
+
+
+def _csv_response(text: str, name: str) -> Response:
+    stamp = datetime.utcnow().strftime("%Y%m%d-%H%M")
+    return Response(text, media_type="text/csv; charset=utf-8", headers={
+        "Content-Disposition": f'attachment; filename="kq-propel-{name}-{stamp}.csv"',
+        "Cache-Control": "no-store"})
+
+
+# ------------------------------------------------------------ payments, paged
+
+@router.get("/ledger")
+def ledger(request: Request, status_filter: Optional[str] = None, method: Optional[str] = None,
+           q: Optional[str] = None, page: int = 1, size: int = 25,
+           session: Dict = Depends(auth.require_role(staff.ADMIN, staff.AGENT))):
+    """Every payment, newest first, filtered by status, method or reference,
+    with phone numbers and checkout IDs masked."""
+    if page == 1:
+        database.record_admin_audit(session.get("username"), "view_transactions",
+                                    None, auth.client_ip(request))
+    return review.ledger(status=status_filter, method=method, q=q, page=page, size=size)
+
+
+@router.get("/ledger.csv")
+def ledger_csv(request: Request, status_filter: Optional[str] = None, method: Optional[str] = None,
+               q: Optional[str] = None,
+               session: Dict = Depends(auth.require_role(staff.ADMIN, staff.AGENT))):
+    data = review.ledger(status=status_filter, method=method, q=q, limit=review.CSV_MAX_ROWS)
+    database.record_admin_audit(session.get("username"), "export_payments",
+                                f"{len(data['transactions'])} rows", auth.client_ip(request))
+    return _csv_response(review.to_csv(data["transactions"], review.LEDGER_CSV_COLUMNS), "payments")
+
+
+# ------------------------------------------------------- conversation review
+
+@router.get("/conversations")
+def conversations(request: Request, flag: Optional[str] = None, q: Optional[str] = None,
+                  page: int = 1, size: int = 25,
+                  session: Dict = Depends(auth.require_role(staff.ADMIN, staff.AGENT))):
+    """Passenger conversations with their worst scores, ratings and
+    frustration, for finding the answers that went wrong."""
+    if flag and flag not in review.FLAGS:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Unknown filter.")
+    if page == 1:
+        database.record_admin_audit(session.get("username"), "view_conversations", flag,
+                                    auth.client_ip(request))
+    return review.list_conversations(flag=flag, q=q, page=page, size=size)
+
+
+@router.get("/conversations/{session_id}")
+def conversation(session_id: str, request: Request,
+                 session: Dict = Depends(auth.require_role(staff.ADMIN, staff.AGENT))):
+    detail = review.conversation_detail(session_id)
+    if detail is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such conversation.")
+    database.record_admin_audit(session.get("username"), "view_conversation",
+                                review.short_id(session_id), auth.client_ip(request))
+    return detail
+
+
+@router.post("/conversations/{session_id}/erase")
+def erase_conversation(session_id: str, request: Request,
+                       session: Dict = Depends(auth.require_role(staff.ADMIN))):
+    """Erases one conversation, as the data-protection panel does by case
+    reference or phone number."""
+    if review.conversation_detail(session_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such conversation.")
+    counts = privacy.erase_sessions([session_id])
+    database.record_admin_audit(session.get("username"), "erase_conversation",
+                                review.short_id(session_id), auth.client_ip(request))
+    return {"erased": counts}
+
+
+# ---------------------------------------------------------- trends, policies
+
+@router.get("/trends")
+def trends(days: int = 14, session: Dict = Depends(auth.require_role(*staff.ROLES))):
+    """Daily conversations, quality, frustration, ratings and handovers.
+    Counts and averages only, so every role may see them."""
+    return review.trends(days=days)
+
+
+@router.get("/knowledge")
+def knowledge(session: Dict = Depends(auth.require_role(*staff.ROLES))):
+    """The policy documents the assistant answers from, as indexed."""
+    return review.knowledge_base()
 
 
 @router.get("/model-comparison")

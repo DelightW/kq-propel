@@ -1100,11 +1100,12 @@ def _finalize_direct(session_id: str, message: str, answer: str, trace: List[Dic
     database.log_message(session_id, "user", message,
                           sentiment_label=sentiment_result["label"],
                           frustration_score=sentiment_result["frustration_score"])
-    database.log_message(session_id, "assistant", answer)
+    message_id = database.log_message(session_id, "assistant", answer)
     return {
         "answer": answer, "model_used": model_name,
         "sentiment": sentiment_result, "sources": [], "trace": trace,
         "rag_metrics": {}, "payment": payment, "handover": handover_case,
+        "message_id": message_id,
     }
 
 
@@ -1515,11 +1516,12 @@ def _run_agent_turn(session_id: str, message: str) -> Dict:
     database.log_message(session_id, "user", message,
                           sentiment_label=sentiment_result["label"],
                           frustration_score=sentiment_result["frustration_score"])
-    database.log_message(session_id, "assistant", answer, sources=", ".join(sources))
+    message_id = database.log_message(session_id, "assistant", answer, sources=", ".join(sources))
     database.log_rag_evaluation(query_id=str(uuid.uuid4()), query=message,
                                  context_relevance=metrics["context_relevance"],
                                  groundedness=metrics["groundedness"],
-                                 answer_relevance=metrics["answer_relevance"], model=model_name)
+                                 answer_relevance=metrics["answer_relevance"], model=model_name,
+                                 session_id=session_id, message_id=message_id)
 
     return {
         "answer": answer,
@@ -1530,4 +1532,5 @@ def _run_agent_turn(session_id: str, message: str) -> Dict:
         "trace": trace,
         "rag_metrics": metrics,
         "payment": payment_result,
+        "message_id": message_id,
     }
