@@ -101,145 +101,235 @@
   </form>
 </main>
 
-<div id="dashboard" hidden>
+<div id="dashboard" class="app" hidden>
 
-<header class="admin-header">
-  <div class="brand">
-    <span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg></span>
-    <div>
-      <h1>KQ-Propel <span class="h1-sub">Staff dashboard</span></h1>
-      <p class="sub">Answer quality, passenger requests and payments</p>
-    </div>
+<!-- Sidebar on laptops; a row of tabs under the top bar on phones. Each link
+     shows one view; the role decides which links exist at all. -->
+<aside class="side-nav" aria-label="Dashboard sections">
+  <div class="side-brand">
+    <span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg></span>
+    <span class="side-name">KQ-Propel <span>Staff console</span></span>
+  </div>
+  <nav aria-label="Sections">
+    <p class="nav-group" data-panel="metrics">Monitor</p>
+    <ul>
+      <li data-panel="metrics"><a href="#overview" data-view="overview">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg>
+        <span class="nav-label">Overview</span></a></li>
+      <li data-panel="comparison"><a href="#comparison" data-view="comparison">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/></svg>
+        <span class="nav-label">Model comparison</span></a></li>
+    </ul>
+    <p class="nav-group" data-panel="handovers">Passengers</p>
+    <ul>
+      <li data-panel="handovers"><a href="#handovers" data-view="handovers">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13v-1a8 8 0 0 1 16 0v1"/><rect x="3" y="13" width="4" height="6" rx="1.5"/><rect x="17" y="13" width="4" height="6" rx="1.5"/><path d="M19 19c0 1.5-2 2.5-5 2.5"/></svg>
+        <span class="nav-label">Handovers</span><span class="nav-count" id="count-handovers" hidden></span></a></li>
+      <li data-panel="requests"><a href="#requests" data-view="requests">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2.2"/><path d="M5.8 16.2c.6-1.5 1.8-2.2 3.2-2.2s2.6.7 3.2 2.2M14.5 10h4M14.5 13.5h3"/></svg>
+        <span class="nav-label">Name corrections</span><span class="nav-count" id="count-requests" hidden></span></a></li>
+      <li data-panel="transactions"><a href="#payments" data-view="payments">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 10h19M6.5 15h4"/></svg>
+        <span class="nav-label">Payments</span></a></li>
+    </ul>
+    <p class="nav-group" data-panel="audit">Administration</p>
+    <ul>
+      <li data-panel="staff"><a href="#staff" data-view="staff">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.3-5.5 6.5-5.5s5.7 2 6.5 5.5"/><path d="M16 4.8a3.5 3.5 0 0 1 0 6.4M18.5 14.8c1.6.8 2.6 2.6 3 5.2"/></svg>
+        <span class="nav-label">Staff accounts</span></a></li>
+      <li data-panel="audit"><a href="#access-log" data-view="access-log">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg>
+        <span class="nav-label">Access log</span></a></li>
+      <li data-panel="privacy"><a href="#data-protection" data-view="data-protection">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7.5 3v5.5c0 4.6-3.1 8.2-7.5 9.5-4.4-1.3-7.5-4.9-7.5-9.5V6z"/><path d="M9 12l2 2 4-4"/></svg>
+        <span class="nav-label">Data protection</span></a></li>
+    </ul>
+  </nav>
+  <div class="side-foot">
+    <span class="proto-badge">Research prototype</span>
+    <p>Not a Kenya Airways system. Data on the hosted demo is reset on every restart.</p>
+  </div>
+</aside>
+
+<div class="main-col">
+
+<header class="topbar">
+  <span class="mark mark-mobile" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg></span>
+  <div class="topbar-title">
+    <p id="view-group" class="eyebrow"></p>
+    <h1 id="view-title">Overview</h1>
   </div>
   <div class="header-actions">
-    <span id="who" class="who"></span>
-    <button id="change-password" class="btn btn-ghost" type="button">Change password</button>
-    <button id="refresh" class="btn btn-ghost" type="button">Refresh</button>
-    <button id="logout" class="btn btn-ghost" type="button">Sign out</button>
+    <span id="updated" class="updated" aria-live="polite"></span>
+    <button id="refresh" class="icon-btn" type="button" aria-label="Refresh" title="Refresh">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.6-4.5M4 13a8 8 0 0 0 14.6 4.5"/><path d="M5 3v4h4M19 21v-4h-4"/></svg>
+    </button>
+    <div class="user-menu">
+      <button id="user-menu-btn" class="user-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="user-menu">
+        <span id="avatar" class="avatar" aria-hidden="true"></span>
+        <span class="user-text"><span id="who" class="who"></span><span id="who-role" class="who-role"></span></span>
+        <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div id="user-menu" class="menu" hidden>
+        <button id="change-password" class="menu-item" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3"/></svg>Change password</button>
+        <a class="menu-item" href="/" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg>Open passenger chat</a>
+        <button id="logout" class="menu-item" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg>Sign out</button>
+      </div>
+    </div>
   </div>
 </header>
 
-<div class="layout">
-
-<nav class="side-nav" aria-label="Dashboard sections">
-  <ul>
-    <li data-panel="metrics"><a href="#kpis">Overview</a></li>
-    <li data-panel="requests"><a href="#requests-panel">Name corrections</a></li>
-    <li data-panel="handovers"><a href="#handover-panel">Handovers</a></li>
-    <li data-panel="transactions"><a href="#transactions-panel">Payments</a></li>
-    <li data-panel="comparison"><a href="#comparison-panel">Model comparison</a></li>
-    <li data-panel="audit"><a href="#audit-panel">Access log</a></li>
-    <li data-panel="privacy"><a href="#privacy-panel">Data protection</a></li>
-    <li data-panel="staff"><a href="#staff-panel">Staff accounts</a></li>
-  </ul>
-  <p class="nav-note">Research prototype. Data on the hosted demo is reset on every restart.</p>
-</nav>
-
 <main class="wrap" id="main" tabindex="-1">
 
-  <section class="cards" id="kpis" aria-label="Key metrics" data-panel="metrics"></section>
+  <!-- ============================== Overview ============================== -->
+  <div class="view" id="view-overview" data-view="overview" data-panel="metrics">
 
-  <section class="grid" data-panel="metrics" aria-label="Quality metrics">
+    <section class="attention" id="attention" aria-label="Needs attention">
+      <a class="att" href="#handovers" data-panel="handovers">
+        <span class="att-icon red"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13v-1a8 8 0 0 1 16 0v1"/><rect x="3" y="13" width="4" height="6" rx="1.5"/><rect x="17" y="13" width="4" height="6" rx="1.5"/></svg></span>
+        <span class="att-text"><span class="att-num" id="att-handovers">–</span><span class="att-label">Passengers waiting for a person</span></span>
+        <svg class="att-go" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+      </a>
+      <a class="att" href="#requests" data-panel="requests">
+        <span class="att-icon amber"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2.2"/><path d="M14.5 10h4M14.5 13.5h3"/></svg></span>
+        <span class="att-text"><span class="att-num" id="att-requests">–</span><span class="att-label">Paid name corrections to make</span></span>
+        <svg class="att-go" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+      </a>
+      <a class="att" href="#payments" data-panel="transactions">
+        <span class="att-icon blue"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 10h19M6.5 15h4"/></svg></span>
+        <span class="att-text"><span class="att-num" id="att-payments">–</span><span class="att-label">Payments still pending</span></span>
+        <svg class="att-go" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+      </a>
+    </section>
 
-    <article class="panel">
-      <h2>RAG Triad</h2>
-      <p class="hint">Rolling averages across logged conversations.</p>
-      <div id="triad" class="meters"></div>
-    </article>
+    <section class="cards" id="kpis" aria-label="Key metrics"></section>
 
-    <article class="panel">
-      <h2>Passenger sentiment</h2>
-      <p class="hint">Output of the self-developed frustration classifier.</p>
-      <div id="sentiment-dist" class="meters"></div>
-    </article>
+    <section class="grid" aria-label="Quality metrics">
+      <article class="panel">
+        <div class="panel-title"><h2>RAG Triad</h2><span class="tag">Rolling average</span></div>
+        <p class="hint">How well answers match the retrieved policy text, across logged conversations.</p>
+        <div id="triad" class="meters"></div>
+      </article>
 
-    <article class="panel">
-      <h2>Sentiment classifier</h2>
-      <p class="hint">Two figures are reported: a held-out split of the training
-        file, and an independently worded challenge set the model never sees.
-        The gap between them is what the headline accuracy alone hides.</p>
-      <div id="sentiment-metrics" class="meters"></div>
-    </article>
+      <article class="panel">
+        <div class="panel-title"><h2>Passenger sentiment</h2><span class="tag">Classifier output</span></div>
+        <p class="hint">Messages the self-developed frustration classifier read as calm or frustrated.</p>
+        <div id="sentiment-dist" class="meters"></div>
+      </article>
 
-    <article class="panel">
-      <h2>Knowledge base</h2>
-      <p class="hint">Vector store indexing status.</p>
-      <div id="vectorstore" class="kv"></div>
-    </article>
+      <article class="panel">
+        <div class="panel-title"><h2>Sentiment classifier</h2><span class="tag">Evaluation</span></div>
+        <p class="hint">A held-out split of the training file, and an independently worded challenge set
+          the model never sees. The gap between them is what the headline accuracy alone hides.</p>
+        <div id="sentiment-metrics" class="meters"></div>
+      </article>
 
+      <article class="panel">
+        <div class="panel-title"><h2>Knowledge base</h2><span class="tag">Index</span></div>
+        <p class="hint">What the assistant can retrieve from, and where it came from.</p>
+        <div id="vectorstore" class="kv"></div>
+      </article>
+    </section>
+  </div>
+
+  <!-- ============================== Handovers ============================= -->
+  <section class="view" id="handover-panel" data-view="handovers" data-panel="handovers" aria-labelledby="handover-h">
+    <div class="view-head">
+      <div>
+        <h2 id="handover-h">Passengers waiting for a person</h2>
+        <p class="hint" id="handover-hint">Cases opened when a passenger asks for a member of staff.
+          Your reply appears in their chat window.</p>
+      </div>
+      <label class="switch"><input type="checkbox" id="handover-closed" /><span class="switch-ui" aria-hidden="true"></span> Show closed</label>
+    </div>
+
+    <div class="inbox">
+      <div class="inbox-list panel flush">
+        <ul id="handover-list" class="case-list" aria-label="Cases"></ul>
+      </div>
+
+      <div class="inbox-detail panel flush">
+        <div id="handover-empty" class="empty-state">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg>
+          <p>Select a case to read the conversation and reply.</p>
+        </div>
+        <div id="handover-detail" class="handover-detail" hidden>
+          <div class="detail-head">
+            <div>
+              <h3 id="handover-title"></h3>
+              <p id="handover-meta" class="sub"></p>
+            </div>
+            <button id="handover-hide" class="icon-btn" type="button" aria-label="Close conversation">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+            </button>
+          </div>
+          <div id="handover-transcript" class="transcript" tabindex="0" role="log" aria-label="Conversation"></div>
+          <form id="handover-form" class="handover-form">
+            <label for="handover-reply" class="sr-only">Reply to passenger</label>
+            <textarea id="handover-reply" rows="3" maxlength="2000"
+                      placeholder="Write a reply to the passenger" required></textarea>
+            <div class="handover-actions">
+              <button id="handover-close" class="btn btn-quiet" type="button">Close case</button>
+              <button id="handover-send" class="btn" type="submit">Send reply</button>
+            </div>
+            <p id="handover-error" class="status-line" role="alert"></p>
+          </form>
+        </div>
+      </div>
+    </div>
   </section>
 
-  <section class="panel" id="requests-panel" data-panel="requests">
-    <div class="panel-head">
+  <!-- =========================== Name corrections ========================= -->
+  <section class="view" id="requests-panel" data-view="requests" data-panel="requests" aria-labelledby="requests-h">
+    <div class="view-head">
       <div>
-        <h2>Name correction requests</h2>
+        <h2 id="requests-h">Name correction requests</h2>
         <p class="hint">Paid requests from passengers. Update the booking in the reservation system,
           then mark the request done; the passenger sees the new status in the chat.</p>
       </div>
-      <label class="check"><input type="checkbox" id="requests-closed" /> Show closed</label>
+      <label class="switch"><input type="checkbox" id="requests-closed" /><span class="switch-ui" aria-hidden="true"></span> Show closed</label>
     </div>
-    <div class="table-scroll" tabindex="0" role="region" aria-label="Table (scrolls sideways on small screens)">
-      <table id="requests-table">
-        <thead>
-          <tr><th>Request</th><th>Booking</th><th>Change</th><th>Fee</th><th>Payment</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr>
-        </thead>
-        <tbody></tbody>
-      </table>
+    <div class="panel flush">
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Name correction requests">
+        <table id="requests-table">
+          <thead>
+            <tr><th>Request</th><th>Booking</th><th>Change</th><th class="num">Fee</th><th>Payment</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </div>
     <p id="requests-status" class="status-line" role="status"></p>
   </section>
 
-  <section class="panel" id="handover-panel" data-panel="handovers">
-    <div class="panel-head">
+  <!-- =============================== Payments ============================= -->
+  <section class="view" id="transactions-panel" data-view="payments" data-panel="transactions" aria-labelledby="payments-h">
+    <div class="view-head">
       <div>
-        <h2>Passengers waiting for a person</h2>
-        <p class="hint" id="handover-hint">Cases opened when a passenger asks for a member of
-          staff. Your reply appears in their chat window.</p>
+        <h2 id="payments-h">Payments</h2>
+        <p class="hint">Every payment the agent started, M-Pesa and card, with its policy-grounded amount.
+          Phone numbers and M-Pesa checkout IDs are masked.</p>
       </div>
-      <label class="check"><input type="checkbox" id="handover-closed" /> Show closed</label>
     </div>
-    <div class="table-scroll" tabindex="0" role="region" aria-label="Table (scrolls sideways on small screens)">
-      <table id="handover-table">
-        <thead>
-          <tr><th>Case</th><th>Opened</th><th>Status</th><th>Frustration</th><th>Latest passenger message</th><th><span class="sr-only">Actions</span></th></tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </div>
-    <div id="handover-detail" class="handover-detail" hidden>
-      <div class="panel-head">
-        <h3 id="handover-title"></h3>
-        <button id="handover-hide" class="btn btn-quiet" type="button">Hide</button>
+    <div class="cards cards-3" id="pay-summary" aria-label="Payment totals"></div>
+    <div class="panel flush">
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Payments">
+        <table id="tx-table">
+          <thead>
+            <tr><th>Time (UTC)</th><th>Session</th><th>Method</th><th>Payer</th><th class="num">Amount</th><th>Status</th><th>Reference</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
       </div>
-      <div id="handover-transcript" class="transcript" aria-live="polite"></div>
-      <form id="handover-form" class="handover-form">
-        <label for="handover-reply" class="sr-only">Reply to passenger</label>
-        <textarea id="handover-reply" rows="3" maxlength="2000"
-                  placeholder="Write a reply to the passenger" required></textarea>
-        <div class="handover-actions">
-          <button id="handover-send" class="btn" type="submit">Send reply</button>
-          <button id="handover-close" class="btn btn-quiet" type="button">Close case</button>
-        </div>
-        <p id="handover-error" class="status-line" role="alert"></p>
-      </form>
     </div>
   </section>
 
-  <section class="panel" id="transactions-panel" data-panel="transactions">
-    <h2>Payments</h2>
-    <p class="hint">Every payment the agent started, M-Pesa and card, with its policy-grounded amount.</p>
-    <div class="table-scroll" tabindex="0" role="region" aria-label="Table (scrolls sideways on small screens)">
-      <table id="tx-table">
-        <thead>
-          <tr><th>Time</th><th>Session</th><th>Method</th><th>Payer</th><th>Amount</th><th>Status</th><th>Reference</th></tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </div>
-  </section>
-
-  <section class="panel" id="comparison-panel" data-panel="comparison">
-    <div class="panel-head">
+  <!-- =========================== Model comparison ========================= -->
+  <section class="view" id="comparison-panel" data-view="comparison" data-panel="comparison" aria-labelledby="comparison-title">
+    <div class="view-head">
       <div>
         <h2 id="comparison-title">Dual-configuration comparison</h2>
         <p class="hint" id="comparison-subtitle">Identical documents, chunking, embeddings, retrieval and prompts &mdash; only the generator varies.</p>
@@ -247,87 +337,122 @@
       <button id="run-comparison" class="btn" type="button">Run comparison</button>
     </div>
     <div id="comparison-caveat" class="caveat" style="display:none"></div>
-    <div id="comparison-status" class="status-line"></div>
-    <div id="comparison-summary" class="meters"></div>
-    <div class="table-scroll" tabindex="0" role="region" aria-label="Table (scrolls sideways on small screens)">
-      <table id="cmp-table">
-        <thead>
-          <tr><th>Query</th><th>Model</th><th>Context rel.</th><th>Groundedness</th><th>Answer rel.</th><th>Latency (s)</th></tr>
-        </thead>
-        <tbody></tbody>
-      </table>
+    <div id="comparison-status" class="status-line" role="status"></div>
+    <div id="comparison-summary" class="meters panel" hidden></div>
+    <div class="panel flush">
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Comparison results">
+        <table id="cmp-table">
+          <thead>
+            <tr><th>Query</th><th>Model</th><th class="num">Context rel.</th><th class="num">Groundedness</th><th class="num">Answer rel.</th><th class="num">Latency (s)</th></tr>
+          </thead>
+          <tbody><tr><td class="empty" colspan="6">Run the comparison to score both configurations on the evaluation set.</td></tr></tbody>
+        </table>
+      </div>
     </div>
   </section>
 
-  <section class="panel" id="audit-panel" data-panel="audit">
-    <h2>Access log</h2>
-    <p class="hint">Staff sign-ins and reads of passenger data. Recorded because
-      the payment ledger contains personal information.</p>
-    <div class="table-scroll" tabindex="0" role="region" aria-label="Table (scrolls sideways on small screens)">
-      <table id="audit-table">
-        <thead>
-          <tr><th>Time</th><th>User</th><th>Action</th><th>Detail</th><th>IP</th></tr>
-        </thead>
-        <tbody></tbody>
-      </table>
+  <!-- ============================== Access log ============================ -->
+  <section class="view" id="audit-panel" data-view="access-log" data-panel="audit" aria-labelledby="audit-h">
+    <div class="view-head">
+      <div>
+        <h2 id="audit-h">Access log</h2>
+        <p class="hint">Staff sign-ins and reads of passenger data. Recorded because
+          the payment ledger contains personal information.</p>
+      </div>
+    </div>
+    <div class="panel flush">
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Access log">
+        <table id="audit-table">
+          <thead>
+            <tr><th>Time (UTC)</th><th>User</th><th>Action</th><th>Detail</th><th>IP address</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </div>
   </section>
 
-  <section class="panel" id="privacy-panel" data-panel="privacy">
-    <h2>Data protection</h2>
-    <p class="hint" id="privacy-retention">Retention settings are loading.</p>
-    <form id="erase-form" class="erase-form">
-      <p class="hint">Erase a passenger's data when they ask by phone, email or at a desk. Find them by a
-        handover case reference or the phone number they used; check the count before erasing.</p>
-      <div class="erase-fields">
-        <label>Case reference <input id="erase-case" type="text" maxlength="20" placeholder="H-00012" /></label>
-        <label>Phone number <input id="erase-phone" type="tel" maxlength="20" placeholder="0708 374 149" /></label>
+  <!-- ============================ Data protection ========================= -->
+  <section class="view" id="privacy-panel" data-view="data-protection" data-panel="privacy" aria-labelledby="privacy-h">
+    <div class="view-head">
+      <div>
+        <h2 id="privacy-h">Data protection</h2>
+        <p class="hint">Retention of personal data, and erasure when a passenger asks for it.</p>
       </div>
-      <div class="handover-actions">
-        <button id="erase-find" class="btn btn-quiet" type="submit">Find</button>
-        <button id="erase-confirm" class="btn btn-danger" type="button" disabled>Erase</button>
-      </div>
-      <p id="erase-status" class="status-line" role="status"></p>
-    </form>
+    </div>
+    <div class="grid">
+      <article class="panel">
+        <div class="panel-title"><h3>Automatic retention</h3><span id="retention-pill" class="pill muted">Loading</span></div>
+        <p class="hint" id="privacy-retention">Retention settings are loading.</p>
+      </article>
+      <article class="panel">
+        <div class="panel-title"><h3>Erase a passenger's data</h3></div>
+        <form id="erase-form" class="erase-form">
+          <p class="hint">For requests made by phone, email or at a desk. Find the passenger by a handover
+            case reference or the phone number they used, check the count, then erase.</p>
+          <div class="erase-fields">
+            <label>Case reference <input id="erase-case" type="text" maxlength="20" placeholder="H-00012" /></label>
+            <label>Phone number <input id="erase-phone" type="tel" maxlength="20" placeholder="0708 374 149" /></label>
+          </div>
+          <div class="handover-actions">
+            <button id="erase-find" class="btn btn-quiet" type="submit">Find</button>
+            <button id="erase-confirm" class="btn btn-danger" type="button" disabled>Erase</button>
+          </div>
+          <p id="erase-status" class="status-line" role="status"></p>
+        </form>
+      </article>
+    </div>
   </section>
 
-  <section class="panel" id="staff-panel" data-panel="staff">
-    <h2>Staff accounts</h2>
-    <p class="hint">Each person signs in as themselves, so the access log shows who did what. Roles:
-      <strong>Administrator</strong> (everything), <strong>Customer service agent</strong> (passengers
-      waiting, name corrections, payments) and <strong>Analyst</strong> (quality metrics only; no passenger
-      records). A new account gets a one-time password, shown once, that must be changed at first sign-in.</p>
-    <form id="staff-form" class="erase-form">
-      <div class="erase-fields">
-        <label>Username <input id="staff-username" type="text" maxlength="40" required
-               autocapitalize="none" spellcheck="false" pattern="[A-Za-z0-9._\-]+" /></label>
-        <label>Full name <input id="staff-name" type="text" maxlength="80" /></label>
-        <label>Role
-          <select id="staff-role">
-            <option value="agent">Customer service agent</option>
-            <option value="analyst">Analyst</option>
-            <option value="admin">Administrator</option>
-          </select>
-        </label>
+  <!-- ============================ Staff accounts ========================== -->
+  <section class="view" id="staff-panel" data-view="staff" data-panel="staff" aria-labelledby="staff-h">
+    <div class="view-head">
+      <div>
+        <h2 id="staff-h">Staff accounts</h2>
+        <p class="hint">Each person signs in as themselves, so the access log shows who did what.</p>
       </div>
-      <div class="handover-actions">
-        <button id="staff-create" class="btn" type="submit">Create account</button>
+    </div>
+    <div class="roles">
+      <div class="role"><span class="role-name">Administrator</span><span>Everything, including staff accounts and data protection</span></div>
+      <div class="role"><span class="role-name">Customer service agent</span><span>Passengers waiting, name corrections and payments</span></div>
+      <div class="role"><span class="role-name">Analyst</span><span>Quality metrics only; no passenger records</span></div>
+    </div>
+    <article class="panel">
+      <div class="panel-title"><h3>Add a staff member</h3></div>
+      <p class="hint">A new account gets a one-time password, shown once, that must be changed at first sign-in.</p>
+      <form id="staff-form" class="erase-form">
+        <div class="erase-fields">
+          <label>Username <input id="staff-username" type="text" maxlength="40" required
+                 autocapitalize="none" spellcheck="false" pattern="[A-Za-z0-9._\-]+" /></label>
+          <label>Full name <input id="staff-name" type="text" maxlength="80" /></label>
+          <label>Role
+            <select id="staff-role">
+              <option value="agent">Customer service agent</option>
+              <option value="analyst">Analyst</option>
+              <option value="admin">Administrator</option>
+            </select>
+          </label>
+        </div>
+        <div class="handover-actions">
+          <button id="staff-create" class="btn" type="submit">Create account</button>
+        </div>
+      </form>
+      <div id="staff-otp" class="otp-box" role="status" hidden></div>
+    </article>
+    <div class="panel flush">
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Staff accounts">
+        <table id="staff-table">
+          <thead>
+            <tr><th>Staff member</th><th>Role</th><th>Status</th><th>Last sign-in (UTC)</th><th><span class="sr-only">Actions</span></th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
       </div>
-    </form>
-    <div id="staff-otp" class="otp-box" role="status" hidden></div>
-    <div class="table-scroll" tabindex="0" role="region" aria-label="Table (scrolls sideways on small screens)">
-      <table id="staff-table">
-        <thead>
-          <tr><th>Username</th><th>Name</th><th>Role</th><th>Status</th><th>Last sign-in</th><th><span class="sr-only">Actions</span></th></tr>
-        </thead>
-        <tbody></tbody>
-      </table>
     </div>
     <p id="staff-status" class="status-line" role="status"></p>
   </section>
 
 </main>
-
 </div>
 
 </div>

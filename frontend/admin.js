@@ -62,15 +62,18 @@
     if (info.must_change_password) { showPasswordScreen(true); return; }
     passwordScreen.hidden = true;
     dashboard.hidden = false;
-    if (who) {
-      who.textContent = "Signed in as " + (info.display_name || info.username) +
-        " (" + (info.role_label || info.role) + ")";
-    }
+    var name = info.display_name || info.username;
+    if (who) { who.textContent = name; }
+    document.getElementById("who-role").textContent = info.role_label || info.role;
+    document.getElementById("avatar").textContent = initials(name);
+    document.getElementById("user-menu-btn").setAttribute("aria-label",
+      "Account: " + name + ", " + (info.role_label || info.role));
     // Panels outside this person's role are not drawn. The server refuses
     // those routes anyway; this only keeps the page honest about it.
     Array.prototype.forEach.call(document.querySelectorAll("[data-panel]"), function (sec) {
       sec.hidden = !allowed(sec.getAttribute("data-panel"));
     });
+    showView(currentViewFromHash(), false);
     loadOverview();
     if (allowed("handovers") || allowed("requests")) { startHandoverPolling(); }
     if (allowed("privacy")) { loadPrivacy(); }
@@ -240,6 +243,132 @@
     table.appendChild(tr);
   }
 
+  function td(text, cls) { return el("td", cls || null, text); }
+
+  function initials(name) {
+    var parts = String(name || "?").trim().split(/\s+/);
+    var s = parts[0].charAt(0) + (parts.length > 1 ? parts[parts.length - 1].charAt(0) : "");
+    return s.toUpperCase();
+  }
+
+  /* Stored times are UTC ISO strings ("2026-11-12T08:31:33.92"). Shown as
+     "12 Nov 2026, 08:31", with the full value on hover. */
+  var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function fmtTime(iso) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/.exec(iso || "");
+    if (!m) { return iso || "-"; }
+    return parseInt(m[3], 10) + " " + MONTHS[parseInt(m[2], 10) - 1] + " " + m[1] + ", " + m[4] + ":" + m[5];
+  }
+  function timeCell(iso) {
+    var c = td(fmtTime(iso), "nowrap");
+    if (iso) { c.title = iso + " UTC"; }
+    return c;
+  }
+  function shortId(id) {
+    if (!id) { return "-"; }
+    return id.length > 12 ? id.slice(0, 8) + "…" : id;
+  }
+  function money(currency, amount, digits) {
+    if (amount === undefined || amount === null) { return "-"; }
+    return currency + " " + Number(amount).toLocaleString(undefined, {
+      minimumFractionDigits: digits || 0, maximumFractionDigits: digits === undefined ? 2 : digits });
+  }
+
+  /* ------------------------------- views -------------------------------- */
+
+  /* One section at a time, chosen by the address bar's #fragment, so links
+     and the back button work. A view outside the person's role falls back
+     to the first one they may see. */
+  var VIEWS = {
+    overview: { panel: "metrics", title: "Overview" },
+    handovers: { panel: "handovers", title: "Handovers" },
+    requests: { panel: "requests", title: "Name corrections" },
+    payments: { panel: "transactions", title: "Payments" },
+    comparison: { panel: "comparison", title: "Model comparison" },
+    staff: { panel: "staff", title: "Staff accounts" },
+    "access-log": { panel: "audit", title: "Access log" },
+    "data-protection": { panel: "privacy", title: "Data protection" }
+  };
+  var currentView = "overview";
+
+  function currentViewFromHash() {
+    return (location.hash || "").replace(/^#/, "");
+  }
+
+  function showView(name, focus) {
+    if (!VIEWS[name] || !allowed(VIEWS[name].panel)) {
+      name = Object.keys(VIEWS).filter(function (k) { return allowed(VIEWS[k].panel); })[0] || "overview";
+    }
+    currentView = name;
+    Array.prototype.forEach.call(document.querySelectorAll(".view"), function (v) {
+      v.classList.toggle("is-active", v.getAttribute("data-view") === name);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll(".side-nav a[data-view]"), function (a) {
+      if (a.getAttribute("data-view") === name) {
+        a.setAttribute("aria-current", "page");
+        // On phones the links are a sideways-scrolling row; keep this one visible.
+        var row = a.closest("nav");
+        if (row && row.scrollWidth > row.clientWidth) {
+          row.scrollLeft = a.offsetLeft - (row.clientWidth - a.offsetWidth) / 2;
+        }
+      }
+      else { a.removeAttribute("aria-current"); }
+    });
+    document.getElementById("view-title").textContent = VIEWS[name].title;
+    var link = document.querySelector('.side-nav a[data-view="' + name + '"]');
+    var group = link ? link.closest("ul").previousElementSibling : null;
+    document.getElementById("view-group").textContent = group ? group.textContent : "";
+    document.title = VIEWS[name].title + " | KQ-Propel staff";
+    if (focus) {
+      window.scrollTo(0, 0);
+      var main = document.getElementById("main");
+      if (main) { main.focus({ preventScroll: true }); }
+    }
+  }
+
+  window.addEventListener("hashchange", function () {
+    if (!dashboard.hidden) { showView(currentViewFromHash(), true); }
+  });
+
+  /* Account menu: name and role on the button, actions inside. */
+  var menuBtn = document.getElementById("user-menu-btn");
+  var menu = document.getElementById("user-menu");
+  function setMenu(open) {
+    menu.hidden = !open;
+    menuBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) { var first = menu.querySelector(".menu-item"); if (first) { first.focus(); } }
+  }
+  menuBtn.addEventListener("click", function () { setMenu(menu.hidden); });
+  document.addEventListener("click", function (e) {
+    if (!menu.hidden && !menu.contains(e.target) && !menuBtn.contains(e.target)) { setMenu(false); }
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && !menu.hidden) { setMenu(false); menuBtn.focus(); }
+  });
+  menu.addEventListener("click", function (e) {
+    if (e.target.closest(".menu-item")) { setMenu(false); }
+  });
+
+  /* Counts on the sidebar and the overview's "needs attention" strip. */
+  function setCount(id, attId, n) {
+    var badge = document.getElementById(id);
+    if (badge) {
+      badge.hidden = !n;
+      badge.textContent = n ? String(n) : "";
+    }
+    var att = document.getElementById(attId);
+    if (att) {
+      att.textContent = String(n);
+      att.parentNode.parentNode.classList.toggle("is-zero", !n);
+    }
+  }
+
+  function stamp() {
+    var d = new Date();
+    document.getElementById("updated").textContent = "Updated " +
+      ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
+  }
+
   /* ------------------------------ overview ------------------------------ */
 
   function loadOverview() {
@@ -256,7 +385,15 @@
         kpis.innerHTML = "";
         kpis.appendChild(card("Connection", "Offline", err.message));
       })
-      .then(function () { refreshBtn.disabled = false; });
+      .then(function () { refreshBtn.disabled = false; stamp(); });
+  }
+
+  function refreshAll() {
+    loadOverview();
+    if (allowed("handovers")) { loadHandovers(); if (openCaseId !== null) { openCase(openCaseId); } }
+    if (allowed("requests")) { loadRequests(); }
+    if (allowed("privacy")) { loadPrivacy(); }
+    if (allowed("staff")) { loadStaff(); }
   }
 
   function loadAudit() {
@@ -271,11 +408,15 @@
         }
         entries.forEach(function (e) {
           var tr = el("tr");
-          tr.appendChild(el("td", null, e.created_at || "-"));
-          tr.appendChild(el("td", null, e.username || "-"));
-          tr.appendChild(el("td", null, (e.action || "-").replace(/_/g, " ")));
-          tr.appendChild(el("td", null, e.detail || "-"));
-          tr.appendChild(el("td", null, e.ip || "-"));
+          tr.appendChild(timeCell(e.created_at));
+          tr.appendChild(td(e.username || "-", "strong"));
+          var action = (e.action || "-").replace(/_/g, " ");
+          var ac = td();
+          ac.appendChild(el("span", "action " + (/fail|lock|disable|erase/.test(e.action || "") ? "bad" : ""),
+            action.charAt(0).toUpperCase() + action.slice(1)));
+          tr.appendChild(ac);
+          tr.appendChild(td(e.detail || "-", "muted"));
+          tr.appendChild(td(e.ip || "-", "mono"));
           auditBody.appendChild(tr);
         });
       })
@@ -327,6 +468,21 @@
     if (byStatus.failed) { parts.push(byStatus.failed + " failed"); }
     if (byStatus.simulated) { parts.push(byStatus.simulated + " simulated"); }
     kpis.appendChild(card("Settled value", totalLabel, parts.join(", ")));
+
+    // The same totals, on the Payments view, and the overview's pending count.
+    var pendingCount = byStatus.pending || 0;
+    setCount(null, "att-payments", pendingCount);
+    var paySummary = document.getElementById("pay-summary");
+    paySummary.innerHTML = "";
+    paySummary.appendChild(card("Settled", totalLabel, (byStatus.paid || 0) + " paid"));
+    paySummary.appendChild(card("Pending", Object.keys(pendingMoney).length ? moneyLabel(pendingMoney) : "None",
+      pendingCount + " awaiting the provider"));
+    var other = [];
+    ["failed", "cancelled", "expired", "needs_review", "simulated"].forEach(function (k) {
+      if (byStatus[k]) { other.push(byStatus[k] + " " + STATUS_LOOK[k][1].toLowerCase()); }
+    });
+    paySummary.appendChild(card("Not completed", String((byStatus.failed || 0) + (byStatus.cancelled || 0) +
+      (byStatus.expired || 0) + (byStatus.needs_review || 0)), other.join(", ") || "None"));
 
     triad.innerHTML = "";
     triad.appendChild(meterRow("Context relevance", t.context_relevance));
@@ -435,12 +591,15 @@
         var method = r.method || "mpesa";
         var currency = r.currency || "KES";
         var tr = el("tr");
-        tr.appendChild(el("td", null, r.created_at || "-"));
-        tr.appendChild(el("td", null, r.session_id || "-"));
-        tr.appendChild(el("td", null, method === "card" ? "Card" : "M-Pesa"));
-        tr.appendChild(el("td", null, r.phone_number || "-"));
-        tr.appendChild(el("td", null, r.amount !== undefined && r.amount !== null
-          ? currency + " " + Number(r.amount).toLocaleString() : "-"));
+        tr.appendChild(timeCell(r.created_at));
+        var sess = td(shortId(r.session_id), "mono");
+        if (r.session_id) { sess.title = r.session_id; }
+        tr.appendChild(sess);
+        var mc = td();
+        mc.appendChild(el("span", "method " + (method === "card" ? "m-card" : "m-mpesa"), method === "card" ? "Card" : "M-Pesa"));
+        tr.appendChild(mc);
+        tr.appendChild(td(r.phone_number || "-", "mono"));
+        tr.appendChild(td(money(currency, r.amount), "num strong"));
         var st = el("td");
         var look = STATUS_LOOK[r.status] || STATUS_LOOK.unknown;
         st.appendChild(el("span", "pill " + look[0], look[1]));
@@ -449,11 +608,12 @@
           var receipt = el("a", "receipt-link", "Receipt");
           receipt.href = "/api/admin/transactions/" + encodeURIComponent(r.reference) + "/receipt";
           receipt.setAttribute("download", "");
+          receipt.setAttribute("aria-label", "Receipt for " + r.reference);
           st.appendChild(document.createTextNode(" "));
           st.appendChild(receipt);
         }
         tr.appendChild(st);
-        tr.appendChild(el("td", null, r.checkout_request_id || r.reference || "-"));
+        tr.appendChild(td(r.checkout_request_id || r.reference || "-", "mono"));
         txBody.appendChild(tr);
       });
     }
@@ -466,6 +626,7 @@
     cmpStatus.textContent = "Running both models across the full evaluation dataset...";
     cmpBody.innerHTML = "";
     cmpSummary.innerHTML = "";
+    cmpSummary.hidden = true;
 
     fetch("/api/admin/model-comparison", { credentials: "same-origin" })
       .then(function (r) {
@@ -529,10 +690,10 @@
         if (row.responses_identical) { tr.className = "identical"; }
         tr.appendChild(el("td", null, i === 0 ? row.query : ""));
         tr.appendChild(el("td", null, m.model || m.name || "-"));
-        tr.appendChild(el("td", null, fmt(m.context_relevance)));
-        tr.appendChild(el("td", null, fmt(m.groundedness)));
-        tr.appendChild(el("td", null, fmt(m.answer_relevance)));
-        tr.appendChild(el("td", null, m.response_time_seconds !== undefined
+        tr.appendChild(td(fmt(m.context_relevance), "num"));
+        tr.appendChild(td(fmt(m.groundedness), "num"));
+        tr.appendChild(td(fmt(m.answer_relevance), "num"));
+        tr.appendChild(el("td", "num", m.response_time_seconds !== undefined
           ? Number(m.response_time_seconds).toFixed(3)
           : (m.latency_seconds !== undefined ? Number(m.latency_seconds).toFixed(3) : "-")));
         cmpBody.appendChild(tr);
@@ -554,6 +715,7 @@
       var a = agg[k];
       var mean = (a.cr / a.n + a.g / a.n + a.ar / a.n) / 3;
       cmpSummary.appendChild(meterRow(k, mean, mean.toFixed(3)));
+      cmpSummary.hidden = false;
     });
   }
 
@@ -563,7 +725,9 @@
 
   /* --------------------------- handover queue --------------------------- */
 
-  var hoBody = document.querySelector("#handover-table tbody");
+  var hoList = document.getElementById("handover-list");
+  var hoEmpty = document.getElementById("handover-empty");
+  var hoMeta = document.getElementById("handover-meta");
   var hoHint = document.getElementById("handover-hint");
   var hoClosed = document.getElementById("handover-closed");
   var hoDetail = document.getElementById("handover-detail");
@@ -601,14 +765,26 @@
       .then(function (d) {
         reqBody.innerHTML = "";
         var rows = d.requests || [];
-        if (!rows.length) { emptyRow(reqBody, 7, "No name correction requests."); return; }
+        if (!rows.length) {
+          setCount("count-requests", "att-requests", 0);
+          emptyRow(reqBody, 7, reqClosed.checked ? "No name correction requests yet." :
+            "Nothing to do. Paid requests appear here.");
+          return;
+        }
+        setCount("count-requests", "att-requests",
+          rows.filter(function (q) { return q.status === "submitted"; }).length);
         rows.forEach(function (q) {
           var tr = el("tr");
-          tr.appendChild(el("td", null, q.reference));
-          tr.appendChild(el("td", null, q.booking_reference || "-"));
-          tr.appendChild(el("td", null, (q.current_name || "-") + " → " + (q.new_name || "-")));
-          tr.appendChild(el("td", null, q.fee_amount != null ? q.fee_currency + " " + Number(q.fee_amount).toFixed(2) : "-"));
-          tr.appendChild(el("td", null, q.payment_reference || "-"));
+          tr.appendChild(td(q.reference, "mono strong"));
+          tr.appendChild(td(q.booking_reference || "-", "mono"));
+          var ch = td();
+          var from = el("span", "name-old", q.current_name || "-");
+          ch.appendChild(from);
+          ch.appendChild(el("span", "arrow", " → "));
+          ch.appendChild(el("span", "name-new", q.new_name || "-"));
+          tr.appendChild(ch);
+          tr.appendChild(td(q.fee_amount != null ? money(q.fee_currency, q.fee_amount, 2) : "-", "num"));
+          tr.appendChild(td(q.payment_reference || "-", "mono"));
           var look = REQUEST_LOOK[q.status] || ["muted", q.status];
           var st = el("td"); st.appendChild(el("span", "pill " + look[0], look[1])); tr.appendChild(st);
           var act = el("td");
@@ -637,6 +813,11 @@
   }
   reqClosed.addEventListener("change", loadRequests);
 
+  function frustrationLevel(score) {
+    if (score === null || score === undefined) { return null; }
+    return score >= 0.55 ? ["high", "High"] : (score >= 0.3 ? ["mid", "Some"] : ["low", "Low"]);
+  }
+
   function loadHandovers() {
     return api("/api/admin/handovers" + (hoClosed.checked ? "?include_closed=true" : ""))
       .then(function (r) { return r.ok ? r.json() : { cases: [] }; })
@@ -646,35 +827,42 @@
             "assistant gives passengers the airline's contact details instead of opening cases.";
         }
         var cases = d.cases || [];
-        hoBody.innerHTML = "";
+        setCount("count-handovers", "att-handovers",
+          cases.filter(function (c) { return c.status === "open"; }).length);
+        hoList.innerHTML = "";
         if (!cases.length) {
-          emptyRow(hoBody, 6, "No passengers are waiting.");
+          var li = el("li", "case-empty");
+          li.appendChild(el("strong", null, "No passengers are waiting."));
+          li.appendChild(el("span", null, "New cases appear here within 15 seconds."));
+          hoList.appendChild(li);
           return;
         }
         cases.forEach(function (c) {
-          var tr = el("tr");
-          tr.appendChild(el("td", null, c.reference));
-          tr.appendChild(el("td", null, (c.created_at || "-").replace("T", " ").slice(0, 16)));
-          var look = HANDOVER_LOOK[c.status] || ["muted", c.status];
-          var st = el("td");
-          st.appendChild(el("span", "pill " + look[0], look[1]));
-          tr.appendChild(st);
-          tr.appendChild(el("td", null, c.frustration_score === null ? "-" :
-                                      Number(c.frustration_score).toFixed(2)));
-          tr.appendChild(el("td", null, c.last_passenger_message || "-"));
-          var act = el("td");
-          var btn = el("button", "btn btn-small", "Open");
+          var li = el("li");
+          var btn = el("button", "case" + (c.id === openCaseId ? " is-open" : ""));
           btn.type = "button";
-          btn.addEventListener("click", function () { openCase(c.id); });
-          act.appendChild(btn);
-          tr.appendChild(act);
-          hoBody.appendChild(tr);
+          btn.setAttribute("aria-current", c.id === openCaseId ? "true" : "false");
+          var top = el("span", "case-top");
+          top.appendChild(el("span", "case-ref", c.reference));
+          var look = HANDOVER_LOOK[c.status] || ["muted", c.status];
+          top.appendChild(el("span", "pill " + look[0], look[1]));
+          top.appendChild(el("span", "case-time", fmtTime(c.created_at)));
+          btn.appendChild(top);
+          btn.appendChild(el("span", "case-msg", c.last_passenger_message || "No message"));
+          var lvl = frustrationLevel(c.frustration_score);
+          if (lvl) {
+            btn.appendChild(el("span", "case-mood " + lvl[0],
+              "Frustration " + Number(c.frustration_score).toFixed(2) + " · " + lvl[1]));
+          }
+          btn.addEventListener("click", function () { openCase(c.id, true); });
+          li.appendChild(btn);
+          hoList.appendChild(li);
         });
       })
       .catch(function () { /* the queue retries on the next tick */ });
   }
 
-  function openCase(id) {
+  function openCase(id, userAction) {
     openCaseId = id;
     hoError.textContent = "";
     return api("/api/admin/handovers/" + id)
@@ -684,21 +872,35 @@
       })
       .then(function (c) {
         hoDetail.hidden = false;
-        hoTitle.textContent = c.reference + " - " + (HANDOVER_LOOK[c.status] || [0, c.status])[1] +
-          (c.claimed_by ? " (" + c.claimed_by + ")" : "");
+        hoEmpty.hidden = true;
+        Array.prototype.forEach.call(hoList.querySelectorAll(".case"), function (b) {
+          var mine = b.querySelector(".case-ref").textContent === c.reference;
+          b.classList.toggle("is-open", mine);
+          b.setAttribute("aria-current", mine ? "true" : "false");
+        });
+        hoTitle.textContent = c.reference;
+        var look = HANDOVER_LOOK[c.status] || [0, c.status];
+        hoMeta.textContent = look[1] + (c.claimed_by ? " · " + c.claimed_by : "") +
+          " · opened " + fmtTime(c.created_at) + " UTC";
         var closed = c.status === "closed";
         hoSend.disabled = closed;
         hoCloseBtn.disabled = closed;
         hoReply.disabled = closed;
+        hoReply.placeholder = closed ? "This case is closed." : "Write a reply to the passenger";
         hoTranscript.innerHTML = "";
         (c.transcript || []).forEach(function (m) {
           var b = el("div", "t-msg " + m.role);
-          b.appendChild(el("span", "t-who", (ROLE_NAME[m.role] || m.role) + " - " +
-                                              (m.created_at || "").replace("T", " ").slice(0, 16)));
-          b.appendChild(document.createTextNode(m.message));
+          var head = el("span", "t-who");
+          head.appendChild(el("strong", null, ROLE_NAME[m.role] || m.role));
+          head.appendChild(document.createTextNode(" · " + fmtTime(m.created_at).replace(/^.*, /, "")));
+          b.appendChild(head);
+          b.appendChild(el("span", "t-text", m.message));
           hoTranscript.appendChild(b);
         });
         hoTranscript.scrollTop = hoTranscript.scrollHeight;
+        if (userAction && window.matchMedia("(max-width: 1023px)").matches) {
+          hoDetail.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
       })
       .catch(function (err) {
         if (err.message !== "Not signed in") { hoError.textContent = "Could not open the case: " + err.message; }
@@ -746,7 +948,12 @@
 
   hoHide.addEventListener("click", function () {
     hoDetail.hidden = true;
+    hoEmpty.hidden = false;
     openCaseId = null;
+    Array.prototype.forEach.call(hoList.querySelectorAll(".case"), function (b) {
+      b.classList.remove("is-open");
+      b.setAttribute("aria-current", "false");
+    });
   });
   hoClosed.addEventListener("change", loadHandovers);
 
@@ -775,7 +982,10 @@
   function loadPrivacy() {
     api("/api/admin/privacy").then(function (r) { return r.json(); }).then(function (d) {
       var p = d.retention || {};
-      var last = d.last_purge && d.last_purge.at ? " Last automatic purge: " + d.last_purge.at + " UTC." : "";
+      var last = d.last_purge && d.last_purge.at ? " Last automatic purge: " + fmtTime(d.last_purge.at) + " UTC." : "";
+      var pill = document.getElementById("retention-pill");
+      pill.className = "pill " + (p.enabled ? "ok" : "warn");
+      pill.textContent = p.enabled ? "On" : "Off";
       if (!p.enabled) {
         retentionLine.textContent = "Automatic deletion is switched off (PRIVACY_RETENTION_ENABLED). " +
           "Personal data is kept until it is erased on request. When switched on, conversations are " +
@@ -909,8 +1119,15 @@
       staffBody.innerHTML = "";
       (d.staff || []).forEach(function (s) {
         var tr = el("tr");
-        tr.appendChild(el("td", null, s.username));
-        tr.appendChild(el("td", null, s.display_name || "-"));
+        var person = td();
+        var pw = el("span", "person");
+        pw.appendChild(el("span", "avatar small", initials(s.display_name || s.username)));
+        var names = el("span", "person-names");
+        names.appendChild(el("span", "strong", s.display_name || s.username));
+        names.appendChild(el("span", "muted", "@" + s.username));
+        pw.appendChild(names);
+        person.appendChild(pw);
+        tr.appendChild(person);
 
         var roleCell = el("td");
         var select = el("select");
@@ -933,7 +1150,7 @@
         st.appendChild(el("span", "pill " + (s.active ? (s.must_change_password ? "warn" : "ok") : "muted"),
           s.active ? (s.must_change_password ? "Awaiting first sign-in" : "Active") : "Disabled"));
         tr.appendChild(st);
-        tr.appendChild(el("td", null, s.last_login_at ? s.last_login_at.replace("T", " ") : "Never"));
+        tr.appendChild(s.last_login_at ? timeCell(s.last_login_at) : td("Never", "muted"));
 
         var act = el("td", "row-actions");
         var self = me && s.username.toLowerCase() === me.username.toLowerCase();
@@ -981,7 +1198,7 @@
     }).catch(function (err) { staffStatus.textContent = err.message; });
   });
 
-  refreshBtn.addEventListener("click", loadOverview);
+  refreshBtn.addEventListener("click", refreshAll);
   runCmpBtn.addEventListener("click", runComparison);
   loginForm.addEventListener("submit", submitLogin);
   logoutBtn.addEventListener("click", doLogout);
