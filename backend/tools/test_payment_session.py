@@ -46,7 +46,7 @@ step("turn 3 quotes the fee from policy", say("Delight Wambui"), "USD 75.00")
 step("turn 4 accepts", say("yes"), "SR-")
 say("M-Pesa")
 # Not a registered sandbox test number, so no real prompt is sent.
-d = say("0712345678")
+d = say("0700000001")
 step("turn 5 starts the payment", d, "M-Pesa")
 
 payment = d.get("payment")
@@ -62,7 +62,7 @@ print("\n=== State is bound to the session ===")
 other = requests.Session()
 other.post(BASE + "/api/chat/session", timeout=30)
 r = other.post(BASE + "/api/chat",
-               json={"session_id": sid, "message": "0712345678"}, timeout=60)
+               json={"session_id": sid, "message": "0700000001"}, timeout=60)
 bound = r.status_code == 403
 ok = ok and bound
 print(("  PASS  " if bound else "  FAIL  ") +

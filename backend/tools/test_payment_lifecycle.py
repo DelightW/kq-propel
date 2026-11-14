@@ -60,7 +60,7 @@ def callback(checkout_id, code=0, amount=None, receipt="RCP123"):
 
 def pending_attempt(session="s-1", kes=9675, quote=True):
     quote_id = payments.new_quote(session, kes, "KES", "Name change fee") if quote else None
-    result = agent._execute_payment(session, "254712345678", kes, "Name change fee", [],
+    result = agent._execute_payment(session, "254700000001", kes, "Name change fee", [],
                                     quote_id=quote_id)
     return result, payments.for_passenger(session, result["reference"])
 
@@ -139,11 +139,11 @@ def test_cancel_and_timeout_codes_map_to_their_states():
 def test_same_quote_never_charges_twice():
     STK_CALLS.clear()
     quote = payments.new_quote("s-dup", 9675, "KES", "Name change fee")
-    first = agent._execute_payment("s-dup", "254712345678", 9675, "fee", [], quote_id=quote)
-    second = agent._execute_payment("s-dup", "254712345678", 9675, "fee", [], quote_id=quote)
+    first = agent._execute_payment("s-dup", "254700000001", 9675, "fee", [], quote_id=quote)
+    second = agent._execute_payment("s-dup", "254700000001", 9675, "fee", [], quote_id=quote)
     assert len(STK_CALLS) == 1, STK_CALLS
     assert second.get("duplicate") and second["reference"] == first["reference"]
-    assert "already in progress" in agent._payment_sent_message(9675, "254712345678", second)
+    assert "already in progress" in agent._payment_sent_message(9675, "254700000001", second)
 
 
 def test_a_failed_attempt_can_be_retried():
@@ -153,10 +153,10 @@ def test_a_failed_attempt_can_be_retried():
     daraja.initiate_stk_push = lambda **k: {"source": "daraja_sandbox", "success": False,
                                             "error": "rejected", "amount": 9675}
     try:
-        failed = agent._execute_payment("s-retry", "254712345678", 9675, "fee", [], quote_id=quote)
+        failed = agent._execute_payment("s-retry", "254700000001", 9675, "fee", [], quote_id=quote)
     finally:
         daraja.initiate_stk_push = original
-    retry = agent._execute_payment("s-retry", "254712345678", 9675, "fee", [], quote_id=quote)
+    retry = agent._execute_payment("s-retry", "254700000001", 9675, "fee", [], quote_id=quote)
     assert failed["status"] == payments.FAILED and not retry.get("duplicate")
     assert len(STK_CALLS) == 1
 
@@ -178,9 +178,9 @@ def test_rejected_daraja_response_is_a_failure():
     # Sandbox prompts only go to listed numbers; list this one so the stubbed
     # rejection is reached. Nothing leaves the machine.
     saved_numbers = config.DARAJA_SANDBOX_TEST_NUMBERS
-    config.DARAJA_SANDBOX_TEST_NUMBERS = "254712345678"
+    config.DARAJA_SANDBOX_TEST_NUMBERS = "254700000001"
     try:
-        result = fresh.initiate_stk_push("254712345678", 100, "KQREF", "fee")
+        result = fresh.initiate_stk_push("254700000001", 100, "KQREF", "fee")
     finally:
         config.DARAJA_SANDBOX_TEST_NUMBERS = saved_numbers
         fresh.requests.post = saved[0]
@@ -209,7 +209,7 @@ def test_expired_quote_is_not_settled():
         conn.execute("UPDATE payment_state SET expires_at = ? WHERE session_id = ?",
                      ((datetime.utcnow() - timedelta(minutes=1)).isoformat(), "s-expired"))
     pending = database.get_pending_payment("s-expired")
-    turn = agent._handle_pending_payment("s-expired", "0712345678", pending, [],
+    turn = agent._handle_pending_payment("s-expired", "0700000001", pending, [],
                                          {"label": "calm", "frustration_score": 0.1})
     assert "expired" in turn["answer"] and not STK_CALLS
 
@@ -231,7 +231,7 @@ def test_typed_amount_is_never_charged():
     STK_CALLS.clear()
     database.clear_pending_payment("s-typed")
     agent.run_agent_turn("s-typed", "I want to pay Ksh 1 now for my name correction on an "
-                                    "international booking, my number is 0712345678")
+                                    "international booking, my number is 0700000001")
     assert STK_CALLS, "expected a prompt for the policy fee"
     assert STK_CALLS[0]["amount"] != 1, STK_CALLS
     assert STK_CALLS[0]["amount"] == round(75 * config.USD_TO_KES_RATE), STK_CALLS

@@ -664,7 +664,7 @@
     return bubble;
   }
 
-  function step(label, text, code, kind) {
+  function step(label, text, detail, kind) {
     var el = document.createElement("div");
     el.className = "step" + (kind ? " step-" + kind : "");
     var l = document.createElement("span");
@@ -673,12 +673,61 @@
     el.appendChild(l);
     // The trace is plain text: drop the answer's **bold** markers.
     if (text) { el.appendChild(document.createTextNode(String(text).replace(/\*\*/g, ""))); }
-    if (code) {
+    if (detail && detail.nodeType) {
+      el.appendChild(detail);
+    } else if (detail) {
       var c = document.createElement("code");
-      c.textContent = code;
+      c.textContent = detail;
       el.appendChild(c);
     }
     return el;
+  }
+
+  var FACT_NAMES = {
+    source: "Source", is_live: "Live", available: "Available", flight_number: "Flight", route: "Route",
+    status: "Status", delay_minutes: "Delay (min)", gate: "Gate", estimated_departure_utc: "Est. departure (UTC)",
+    scheduled_departure_utc: "Departure (UTC)", retrieved_at_utc: "Retrieved (UTC)", reason: "Note",
+    segments: "Segments"
+  };
+
+  function factValue(v) {
+    if (v === true) { return "Yes"; }
+    if (v === false) { return "No"; }
+    if (Array.isArray(v)) { return v.length + (v.length === 1 ? " item" : " items"); }
+    if (v && typeof v === "object") { return Object.keys(v).length + " fields"; }
+    return String(v).replace("T", " ").replace(/:00\+00:00$|Z$/, "");
+  }
+
+  /* An observation as a short list: retrieved sections with their scores, or
+     a tool's result as name and value. Empty values are left out. */
+  function observationList(obs) {
+    var ul = document.createElement("ul");
+    ul.className = "obs";
+    function row(k, v, cls) {
+      var li = document.createElement("li");
+      var a = document.createElement("span");
+      a.className = cls === "score" ? "v text" : "k";
+      a.textContent = k;
+      var b = document.createElement("span");
+      b.className = cls === "score" ? "score" : "v";
+      b.textContent = v;
+      li.appendChild(a);
+      li.appendChild(b);
+      ul.appendChild(li);
+    }
+    if (Array.isArray(obs)) {
+      obs.forEach(function (o) {
+        var name = (o.section || o.source || "result").replace(/^Section \d+:\s*/, "");
+        row(name, o.score !== undefined ? Number(o.score).toFixed(2) : "", "score");
+      });
+    } else if (obs && typeof obs === "object") {
+      Object.keys(obs).forEach(function (k) {
+        var v = obs[k];
+        if (v === null || v === undefined || v === "") { return; }
+        row(FACT_NAMES[k] || k.replace(/_/g, " "), factValue(v));
+      });
+    }
+    return ul.childNodes.length ? ul : null;
   }
 
   function renderTrace(data) {
@@ -688,22 +737,14 @@
     for (var i = 0; i < trace.length; i++) {
       var t = trace[i];
       if (t.step === "action") {
-        var detail = "";
-        if (Array.isArray(t.observation)) {
-          for (var j = 0; j < t.observation.length; j++) {
-            var o = t.observation[j];
-            detail += (o.section || o.source || "result") +
-                      (o.score !== undefined ? "  (score " + o.score + ")" : "") + "\n";
-          }
-        } else if (t.observation && typeof t.observation === "object") {
-          detail = JSON.stringify(t.observation, null, 1);
-        } else if (t.observation !== undefined) {
-          detail = String(t.observation);
-        }
+        var detail = (t.observation && typeof t.observation === "object")
+          ? observationList(t.observation)
+          : (t.observation !== undefined ? String(t.observation) : "");
         var toolInput = t.input;
         if (toolInput && typeof toolInput === "object") { toolInput = JSON.stringify(toolInput); }
-        traceBody.appendChild(step("Action · " + t.tool, toolInput ? String(toolInput) : "",
-                                   detail.trim(), "action"));
+        var toolName = String(t.tool || "tool").replace(/_/g, " ");
+        traceBody.appendChild(step("Action · " + toolName, toolInput ? String(toolInput) : "",
+                                   detail, "action"));
       } else if (t.step === "final_answer") {
         traceBody.appendChild(step("Answer · " + (t.model || "model"), t.content || "", "", "final"));
       } else {
@@ -802,13 +843,10 @@
     if (e.key === "Escape" && !isDesktop()) { closeTrace(); }
   });
 
-  // On phones the panel starts hidden; on laptops it starts docked open.
-  if (isDesktop()) {
-    tracePanel.classList.remove("open");
-    traceToggle.setAttribute("aria-expanded", "true");
-  } else {
-    tracePanel.classList.add("collapsed");
-  }
+  // The panel starts closed on every screen and opens on demand; on laptops it
+  // slides in beside the conversation, on phones over it.
+  tracePanel.classList.add("collapsed");
+  traceToggle.setAttribute("aria-expanded", "false");
 
   window.addEventListener("resize", function () {
     if (isDesktop()) {
@@ -871,6 +909,7 @@
         typing.remove();
         var answerBubble = addBubble("bot", data.answer || "I could not produce an answer for that.", data);
         if (data.message_id) { addFeedback(answerBubble, data.message_id, null); }
+        scrollToBottom();
 
         if (data.payment) {
           addPaymentCard(data.payment);

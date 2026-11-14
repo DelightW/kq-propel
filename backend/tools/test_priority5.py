@@ -303,7 +303,7 @@ def test_mpesa_prompts_are_limited_per_number():
     assert "card" in blocked["message"], "offers the other way to pay"
     # The same number written another way is the same number.
     assert agent._execute_payment("cs_p5_x", "+254 708 374 149", 75, "fee", [])["rate_limited"]
-    assert agent._execute_payment("cs_p5_y", "0712345678", 75, "fee", [])["success"], "other numbers fine"
+    assert agent._execute_payment("cs_p5_y", "0700000001", 75, "fee", [])["success"], "other numbers fine"
     ratelimit.reset()
 
 

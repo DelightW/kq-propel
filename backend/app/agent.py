@@ -525,12 +525,12 @@ def _offer_payment_message(amount: float, currency: str,
     if kes_amount is not None:
         if currency == "KES":
             lines.append("\n- **M-Pesa** - reply with your Kenyan number (for example "
-                         "0712345678) and I'll push the prompt to your phone.")
+                         "0708374149) and I'll push the prompt to your phone.")
         else:
             lines.append(f"\n- **M-Pesa** - available on a Kenyan mobile number. M-Pesa "
                          f"settles in shillings, so this would be **Ksh {kes_amount:,.0f}** "
                          f"at the indicative rate below. Reply with your number "
-                         f"(for example 0712345678).")
+                         f"(for example 0708374149).")
     return "".join(lines)
 
 
@@ -592,7 +592,7 @@ def _handle_pending_payment(session_id: str, message: str, pending: Dict,
             trace, sentiment_result)
 
     # A phone number is an unambiguous choice of the M-Pesa rail, so it is read
-    # before the card check - "pay with my card on 0712345678" is incoherent,
+    # before the card check - "pay with my card on 0708374149" is incoherent,
     # but a number is the more specific signal.
     phone_match = _PHONE_RE.search(message)
     if phone_match:
@@ -1506,7 +1506,12 @@ def _run_agent_turn(session_id: str, message: str) -> Dict:
     memory.remember(session_id, query=query)
 
     # Relevance is judged against the English question the answer was built for.
-    metrics = evaluation.evaluate_response(swahili_english or message, answer, retrieved)
+    # The RAG Triad scores an answer against the policy text it drew on. An
+    # answer from a tool alone (a flight's status) quotes no policy, and was
+    # scored 0 grounded, which pulled the dashboard's average down for answers
+    # that were correct. Such an answer is not scored.
+    metrics = (evaluation.evaluate_response(swahili_english or message, answer, retrieved)
+               if retrieved else {})
     sources = []
     for r in retrieved:
         label = composer._section_label(r)
@@ -1517,11 +1522,12 @@ def _run_agent_turn(session_id: str, message: str) -> Dict:
                           sentiment_label=sentiment_result["label"],
                           frustration_score=sentiment_result["frustration_score"])
     message_id = database.log_message(session_id, "assistant", answer, sources=", ".join(sources))
-    database.log_rag_evaluation(query_id=str(uuid.uuid4()), query=message,
-                                 context_relevance=metrics["context_relevance"],
-                                 groundedness=metrics["groundedness"],
-                                 answer_relevance=metrics["answer_relevance"], model=model_name,
-                                 session_id=session_id, message_id=message_id)
+    if metrics:
+        database.log_rag_evaluation(query_id=str(uuid.uuid4()), query=message,
+                                     context_relevance=metrics["context_relevance"],
+                                     groundedness=metrics["groundedness"],
+                                     answer_relevance=metrics["answer_relevance"], model=model_name,
+                                     session_id=session_id, message_id=message_id)
 
     return {
         "answer": answer,

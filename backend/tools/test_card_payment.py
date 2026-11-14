@@ -291,7 +291,7 @@ def test_a_simulated_stk_push_is_labelled_as_simulated():
     # accepted anything. Checked against the real client, not the stub.
     if daraja.is_configured():
         return
-    result = _LIVE_STK("254712345678", 1, "TEST", "verification")
+    result = _LIVE_STK("254708374149", 1, "TEST", "verification")
     assert result["source"] == "simulated", result
 
 

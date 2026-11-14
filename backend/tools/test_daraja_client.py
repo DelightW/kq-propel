@@ -80,7 +80,7 @@ def restore(saved):
 def test_sandbox_never_prompts_an_unlisted_number():
     stub, saved = setup(test_numbers="")
     try:
-        r = daraja.initiate_stk_push("254712345678", 9675, "KQ-1", "fee")
+        r = daraja.initiate_stk_push("254700000001", 9675, "KQ-1", "fee")
         assert r["source"] == "simulated" and r["sandbox_blocked"], r
         assert stub.posts == [] and stub.gets == [], "nothing sent to Safaricom"
     finally:
@@ -102,7 +102,7 @@ def test_production_sends_the_real_fee_to_any_number():
     stub, saved = setup()
     config.DARAJA_SANDBOX = False
     try:
-        r = daraja.initiate_stk_push("254712345678", 9675, "KQ-3", "fee")
+        r = daraja.initiate_stk_push("254700000001", 9675, "KQ-3", "fee")
         assert r["success"] and r["amount"] == 9675 and r["sandbox_test_fee"] is None, r
         assert stub.posts[-1][0].startswith("https://api.safaricom.co.ke")
     finally:

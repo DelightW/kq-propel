@@ -33,13 +33,13 @@ def ago(**kw) -> str:
     return (NOW - timedelta(**kw)).isoformat()
 
 
-def seed(session, when, *, phone="254712345678", status="paid", handover_status=None,
+def seed(session, when, *, phone="254700000001", status="paid", handover_status=None,
          question=None):
     """One passenger session with everything personal the system can hold."""
     question = question or f"What is my allowance? ({session})"
     with database._connect() as conn:
         conn.execute("INSERT INTO chat_sessions VALUES (?,?,?,?)", (session, when, when, "10.0.0.1"))
-        for role, text in (("user", question), ("user", f"My number is 0712 345 678 ({session})"),
+        for role, text in (("user", question), ("user", f"My number is 0700 000 001 ({session})"),
                            ("assistant", "Two pieces of 23kg.")):
             conn.execute("INSERT INTO conversations (session_id, role, message, created_at) "
                          "VALUES (?,?,?,?)", (session, role, text, when))
@@ -79,8 +79,9 @@ def eval_query(session):
 # ------------------------------------------------------------------ masking
 
 def test_mask_phone_keeps_only_prefix_and_last_digits():
-    assert privacy.mask_phone("254712345678") == "2547*****678"
-    assert privacy.mask_phone("+254 712 345 678") == "2547*****678"
+    # An obviously made-up number; the repository is public.
+    assert privacy.mask_phone("254700000001") == "2547*****001"
+    assert privacy.mask_phone("+254 700 000 001") == "2547*****001"
     assert privacy.mask_phone(None) is None and privacy.mask_phone("") == ""
 
 
@@ -96,9 +97,12 @@ def test_checkout_id_does_not_reveal_the_number():
 
 
 def test_mask_text_finds_numbers_in_messages():
-    for raw in ("Send it to 0712 345 678 please", "my line is +254712345678.", "use 0112-345-678"):
+    for raw, number in (("Send it to 0700 000 001 please", "0700000001"),
+                        ("my line is +254700000001.", "254700000001"),
+                        ("use 0110-000-002", "0110000002")):
         masked = privacy.mask_text(raw)
-        assert "345" not in masked.replace("*", ""), masked
+        digits = "".join(ch for ch in masked if ch.isdigit())
+        assert "*" in masked and number not in digits, masked
     assert privacy.mask_text("Flight KQ100 at gate 14, ref 7061234567890") == \
         "Flight KQ100 at gate 14, ref 7061234567890"   # not phone numbers: untouched
 
@@ -123,8 +127,8 @@ def test_sessions_found_by_any_spelling_of_the_number():
     seed("cs_phone", ago(days=2), phone="254733000111")
     assert "cs_phone" in privacy.sessions_for_phone("0733 000 111")
     assert "cs_phone" in privacy.sessions_for_phone("+254733000111")
-    # Mentioned in a message only (0712 345 678 is in every seeded chat).
-    assert "cs_phone" in privacy.sessions_for_phone("0712345678")
+    # Mentioned in a message only (0700 000 001 is in every seeded chat).
+    assert "cs_phone" in privacy.sessions_for_phone("0700000001")
     assert privacy.sessions_for_phone("12") == []
 
 

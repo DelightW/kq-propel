@@ -8,7 +8,8 @@
   --accent: #c8102e;
   --accent-hover: #a50d26;
   --accent-soft: #fdecee;
-  --bg: #f6f7f9;
+  --bg: #ffffff;
+  --bg-soft: #f7f8fa;
   --surface: #ffffff;
   --surface-2: #f9fafb;
   --border: #e4e7ec;
@@ -23,8 +24,10 @@
   --danger: #b42318;
   --danger-soft: #fef0ef;
   --radius: 14px;
-  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
-  --shadow-md: 0 4px 16px rgba(16, 24, 40, 0.08);
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-md: 0 6px 24px -6px rgba(16, 24, 40, 0.12);
+  --shadow-lg: 0 16px 40px -12px rgba(16, 24, 40, 0.18);
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
 }
 
@@ -64,17 +67,19 @@ body {
   gap: 12px;
   padding: 10px 16px;
   padding-top: calc(10px + env(safe-area-inset-top));
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: saturate(180%) blur(12px);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+  border-bottom: 1px solid rgba(228, 231, 236, 0.8);
   z-index: 30;
 }
 
 .brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
 
 .mark {
-  width: 36px; height: 36px;
-  flex: 0 0 36px;
-  border-radius: 10px;
+  width: 32px; height: 32px;
+  flex: 0 0 32px;
+  border-radius: 9px;
   background: var(--accent);
   color: #fff;
   display: flex; align-items: center; justify-content: center;
@@ -109,10 +114,10 @@ body {
 .proto-badge {
   display: none;
   font-size: 12px;
-  font-weight: 600;
-  color: var(--warn);
-  background: var(--warn-soft);
-  border: 1px solid #f2dca3;
+  font-weight: 500;
+  color: var(--ink-2);
+  background: transparent;
+  border: 1px solid var(--border);
   padding: 4px 10px;
   border-radius: 999px;
   white-space: nowrap;
@@ -120,20 +125,20 @@ body {
 
 .ghost-btn {
   display: inline-flex; align-items: center; gap: 7px;
-  height: 38px;
+  height: 36px;
   padding: 0 12px;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--surface);
   color: var(--ink-2);
   font: inherit;
   font-size: 13.5px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: background 0.2s var(--ease), border-color 0.2s var(--ease), color 0.2s var(--ease);
 }
-.ghost-btn:hover { background: var(--surface-2); border-color: #b7bec9; }
-.ghost-btn[aria-expanded="true"] { background: var(--accent-soft); border-color: #f3c3cb; color: var(--accent-hover); }
+.ghost-btn:hover { background: var(--bg-soft); border-color: var(--border-strong); }
+.ghost-btn[aria-expanded="true"] { background: var(--ink); border-color: var(--ink); color: #fff; }
 .btn-label { display: none; }
 
 .icon-btn {
@@ -172,10 +177,10 @@ body {
 }
 
 .chat-inner {
-  max-width: 780px;
+  max-width: 760px;
   min-height: 100%;
   margin: 0 auto;
-  padding: 20px 16px 12px;
+  padding: 24px 16px 28px;
   display: flex;
   flex-direction: column;
 }
@@ -184,7 +189,7 @@ body {
 .chat-window {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
 }
 
 .bubble {
@@ -193,10 +198,10 @@ body {
   border-radius: 16px;
   font-size: 15px;
   line-height: 1.55;
-  overflow-wrap: anywhere;
-  animation: rise 0.2s ease-out;
+  overflow-wrap: break-word;
+  animation: rise 0.35s var(--ease) both;
 }
-@keyframes rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 
 .bubble .msg-p { margin: 0 0 10px; }
 .bubble .msg-p:last-child { margin-bottom: 0; }
@@ -208,9 +213,11 @@ body {
 
 .bubble.user {
   align-self: flex-end;
-  background: var(--accent);
-  color: #fff;
+  background: #f2f4f7;
+  color: var(--ink);
+  border-radius: 20px;
   border-bottom-right-radius: 6px;
+  padding: 10px 16px;
 }
 
 /* Assistant and staff replies carry an avatar, drawn in CSS so every reply
@@ -219,22 +226,22 @@ body {
 .bubble.agent {
   position: relative;
   align-self: flex-start;
-  margin-left: 42px;
-  max-width: calc(100% - 42px);
+  margin-left: 40px;
+  max-width: calc(100% - 40px);
 }
 
 /* The assistant's replies read as plain text beside its avatar, the way
    modern assistants present answers; only the passenger's own messages and
    staff replies sit in bubbles. */
 .bubble.bot {
-  width: calc(100% - 42px);
-  padding: 4px 0 2px;
+  width: calc(100% - 40px);
+  padding: 3px 0 2px;
   background: transparent;
   border: 0;
   border-radius: 0;
   font-size: 15.5px;
-  line-height: 1.65;
-  color: var(--ink);
+  line-height: 1.7;
+  color: #1d2939;
 }
 .bubble.bot .msg-p { margin-bottom: 12px; }
 
@@ -249,14 +256,16 @@ body {
 .bubble.agent::before {
   content: "";
   position: absolute;
-  left: -42px; top: 2px;
-  width: 30px; height: 30px;
-  border-radius: 9px;
-  background-color: var(--accent);
+  left: -40px; top: 1px;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
   background-repeat: no-repeat;
   background-position: center;
-  background-size: 17px 17px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='white' d='M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z'/%3E%3C/svg%3E");
+  background-size: 15px 15px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23c8102e' d='M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z'/%3E%3C/svg%3E");
 }
 
 /* A reply from a member of staff, so a passenger can always tell a person
@@ -300,7 +309,7 @@ body {
 
 .sources { margin: 14px 0 4px; display: grid; gap: 8px; }
 .sources-label {
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -308,13 +317,15 @@ body {
 }
 .source-card {
   display: flex;
-  gap: 11px;
-  padding: 10px 12px;
+  gap: 10px;
+  padding: 9px 12px;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: var(--surface);
+  background: var(--bg-soft);
   scroll-margin: 80px;
+  transition: border-color 0.2s var(--ease), background 0.2s var(--ease);
 }
+.source-card:hover { background: var(--surface); border-color: var(--border-strong); }
 .source-card:target { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .source-num {
   flex: 0 0 22px;
@@ -382,7 +393,7 @@ body {
   background: var(--surface);
   box-shadow: var(--shadow-md);
   overflow: hidden;
-  animation: rise 0.25s ease-out;
+  animation: rise 0.4s var(--ease) both;
 }
 .kq-card-head {
   display: flex;
@@ -414,10 +425,14 @@ body {
 }
 
 .route { display: flex; align-items: center; gap: 14px; }
-.route-end { min-width: 0; }
+.route-end { min-width: 0; flex: 0 1 auto; max-width: 42%; }
 .route-end:last-child { text-align: right; }
 .iata { display: block; font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
-.city { display: block; font-size: 12.5px; color: var(--muted); }
+.city {
+  display: block; font-size: 12.5px; color: var(--muted);
+  overflow-wrap: normal; word-break: normal;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .route-path {
   position: relative;
   flex: 1 1 auto;
@@ -487,6 +502,7 @@ body {
 .nc-question { margin: 14px 0 0; font-size: 14px; color: var(--ink-2); }
 .nc-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .card-btn {
+  transition: background 0.2s var(--ease), transform 0.1s var(--ease);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -504,6 +520,7 @@ body {
 .card-btn:hover:not(:disabled) { background: var(--surface-2); }
 .card-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .card-btn.primary:hover:not(:disabled) { background: var(--accent-hover); }
+.card-btn:active:not(:disabled) { transform: scale(0.97); }
 .card-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 @media (max-width: 480px) {
@@ -541,25 +558,25 @@ body {
   margin: auto 0;
   padding: 12px 0 8px;
   text-align: center;
-  animation: rise 0.3s ease-out;
+  animation: rise 0.5s var(--ease) both;
 }
 
 .hero-mark {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 56px; height: 56px;
+  width: 52px; height: 52px;
   border-radius: 16px;
-  background: var(--accent);
+  background: linear-gradient(145deg, #d81b3b, #a50d26);
   color: #fff;
-  box-shadow: 0 8px 24px rgba(200, 16, 46, 0.25);
+  box-shadow: 0 10px 28px -8px rgba(200, 16, 46, 0.45);
 }
 
 .hero-title {
-  margin: 18px 0 8px;
-  font-size: 26px;
+  margin: 20px 0 10px;
+  font-size: clamp(24px, 1.6vw + 16px, 32px);
   font-weight: 700;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.03em;
   line-height: 1.2;
   color: var(--ink);
 }
@@ -604,21 +621,29 @@ body {
   flex-direction: column;
   gap: 3px;
   text-align: left;
-  padding: 12px 14px;
+  padding: 13px 15px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 14px;
   background: var(--surface);
   color: var(--ink);
   font: inherit;
   cursor: pointer;
-  box-shadow: var(--shadow-sm);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+  transition: border-color 0.25s var(--ease), box-shadow 0.25s var(--ease), transform 0.25s var(--ease),
+              background 0.25s var(--ease);
+  animation: rise 0.5s var(--ease) both;
 }
+.suggestions button:nth-child(1) { animation-delay: 0.05s; }
+.suggestions button:nth-child(2) { animation-delay: 0.1s; }
+.suggestions button:nth-child(3) { animation-delay: 0.15s; }
+.suggestions button:nth-child(4) { animation-delay: 0.2s; }
+.suggestions button:nth-child(5) { animation-delay: 0.25s; }
+.suggestions button:nth-child(6) { animation-delay: 0.3s; }
 .suggestions button:hover {
   border-color: var(--border-strong);
   box-shadow: var(--shadow-md);
-  transform: translateY(-1px);
+  transform: translateY(-2px);
 }
+.suggestions button:active { transform: translateY(0) scale(0.99); }
 .suggestions button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
 .s-title { font-size: 13.5px; font-weight: 600; color: var(--ink); }
 .s-q { font-size: 13px; color: var(--muted); line-height: 1.45; }
@@ -634,9 +659,18 @@ body {
 /* -------------------------------- composer -------------------------------- */
 .composer {
   flex: 0 0 auto;
-  padding: 10px 16px;
+  position: relative;
+  padding: 6px 16px;
   padding-bottom: calc(10px + env(safe-area-inset-bottom));
-  background: linear-gradient(to bottom, rgba(246, 247, 249, 0), var(--bg) 30%);
+  background: var(--bg);
+}
+/* A soft fade above the composer, so text scrolls away under it. */
+.composer::before {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; top: -24px; height: 24px;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), var(--bg));
+  pointer-events: none;
 }
 
 .input-shell {
@@ -645,17 +679,17 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 6px 6px 16px;
+  padding: 6px 6px 6px 18px;
   background: var(--surface);
   border: 1px solid var(--border-strong);
-  border-radius: 16px;
+  border-radius: 26px;
   box-shadow: var(--shadow-md);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color 0.25s var(--ease), box-shadow 0.25s var(--ease);
 }
 /* The whole box carries the focus ring, since the input inside has none. */
 .input-shell:focus-within {
-  border-color: #1d4ed8;
-  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.25), var(--shadow-md);
+  border-color: #475467;
+  box-shadow: 0 0 0 4px rgba(71, 84, 103, 0.14), var(--shadow-lg);
 }
 
 #chat-input {
@@ -677,21 +711,21 @@ body {
   flex: 0 0 auto;
   width: 40px; height: 40px;
   border: none;
-  border-radius: 11px;
+  border-radius: 50%;
   background: var(--accent);
   color: #fff;
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  transition: background 0.15s ease, transform 0.1s ease;
+  transition: background 0.2s var(--ease), transform 0.15s var(--ease), opacity 0.2s var(--ease);
 }
 .send-btn:hover { background: var(--accent-hover); }
 .send-btn:active { transform: scale(0.94); }
-.send-btn:disabled { background: #c5cad3; cursor: not-allowed; }
+.send-btn:disabled { background: #98a2b3; cursor: not-allowed; }
 
 .privacy-line {
   max-width: 780px;
   margin: 8px auto 0;
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--muted);
   text-align: center;
 }
@@ -712,14 +746,14 @@ body {
 /* ------------------------------ payment card ------------------------------ */
 .pay-card {
   align-self: flex-start;
-  margin-left: 42px;
-  width: min(420px, calc(100% - 42px));
+  margin-left: 40px;
+  width: min(420px, calc(100% - 40px));
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
-  box-shadow: var(--shadow-sm);
-  animation: rise 0.2s ease-out;
+  box-shadow: var(--shadow-md);
+  animation: rise 0.4s var(--ease) both;
 }
 
 .pay-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -814,17 +848,19 @@ body {
   position: fixed;
   top: 0; right: 0; bottom: 0;
   width: min(88vw, 390px);
-  background: var(--surface);
+  background: var(--bg-soft);
   border-left: 1px solid var(--border);
   box-shadow: -8px 0 30px rgba(16, 24, 40, 0.12);
   z-index: 40;
   transform: translateX(100%);
-  transition: transform 0.25s ease;
+  transition: transform 0.35s var(--ease);
   display: flex;
   flex-direction: column;
   padding-top: env(safe-area-inset-top);
 }
 .trace-panel.open { transform: translateX(0); }
+/* Closed, its shadow must not show at the edge of the screen. */
+.trace-panel:not(.open) { box-shadow: none; visibility: hidden; transition: transform 0.35s var(--ease), visibility 0s 0.35s; }
 
 .trace-head {
   flex: 0 0 auto;
@@ -849,7 +885,8 @@ body {
 .step {
   position: relative;
   margin-left: 6px;
-  padding: 0 0 16px 18px;
+  padding: 0 0 18px 18px;
+  animation: rise 0.4s var(--ease) both;
   border-left: 2px solid var(--border);
   font-size: 13px;
   line-height: 1.55;
@@ -884,7 +921,7 @@ body {
 
 .step code {
   display: block;
-  background: var(--surface-2);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 7px 9px;
@@ -893,6 +930,33 @@ body {
   font-size: 11.5px;
   color: var(--ink-2);
   white-space: pre-wrap;
+}
+/* Tool results as a short list of facts rather than raw JSON. */
+.obs {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.obs li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.obs li + li { border-top: 1px solid var(--border); }
+.obs .k { color: var(--muted); flex: 0 0 auto; }
+.obs .v { color: var(--ink); font-weight: 500; text-align: right; min-width: 0; overflow-wrap: anywhere; }
+.obs .v.text { text-align: left; font-weight: 400; }
+.obs .score {
+  flex: 0 0 auto;
+  font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums;
+  color: var(--ink-2); background: #eef0f3; border-radius: 6px; padding: 1px 6px; align-self: flex-start;
 }
 
 .meter { margin-top: 8px; }
@@ -936,9 +1000,22 @@ body {
     flex: 0 0 380px;
     box-shadow: none;
     z-index: 1;
-    background: var(--surface);
+    background: var(--bg-soft);
+    margin-right: 0;
+    opacity: 1;
+    transition: margin-right 0.4s var(--ease), opacity 0.3s var(--ease), visibility 0s;
   }
-  .trace-panel.collapsed { display: none; }
+  /* Docked panels use "collapsed", not "open", so the phone rule above that
+     hides a panel without "open" must not apply here. */
+  .trace-panel:not(.collapsed) { visibility: visible; }
+  /* Closed, it slides off to the right and the conversation widens into the
+     space, instead of the layout jumping. */
+  .trace-panel.collapsed {
+    margin-right: -380px;
+    opacity: 0;
+    visibility: hidden;
+    transition: margin-right 0.4s var(--ease), opacity 0.25s var(--ease), visibility 0s 0.4s;
+  }
 
   .icon-btn.close { display: none; }
   .scrim { display: none !important; }
@@ -986,12 +1063,14 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible, summary:focus-v
   border: 1px solid transparent; border-radius: 8px;
   background: transparent; color: var(--muted, #5d6676);
   cursor: pointer;
+  transition: background 0.2s var(--ease), color 0.2s var(--ease), transform 0.15s var(--ease);
 }
+.fb-btn:active { transform: scale(0.9); }
 .fb-btn:hover { background: #f2f4f7; color: var(--ink, #101828); }
 .fb-btn[aria-pressed="true"] { background: #f2f4f7; border-color: #d0d5dd; color: var(--ink, #101828); }
 .fb-btn.down[aria-pressed="true"] { color: #b42318; }
 .fb-status { font-size: 12.5px; color: var(--muted, #5d6676); margin-left: 4px; }
-.fb-form { display: flex; gap: 6px; margin-top: 6px; max-width: 420px; }
+.fb-form { display: flex; gap: 6px; margin-top: 6px; max-width: 420px; animation: rise 0.3s var(--ease) both; }
 .fb-form input {
   flex: 1 1 auto; min-width: 0;
   font: inherit; font-size: 16px;

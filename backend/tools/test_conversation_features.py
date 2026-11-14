@@ -107,6 +107,12 @@ def test_status_question_gets_only_the_status():
         answer = result["answer"]
         assert answer.startswith("Demonstration data for KQ100"), answer[:120]
         assert "Source:" not in answer and answer.count("Demonstration data") == 1, answer
+        # It quotes no policy, so it is not scored as an ungrounded policy answer.
+        assert result["rag_metrics"] == {}, result["rag_metrics"]
+        with database._connect() as conn:
+            scored = conn.execute("SELECT COUNT(*) FROM rag_evaluations WHERE session_id = ?",
+                                  ("status-only-" + q,)).fetchone()[0]
+        assert scored == 0, "a tool-only answer must not enter the groundedness average"
     # A question with a policy subject still gets the policy text.
     result = turn("status-policy", "KQ100 is delayed, what am I entitled to?")
     assert "Source:" in result["answer"], result["answer"][:300]

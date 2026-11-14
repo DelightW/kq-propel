@@ -1540,12 +1540,15 @@
     var headline = spec.sum
       ? present.reduce(function (a, b) { return a + b; }, 0)
       : (present.length ? (present.reduce(function (a, b) { return a + b; }, 0) / present.length).toFixed(2) : "–");
-    head.appendChild(el("span", "mini-value", spec.sum ? headline + " total" : (present.length ? "avg " + headline : "–")));
+    var big = el("span", "mini-value");
+    big.appendChild(el("span", "mini-num", spec.sum ? String(headline) : (present.length ? headline : "–")));
+    big.appendChild(el("span", "mini-unit", spec.sum ? "in 14 days" : (present.length ? "average" : "no answers yet")));
+    head.appendChild(big);
     box.appendChild(head);
     trendsBox.appendChild(box);
 
     var W = Math.max(160, box.clientWidth || 240);
-    var H = 96, top = 8, bottom = 18, left = 2, right = 2;
+    var H = 74, top = 8, bottom = 18, left = 2, right = 2;
     var max = spec.max || Math.max(1, Math.max.apply(null, present.length ? present : [0]));
     var plotH = H - top - bottom;
     var step = (W - left - right) / days.length;

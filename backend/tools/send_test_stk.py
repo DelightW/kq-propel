@@ -7,7 +7,7 @@ nowhere in the corpus, so exposing it through the agent would punch a hole in
 exactly the grounding rule the project is built on. Verification belongs in a
 tool the operator runs deliberately.
 
-    python tools/send_test_stk.py --phone 0712345678 --amount 1
+    python tools/send_test_stk.py --phone 0708374149 --amount 1
 
 Without DARAJA_* credentials this refuses to run rather than printing a
 simulated success, because a simulated success proves nothing about Safaricom.
@@ -36,7 +36,7 @@ def normalize(phone: str) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Send one real STK push.")
-    parser.add_argument("--phone", required=True, help="Safaricom number, e.g. 0712345678")
+    parser.add_argument("--phone", required=True, help="Safaricom number, e.g. 0708374149")
     parser.add_argument("--amount", type=int, default=1, help="Whole shillings (default 1)")
     parser.add_argument("--reference", default="KQPROPEL-TEST")
     parser.add_argument("--description", default="KQ-Propel STK verification")
