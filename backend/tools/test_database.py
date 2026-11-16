@@ -94,6 +94,19 @@ def test_sqlite_stays_the_default():
     assert sqlite3.IntegrityError in database.IntegrityError
 
 
+def test_health_says_which_database_without_its_address():
+    from fastapi.testclient import TestClient
+    from app.main import app
+    client = TestClient(app)
+    assert client.get("/api/health").json()["database"] == "sqlite"
+    config.DATABASE_URL = "postgresql://user:secret@db.example:5432/x"
+    try:
+        body = client.get("/api/health").text
+        assert '"database":"postgresql"' in body and "secret" not in body and "db.example" not in body, body
+    finally:
+        config.DATABASE_URL = ""
+
+
 def test_round_trip_on_postgresql():
     if not PG_URL:
         print("        (skipped: KQ_TEST_POSTGRES_URL not set)")

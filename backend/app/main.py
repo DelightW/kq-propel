@@ -66,7 +66,11 @@ async def schedule_purge():
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "app": config.APP_TITLE}
+    # Which kind of database is in use (never its address), so a deployment
+    # can be checked: "sqlite" on a host that wipes its disk means data is lost
+    # on restart.
+    return {"status": "ok", "app": config.APP_TITLE,
+            "database": "postgresql" if database.using_postgres() else "sqlite"}
 
 
 if FRONTEND_DIR.exists():
