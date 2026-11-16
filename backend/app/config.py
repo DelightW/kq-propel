@@ -94,9 +94,10 @@ LLM_TEMPERATURE = 0.0
 # Second, open-source model used for the comparative evaluation introduced in the
 # corrections document (e.g. Llama 3 / Mistral served locally via Ollama, or a
 # HuggingFace inference endpoint).
-# The default is a tag Ollama actually publishes ("ollama pull llama3.1:8b");
+# The default is a tag Ollama actually publishes ("ollama pull llama3.2:3b", the model
+# used in the evaluation on a laptop without a GPU);
 # the earlier "llama3-8b-instruct" is not one, so a live run always failed.
-OPEN_SOURCE_MODEL_NAME = os.getenv("OPEN_SOURCE_MODEL_NAME", "llama3.1:8b")
+OPEN_SOURCE_MODEL_NAME = os.getenv("OPEN_SOURCE_MODEL_NAME", "llama3.2:3b")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 # Longest the agent waits for a live model before answering from the offline
 # composer instead. A local 8B model on a laptop CPU needs most of this.

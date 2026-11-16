@@ -73,7 +73,7 @@ Every follow-up, unanswerable and handover case in the conversation test set pas
 
 - Swahili questions are read through a small glossary of travel terms and answered in English. Anything outside the glossary is declined.
 - Vague questions ("How much is the fee?") get a clarifying question chosen by keywords, which is a simple rule rather than real understanding.
-- No live language model has been evaluated yet. All the figures above are for the offline composer.
+- Only one live model has been tried. On the same 30 questions, Llama 3.2 3B (run locally through Ollama, no GPU) scored answer relevance 0.706 but groundedness 0.824, below the 0.95 the release gate requires, and took a median of 15.5 seconds per answer. The figure check blocked its two answers with invented numbers. So the offline composer stays the default. GPT-4o-mini hasn't been run (no API key). Results: `docs/results/model_comparison_llama3.2-3b_2026-11-16.json`; re-run with `python tools/compare_models.py`.
 - Rate limits are kept in memory. On the free hosting plan, all data resets on restart.
 
 ## Running it yourself
@@ -102,6 +102,7 @@ If you don't set one, a one-time password is printed when the server starts.
 
 ```bash
 python tools/quality_gate.py      # the release gate: grounding, relevance, conversation cases, fairness
+python tools/compare_models.py    # offline composer vs a local Ollama model, same questions and context
 python tools/test_<name>.py       # each of the 19 suites runs on its own
 ```
 
