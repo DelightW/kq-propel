@@ -173,6 +173,20 @@ def test_vague_question_is_read_against_the_previous_one():
     assert "golf" in result["answer"].lower(), result["answer"][:200]
 
 
+def test_booking_lookup_without_a_reference_asks_for_one():
+    # The welcome screen's "Your booking" suggestion sends this; it used to get booking-fee text.
+    for i, question in enumerate(("I want to look up my booking", "Check my booking", "Find my booking",
+                                  "Show me my booking details")):
+        result = turn(f"cs_lookup_{i}", question)
+        assert "booking reference" in result["answer"] and "surname" in result["answer"], question
+        assert "KQDEMO" in result["answer"] and "sample data" in result["answer"], "the demo is labelled"
+        assert not result.get("sources"), question
+    for question in ("Can I change my booking?", "How much does it cost to cancel my booking?"):
+        assert "I can look that up" not in turn("cs_lookup_policy", question)["answer"], question
+    turn("cs_lookup_9", "Find my booking")
+    assert "Delight Wanjiru" in turn("cs_lookup_9", "booking KQDEMO, surname Wanjiru")["answer"]
+
+
 def test_subject_outside_the_policies_is_declined():
     # "fee" alone used to ground a question about something the policies never mention.
     for question in ("What is the fee for a pet?", "Can I bring my dog?"):
@@ -297,7 +311,7 @@ def test_http_handover_flow():
 
     stranger = TestClient(fastapi_app)
     stranger.post("/api/chat/session")
-    assert stranger.get("/api/chat/handover?after=0").json() == {"handover": None, "messages": []}
+    assert stranger.get("/api/chat/handover?after=0").json() == {"handover": None, "request": None, "messages": []}
 
     assert staff.post(f"/api/admin/handovers/{case_id}/close",
                       json={"note": "Resolved - safe travels."}).status_code == 200

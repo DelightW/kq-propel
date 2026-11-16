@@ -153,7 +153,21 @@ def complete(request_id: int, username: str) -> Dict:
         raise LookupError(request_id)
     if request["status"] != SUBMITTED:
         raise ValueError(f"Only a paid request can be completed (this one is {request['status']}).")
-    return update(request_id, status=COMPLETED, completed_by=username)
+    done = update(request_id, status=COMPLETED, completed_by=username)
+    # Tell the passenger in their chat, the same way a staff reply reaches it.
+    database.log_message(done["session_id"], "agent", completion_message(done))
+    return done
+
+
+def completion_message(request: Dict) -> str:
+    return (f"Your name correction {reference(request)} is done. Our team has updated booking "
+            f"{request.get('booking_reference')}: the passenger name is now {request.get('new_name')}. "
+            f"Please make sure it matches your passport or ID before you travel.")
+
+
+def waiting_for_staff(session_id: str) -> Optional[Dict]:
+    """The session's paid request that staff have not completed yet, if any."""
+    return _get("session_id = ? AND status = ?", (session_id, SUBMITTED))
 
 
 # ------------------------------------------------------------------ the change itself

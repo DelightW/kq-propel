@@ -912,13 +912,44 @@ def _request_status_reply(request: Dict) -> str:
     }.get(request["status"], f"Request {ref} is not finished yet.")
 
 
+_LOOKUP_RE = re.compile(
+    r"\b(look\s*(?:up|at)|check|find|see|view|show|open|pull\s+up|access|retrieve|get)\b.{0,20}?"
+    r"\b(my|our|a)\s+(booking|reservation|ticket|pnr|trip)\b"
+    r"|\b(booking|reservation|ticket)\s+(details|information|info)\b"
+    r"|^\s*(my|your)\s+(booking|reservation)\s*[.?!]*\s*$", re.I)
+# Questions about doing something to a booking are policy questions, not a lookup.
+_BOOKING_POLICY_RE = re.compile(
+    r"\b(change|changing|cancel\w*|refund\w*|upgrade\w*|fees?|costs?|charges?|price|how\s+much|"
+    r"bags?|baggage|luggage|allowance|correct\w*|name)\b", re.I)
+
+
+def _wants_booking_lookup(message: str) -> bool:
+    return bool(_LOOKUP_RE.search(message)) and not _BOOKING_POLICY_RE.search(message)
+
+
+def _ask_for_booking() -> str:
+    text = ("I can look that up. Please send your **booking reference** (the six-character code on your "
+            "e-ticket or confirmation email) together with the **surname** on the booking, for example "
+            "\"booking ABC123, surname Kanja\".")
+    if not config.KQ_BOOKING_API_URL:
+        text += ("\n\nThis prototype is not connected to Kenya Airways' booking system, so only demonstration "
+                 "bookings can be found. To try one, use booking **KQDEMO** with surname **Wanjiru** "
+                 "(sample data, not a real booking).")
+    return text
+
+
 def _booking_turn(session_id: str, message: str, trace: List[Dict],
                   sentiment_result: Dict) -> Optional[Dict]:
     """Looks up a booking when the message gives a booking reference. None
     when it gives none."""
     reference = booking.find_reference(message)
     if not reference:
-        return None
+        if not _wants_booking_lookup(message):
+            return None
+        trace.append({"step": "thought",
+                       "content": "Passenger wants to see a booking but gave no reference; asking for it."})
+        return _finalize_direct(session_id, message, _apply_empathy(_ask_for_booking(), sentiment_result),
+                                trace, sentiment_result)
     surname = booking.find_surname(message)
     if not surname:
         trace.append({"step": "thought",

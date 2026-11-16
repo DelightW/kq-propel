@@ -749,7 +749,7 @@
               }).then(function (r) {
                 return r.json().then(function (body) {
                   if (!r.ok) { throw new Error(body.detail || ("HTTP " + r.status)); }
-                  reqStatus.textContent = q.reference + " marked done.";
+                  reqStatus.textContent = q.reference + " marked done. The passenger has been told in their chat.";
                   return loadRequests();
                 });
               }).catch(function (err) { reqStatus.textContent = err.message; btn.disabled = false; });

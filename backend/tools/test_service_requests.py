@@ -151,6 +151,33 @@ def test_staff_routes():
     assert "view_service_requests" in actions
 
 
+def test_passenger_is_told_in_the_chat_when_staff_finish():
+    from fastapi.testclient import TestClient
+    from app.main import app as fastapi_app
+    passenger = TestClient(fastapi_app)
+    passenger.post("/api/chat/session")
+    for text in ("I want to correct my name", "booking KQDLW1, surname Wangui", "Delight Wambui", "yes",
+                 "M-Pesa", "0708374149"):
+        assert passenger.post("/api/chat", json={"message": text}).status_code == 200, text
+    sid = passenger.cookies.get("kq_session")
+    req = service_requests.latest(sid)
+    assert passenger.get("/api/chat/handover").json()["request"] is None, "not paid yet: nothing to wait for"
+    with database._connect() as conn:
+        tx_id = conn.execute("SELECT id FROM transactions WHERE quote_id = ?", (req["quote_id"],)).fetchone()[0]
+    payments.transition(tx_id, payments.PAID, receipt="UKTEST124")
+    before = passenger.get("/api/chat/handover").json()
+    assert before["request"] == service_requests.reference(req) and before["messages"] == [], before
+    staff = TestClient(fastapi_app)
+    staff.post("/api/admin/login", json={"username": config.ADMIN_USERNAME, "password": config.ADMIN_PASSWORD})
+    assert staff.post(f"/api/admin/requests/{req['id']}/complete").status_code == 200
+    after = passenger.get("/api/chat/handover").json()
+    assert after["request"] is None, after
+    assert len(after["messages"]) == 1 and "is done" in after["messages"][0]["message"], after
+    assert "Delight Wambui" in after["messages"][0]["message"]
+    history = passenger.get("/api/chat/history").json()["messages"]
+    assert history[-1]["role"] == "agent" and "is done" in history[-1]["message"], "kept after a reload"
+
+
 def test_short_replies_are_not_read_as_frustration():
     for reply in ("yes", "no", "card", "0708374149", "M-Pesa"):
         assert sentiment.classify_frustration(reply)["label"] == "calm", reply

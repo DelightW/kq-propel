@@ -492,7 +492,10 @@
         return r.json();
       }).then(function (d) {
         showPaymentStatus(line, d.status);
-        if (d.status === "paid") { addReceiptLink(card, reference); }
+        if (d.status === "paid") {
+          addReceiptLink(card, reference);
+          pollHandover();   // a paid name correction: wait for staff to finish it
+        }
         if (d.status === "failed" || d.status === "needs_review") {
           card.classList.add("failed");
         }
@@ -528,8 +531,8 @@
           lastAgentMessageId = Math.max(lastAgentMessageId, m.id);
           addBubble("agent", m.message);
         });
-        if (d.handover) {
-          setTimeout(tick, 5000);
+        if (d.handover || d.request) {
+          setTimeout(tick, d.handover ? 5000 : 10000);
         } else {
           handoverPolling = false;
         }

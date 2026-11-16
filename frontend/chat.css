@@ -111,17 +111,6 @@ body {
 
 .topbar-actions { display: flex; align-items: center; gap: 10px; }
 
-.proto-badge {
-  display: none;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--ink-2);
-  background: transparent;
-  border: 1px solid var(--border);
-  padding: 4px 10px;
-  border-radius: 999px;
-  white-space: nowrap;
-}
 
 .ghost-btn {
   display: inline-flex; align-items: center; gap: 7px;
@@ -978,7 +967,6 @@ body {
 /* ============================ tablet / laptop ============================ */
 @media (min-width: 560px) {
   .suggestions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .proto-badge { display: inline-block; }
   .btn-label { display: inline; }
 }
 

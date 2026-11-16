@@ -11,7 +11,8 @@ from typing import Optional
 from fastapi import APIRouter, Cookie, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
-from app import auth, config, database, handover, memory, payments, privacy, ratelimit, receipts
+from app import (auth, config, database, handover, memory, payments, privacy, ratelimit, receipts,
+                 service_requests)
 from app.agent import run_agent_turn
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -130,8 +131,12 @@ def handover_updates(after: int = 0, kq_session: Optional[str] = Cookie(default=
     if not auth.chat_session_is_valid(kq_session):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No session.")
     ratelimit.check_http("poll_session", kq_session)
+    waiting = service_requests.waiting_for_staff(kq_session)
     return {
         "handover": handover.status_for_passenger(kq_session),
+        # A paid name correction staff have not finished: the chat keeps
+        # polling so the "done" message appears without a reload.
+        "request": service_requests.reference(waiting) if waiting else None,
         "messages": handover.messages_since(kq_session, max(after, 0)),
     }
 
