@@ -1,859 +1,902 @@
 {
+  "run_at": "2026-11-16T15:33:08+00:00",
   "questions": 30,
-  "live_model": "llama3.2:3b",
-  "composer": {
-    "answered": 30,
-    "errors": 0,
-    "context_relevance": 0.405,
-    "groundedness": 1.0,
-    "answer_relevance": 0.633,
-    "all_keys_found": 14,
-    "median_seconds": 0.0,
-    "max_seconds": 0.03
+  "metric_version": 2,
+  "is_model_comparison": false,
+  "skipped": {},
+  "summary": {
+    "ollama": {
+      "model": "llama3.2:3b",
+      "is_live_model": true,
+      "context_relevance": 0.405,
+      "groundedness": 0.824,
+      "answer_relevance": 0.706,
+      "withheld_answers": 2,
+      "questions_with_every_key": 14,
+      "errors": 0,
+      "median_seconds": 16.28,
+      "max_seconds": 33.59
+    },
+    "offline": {
+      "model": "extractive-broad (offline, not an LLM)",
+      "is_live_model": false,
+      "context_relevance": 0.405,
+      "groundedness": 1.0,
+      "answer_relevance": 0.633,
+      "withheld_answers": 0,
+      "questions_with_every_key": 14,
+      "errors": 0,
+      "median_seconds": 0.0,
+      "max_seconds": 0.01
+    }
   },
-  "live": {
-    "answered": 30,
-    "errors": 0,
-    "context_relevance": 0.405,
-    "groundedness": 0.824,
-    "answer_relevance": 0.706,
-    "all_keys_found": 14,
-    "median_seconds": 15.54,
-    "max_seconds": 216.33,
-    "passed_figure_check": 28
+  "recommendation": {
+    "CHAT_MODEL_PROVIDER": "offline",
+    "model": "extractive-broad (offline, not an LLM)",
+    "note": "No live model reached groundedness 0.95."
   },
-  "rows": [
+  "results": [
     {
       "id": "q1",
       "query": "How many bags can I check in Economy on a flight from Nairobi to London?",
-      "composer": {
-        "model": "extractive-broad (offline, not an LLM)",
-        "answer": "On Bangkok to Guangzhou, on Nairobi to Mumbai, and on domestic Kenyan flights, Economy guests may check one piece of up to 23kg and Business guests one piece of up to 32kg.\n\nSource: Baggage Allowance Policy - Section 2: Routes With a One-Piece Allowance (version 1.0, as published 23 Sep 2026)",
-        "error": null,
-        "seconds": 0.03,
-        "context_relevance": 0.641,
-        "groundedness": 1.0,
-        "answer_relevance": 1.0,
-        "missing_keys": []
-      },
-      "live": {
-        "model": "llama3.2:3b",
-        "answer": "According to Section 1 of the Baggage Allowance Policy, on journeys between Africa and Europe or the Americas, Economy guests may check two pieces of up to 23kg (50lb) each. Since Nairobi to London is a route between Africa and Europe, the applicable policy section is Section 1.\n\nTherefore, as an Economy guest, you are allowed to check in two pieces of baggage, each weighing up to 23kg.",
-        "error": null,
-        "seconds": 12.86,
-        "context_relevance": 0.641,
-        "groundedness": 1.0,
-        "answer_relevance": 1.0,
-        "missing_keys": [],
-        "withheld": null
+      "models": {
+        "ollama": {
+          "answer": "According to Section 1 of the Baggage Allowance Policy, on journeys between Africa and Europe or the Americas, Economy guests may check two pieces of up to 23kg (50lb) each. Since Nairobi to London is a route between Africa and Europe, the applicable policy section is Section 1.\n\nTherefore, as an Economy guest, you are allowed to check in two pieces of baggage, each weighing up to 23kg.",
+          "error": null,
+          "withheld": null,
+          "seconds": 30.76,
+          "missing_keys": [],
+          "context_relevance": 0.641,
+          "groundedness": 1.0,
+          "answer_relevance": 1.0
+        },
+        "offline": {
+          "answer": "On Bangkok to Guangzhou, on Nairobi to Mumbai, and on domestic Kenyan flights, Economy guests may check one piece of up to 23kg and Business guests one piece of up to 32kg.\n\nSource: Baggage Allowance Policy - Section 2: Routes With a One-Piece Allowance (version 1.0, as published 23 Sep 2026)",
+          "error": null,
+          "withheld": null,
+          "seconds": 0.01,
+          "missing_keys": [],
+          "context_relevance": 0.641,
+          "groundedness": 1.0,
+          "answer_relevance": 1.0
+        }
       }
     },
     {
       "id": "q2",
       "query": "What is the weight limit for hand baggage in Economy on a flight to the United States?",
-      "composer": {
-        "model": "extractive-broad (offline, not an LLM)",
-        "answer": "The Economy weight limit is 12kg (26lb) on flights to and from the European Union, the United States and the United Kingdom, and 10kg (22lb) on all other routes.\n\nSource: Hand Baggage Policy - Section 1: Cabin Allowance by Class (version 1.0, as published 23 Sep 2026)",
-        "error": null,
-        "seconds": 0.0,
-        "context_relevance": 0.45,
-        "groundedness": 1.0,
-        "answer_relevance": 1.0,
-        "missing_keys": []
-      },
-      "live": {
-        "model": "llama3.2:3b",
-        "answer": "According to Section 1 of the Hand Baggage Policy, the Economy weight limit is 12kg (26lb) on flights to and from the European Union, the United States, and the United Kingdom.",
-        "error": null,
-        "seconds": 7.11,
-        "context_relevance": 0.45,
-        "groundedness": 1.0,
-        "answer_relevance": 1.0,
-        "missing_keys": [],
-        "withheld": null
+      "models": {
+        "ollama": {
+          "answer": "According to Section 1 of the Hand Baggage Policy, the Economy weight limit is 12kg (26lb) on flights to and from the European Union, the United States, and the United Kingdom.",
+          "error": null,
+          "withheld": null,
+          "seconds": 16.01,
+          "missing_keys": [],
+          "context_relevance": 0.45,
+          "groundedness": 1.0,
+          "answer_relevance": 1.0
+        },
+        "offline": {
+          "answer": "The Economy weight limit is 12kg (26lb) on flights to and from the European Union, the United States and the United Kingdom, and 10kg (22lb) on all other routes.\n\nSource: Hand Baggage Policy - Section 1: Cabin Allowance by Class (version 1.0, as published 23 Sep 2026)",
+          "error": null,
+          "withheld": null,
+          "seconds": 0.0,
+          "missing_keys": [],
+          "context_relevance": 0.45,
+          "groundedness": 1.0,
+          "answer_relevance": 1.0
+        }
       }
     },
     {
       "id": "q3",
       "query": "How much is the heavy bag fee for an extra bag to Europe if I am starting my journey in Nairobi?",
-      "composer": {
-        "model": "extractive-broad (offline, not an LLM)",
-        "answer": "Journeys beginning at the Nairobi hub are charged 75 for Europe, 75 for the Americas, 50 for Asia, 50 for the Middle East, 50 within Africa and 25 on domestic services. Journeys beginning at all other points are charged 100 for Europe, 100 for the Americas, 100 for Asia, 75 for the Middle East, 60 within Africa and 25 on domestic services. Kenya Airways publishes this fee table without a currency label; the administrative fees listed on the same page are stated in US dollars.\n\nSource: Excess Baggage Fees Policy - Section 2: Heavy Bag Fees by Region (version 1.0, as published 23 Sep 2026)",
-        "error": null,
-        "seconds": 0.0,
-        "context_relevance": 0.72,
-        "groundedness": 1.0,
-        "answer_relevance": 0.5,
-        "missing_keys": [
-          "no currency label"
-        ]
-      },
-      "live": {
-        "model": "llama3.2:3b",
-        "answer": "According to Section 1 of the Excess Baggage Fees Policy, the heavy bag fee for journeys beginning at the Nairobi hub to Europe is $75.",
-        "error": null,
-        "seconds": 14.76,
-        "context_relevance": 0.72,
-        "groundedness": 1.0,
-        "answer_relevance": 0.5,
-        "missing_keys": [
-          "no currency label"
-        ],
-        "withheld": null
+      "models": {
+        "ollama": {
+          "answer": "According to Section 1 of the Excess Baggage Fees Policy, the heavy bag fee for journeys beginning at the Nairobi hub to Europe is $75.",
+          "error": null,
+          "withheld": null,
+          "seconds": 14.75,
+          "missing_keys": [
+            "no currency label"
+          ],
+          "context_relevance": 0.72,
+          "groundedness": 1.0,
+          "answer_relevance": 0.5
+        },
+        "offline": {
+          "answer": "Journeys beginning at the Nairobi hub are charged 75 for Europe, 75 for the Americas, 50 for Asia, 50 for the Middle East, 50 within Africa and 25 on domestic services. Journeys beginning at all other points are charged 100 for Europe, 100 for the Americas, 100 for Asia, 75 for the Middle East, 60 within Africa and 25 on domestic services. Kenya Airways publishes this fee table without a currency label; the administrative fees listed on the same page are stated in US dollars.\n\nSource: Excess Baggage Fees Policy - Section 2: Heavy Bag Fees by Region (version 1.0, as published 23 Sep 2026)",
+          "error": null,
+          "withheld": null,
+          "seconds": 0.0,
+          "missing_keys": [
+            "no currency label"
+          ],
+          "context_relevance": 0.72,
+          "groundedness": 1.0,
+          "answer_relevance": 0.5
+        }
       }
     },
     {
       "id": "q4",
       "query": "My bag never arrived in Amsterdam. What can I claim after a day of waiting?",
-      "composer": {
-        "model": "extractive-broad (offline, not an LLM)",
-        "answer": "A guest whose baggage does not arrive should report it before leaving the airport so that a file is created and a file reference number is issued. That reference number is required for all tracing and for any later claim. Tracing can be followed online through the WorldTracer service at worldtracer.aero/filedsp/kq.htm, and the baggage tracking line is +254-20-3274747.\n\nSource: Delayed Baggage Policy - Section 1: Reporting Baggage That Has Not Arrived (version 1.0, as published 23 Sep 2026)",
-        "error": null,
-        "seconds": 0.0,
-        "context_relevance": 0.281,
-        "groundedness": 1.0,
-        "answer_relevance": 0.333,
-        "missing_keys": [
-          "24 hours",
-          "100 US dollars"
-        ]
-      },
-      "live": {
-        "model": "llama3.2:3b",
-        "answer": "I'm so sorry to hear that your bag didn't arrive in Amsterdam. According to our Delayed Baggage Policy (Section 1: Reporting Baggage That Has Not Arrived), you should have reported your missing bag before leaving the airport so that a file can be created and a file reference number can be issued. \n\nSince you didn't report it before leaving the airport, you can still report it to us, but you'll need to do so as soon as possible. You can report it to our baggage tracing line at +254-20-3274747 or follow the tracing process online through the WorldTracer service at worldtracer.aero/filedsp/kq.htm.\n\nPlease note that you'll need to submit a written claim for compensation within seven days of your arrival, as stated in our Delayed Baggage Policy (Section 4: Deadline for Compensation Claims).",
-        "error": null,
-        "seconds": 31.11,
-        "context_relevance": 0.281,
-        "groundedness": 0.6,
-        "answer_relevance": 0.333,
-        "missing_keys": [
-          "24 hours",
-          "100 US dollars"
-        ],
-        "withheld": null
+      "models": {
+        "ollama": {
+          "answer": "I'm so sorry to hear that your bag didn't arrive in Amsterdam. According to our Delayed Baggage Policy (Section 1: Reporting Baggage That Has Not Arrived), you should have reported your missing bag before leaving the airport so that a file can be created and a file reference number can be issued. \n\nSince you didn't report it before leaving the airport, you can still report it to us, but you'll need to do so as soon as possible. You can report it to our baggage tracing line at +254-20-3274747 or follow the tracing process online through the WorldTracer service at worldtracer.aero/filedsp/kq.htm.\n\nPlease note that you'll need to submit a written claim for compensation within seven days of your arrival, as stated in our Delayed Baggage Policy (Section 4: Deadline for Compensation Claims).",
+          "error": null,
+          "withheld": null,
+          "seconds": 30.97,
+          "missing_keys": [
+            "24 hours",
+            "100 US dollars"
+          ],
+          "context_relevance": 0.281,
+          "groundedness": 0.6,
+          "answer_relevance": 0.333
+        },
+        "offline": {
+          "answer": "A guest whose baggage does not arrive should report it before leaving the airport so that a file is created and a file reference number is issued. That reference number is required for all tracing and for any later claim. Tracing can be followed online through the WorldTracer service at worldtracer.aero/filedsp/kq.htm, and the baggage tracking line is +254-20-3274747.\n\nSource: Delayed Baggage Policy - Section 1: Reporting Baggage That Has Not Arrived (version 1.0, as published 23 Sep 2026)",
+          "error": null,
+          "withheld": null,
+          "seconds": 0.0,
+          "missing_keys": [
+            "24 hours",
+            "100 US dollars"
+          ],
+          "context_relevance": 0.281,
+          "groundedness": 1.0,
+          "answer_relevance": 0.333
+        }
       }
     },
     {
       "id": "q5",
       "query": "What time does online check-in close?",
-      "composer": {
-        "model": "extractive-broad (offline, not an LLM)",
-        "answer": "Online check-in closes one hour before departure on all services. Online and mobile check-in opens 48 hours before departure on international services. On flights involving the United States, check-in opens 24 hours before departure.\n\nSource: Checkin Policy - Section 1: Online and Mobile Check-in (version 1.0, as published 23 Sep 2026)",
-        "error": null,
-        "seconds": 0.0,
-        "context_relevance": 0.435,
-        "groundedness": 1.0,
-        "answer_relevance": 1.0,
-        "missing_keys": []
-      },
-      "live": {
-        "model": "llama3.2:3b",
-        "answer": "According to the provided context, online check-in closes one hour before departure on all services. (Section 1: Online and Mobile Check-in)",
-        "error": null,
-        "seconds": 9.99,
-        "context_relevance": 0.435,
-        "groundedness": 1.0,
-        "answer_relevance": 1.0,
-        "missing_keys": [],
-        "withheld": null
+      "models": {
+        "ollama": {
+          "answer": "According to the provided context, online check-in closes one hour before departure on all services. (Section 1: Online and Mobile Check-in)",
+          "error": null,
+          "withheld": null,
+          "seconds": 10.05,
+          "missing_keys": [],
+          "context_relevance": 0.435,
+          "groundedness": 1.0,
+          "answer_relevance": 1.0
+        },
+        "offline": {
+          "answer": "Online check-in closes one hour before departure on all services. Online and mobile check-in opens 48 hours before departure on international services. On flights involving the United States, check-in opens 24 hours before departure.\n\nSource: Checkin Policy - Section 1: Online and Mobile Check-in (version 1.0, as published 23 Sep 2026)",
+          "error": null,
+          "withheld": null,
+          "seconds": 0.0,
+          "missing_keys": [],
+          "context_relevance": 0.435,
+          "groundedness": 1.0,
+          "answer_relevance": 1.0
+        }
       }
     },
     {
       "id": "q6",
       "query": "How long will my refund take to come back to my card?",
-      "composer": {
-        "model": "extractive-broad (offline, not an LLM)",
-        "answer": "Refunds to a card are returned to the original card and are processed within 21 to 30 business days. Local and international credit and debit cards are accepted.\n\nSource: Payment Methods Policy - Section 4: Card Payment (version 1.0, as published 23 Sep 2026)",
-        "error": null,
-        "seconds": 0.0,
-        "context_relevance": 0.348,
-        "groundedness": 1.0,
-        "answer_relevance": 0.5,
-        "missing_keys": [
-          "original form of payment"
-        ]
-      },
-      "live": {
-        "model": "llama3.2:3b",
-        "answer": "According to Section 4 of the Payment Methods Policy, refunds to a card are processed within 21 to 30 business days.",
-        "error": null,
-        "seconds": 10.14,
-        "context_relevance": 0.348,
-        "groundedness": 1.0,
-        "answer_relevance": 0.5,
-        "missing_keys": [
-          "original form of payment"
-        ],
-        "withheld": null
+      "models": {
+        "ollama": {
+          "answer": "According to Section 4 of the Payment Methods Policy, refunds to a card are processed within 21 to 30 business days.",
+          "error": null,
+          "withheld": null,
+          "seconds": 10.36,
+          "missing_keys": [
+            "original form of payment"
+          ],
+          "context_relevance": 0.348,
+          "groundedness": 1.0,
+          "answer_relevance": 0.5
+        },
+        "offline": {
+          "answer": "Refunds to a card are returned to the original card and are processed within 21 to 30 business days. Local and international credit and debit cards are accepted.\n\nSource: Payment Methods Policy - Section 4: Card Payment (version 1.0, as published 23 Sep 2026)",
+          "error": null,
+          "withheld": null,
+          "seconds": 0.0,
+          "missing_keys": [
+            "original form of payment"
+          ],
+          "context_relevance": 0.348,
+          "groundedness": 1.0,
+          "answer_relevance": 0.5
+        }
       }
     },
     {
       "id": "q7",
       "query": "I want to bring my golf clubs from Nairobi to Paris. What will that cost?",
-      "composer": {
-        "model": "extractive-broad (offline, not an LLM)",
-        "answer": "Charges for golf equipment are doubled where the booking is a round trip.\n\nSource: Special Baggage Policy - Section 3: Rates for Bulky Sporting Equipment (version 1.0, as published 23 Sep 2026)",
-        "error": null,
-        "seconds": 0.0,
-        "context_relevance": 0.474,
-        "groundedness": 1.0,
-        "answer_relevance": 0.5,
-        "missing_keys": [
-          "110"
-        ]
-      },
-      "live": {
-        "model": "llama3.2:3b",
-        "answer": "According to Section 2: Rates for Common Sporting Equipment, golf equipment is charged at 110 between Africa and Europe or the Americas. Since you're traveling from Nairobi (Africa) to Paris (Europe), the charge will be 110.",
-        "error": null,
-        "seconds": 15.12,
-        "context_relevance": 0.474,
-        "groundedness": 1.0,
-        "answer_relevance": 0.5,
-        "missing_keys": [
-          "doubled"
-        ],
-        "withheld": null
+      "models": {
+        "ollama": {
+          "answer": "According to Section 2: Rates for Common Sporting Equipment, golf equipment is charged at 110 between Africa and Europe or the Americas. Since you're traveling from Nairobi (Africa) to Paris (Europe), the charge will be 110.",
+          "error": null,
+          "withheld": null,
+          "seconds": 15.14,
+          "missing_keys": [
+            "doubled"
+          ],
+          "context_relevance": 0.474,
+          "groundedness": 1.0,
+          "answer_relevance": 0.5
+        },
+        "offline": {
+          "answer": "Charges for golf equipment are doubled where the booking is a round trip.\n\nSource: Special Baggage Policy - Section 3: Rates for Bulky Sporting Equipment (version 1.0, as published 23 Sep 2026)",
+          "error": null,
+          "withheld": null,
+          "seconds": 0.0,
+          "missing_keys": [
+            "110"
+          ],
+          "context_relevance": 0.474,
+          "groundedness": 1.0,
+          "answer_relevance": 0.5
+        }
       }
     },
     {
       "id": "q8",
       "query": "Can I pay for my ticket with M-Pesa?",
-      "composer": {
-        "model": "extractive-broad (offline, not an LLM)",
-        "answer": "Once payment has been confirmed, the electronic ticket is issued and sent to the guest by email.\n\nSource: Payment Methods Policy - Section 3: Ticket Issue After Payment (version 1.0, as published 23 Sep 2026)",
-        "error": null,
-        "seconds": 0.0,
-        "context_relevance": 0.374,
-        "groundedness": 1.0,
-        "answer_relevance": 0.0,
-        "missing_keys": [
-          "M-Pesa",
-          "paybill"
-        ]
-      },
-      "live": {
-        "model": "llama3.2:3b",
-        "answer": "Yes, you can pay for your ticket with M-Pesa, as it is one of the accepted mobile money services in Kenya, as per Section 1 of the Payment Methods Policy.",
-        "error": null,
-        "seconds": 13.19,
-        "context_relevance": 0.374,
-        "groundedness": 1.0,
-        "answer_relevance": 0.5,
-        "missing_keys": [
-          "paybill"
-        ],
-        "withheld": null
+      "models": {
+        "ollama": {
+          "answer": "Yes, you can pay for your ticket with M-Pesa, as it is one of the accepted mobile money services in Kenya, as per Section 1 of the Payment Methods Policy.",
+          "error": null,
+          "withheld": null,
+          "seconds": 13.63,
+          "missing_keys": [
+            "paybill"
+          ],
+          "context_relevance": 0.374,
+          "groundedness": 1.0,
+          "answer_relevance": 0.5
+        },
+        "offline": {
+          "answer": "Once payment has been confirmed, the electronic ticket is issued and sent to the guest by email.\n\nSource: Payment Methods Policy - Section 3: Ticket Issue After Payment (version 1.0, as published 23 Sep 2026)",
+          "error": null,
+          "withheld": null,
+          "seconds": 0.0,
+          "missing_keys": [
+            "M-Pesa",
+            "paybill"
+          ],
+          "context_relevance": 0.374,
+          "groundedness": 1.0,
+          "answer_relevance": 0.0
+        }
       }
     },
     {
       "id": "q9",
       "query": "How late can I arrive at the airport for a domestic flight to Mombasa?",
-      "composer": {
-        "model": "extractive-broad (offline, not an LLM)",
-        "answer": "Domestic check-in counters close 30 minutes before departure. Guests travelling on domestic services must complete airport check-in at least one and a half hours before departure, in every class of travel.\n\nSource: Checkin Policy - Section 3: Domestic Airport Check-in (version 1.0, as published 23 Sep 2026)",
-        "error": null,
-        "seconds": 0.0,
-        "context_relevance": 0.398,
-        "groundedness": 1.0,
-        "answer_relevance": 1.0,
-        "missing_keys": []
-      },
-      "live": {
-        "model": "llama3.2:3b",
-        "answer": "I'd be happy to help you with your question. However, I need to clarify that the provided context does not specify the airport for the domestic flight to Mombasa. The context only provides general information about check-in policies for domestic and international flights.\n\nIf you could provide more information about the specific airport you will be departing from, I would be happy to try and assist you further.",
-        "error": null,
-        "seconds": 15.48,
-        "context_relevance": 0.398,
-        "groundedness": 0.333,
-        "answer_relevance": 0.0,
-        "missing_keys": [
-          "one and a half hours",
-          "30 minutes"
-        ],
-        "withheld": null
+      "models": {
+        "ollama": {
+          "answer": "I'd be happy to help you with your question. However, I need to clarify that the provided context does not specify the airport for the domestic flight to Mombasa. The context only provides general information about check-in policies for domestic and international flights.\n\nIf you could provide more information about the specific airport you will be departing from, I would be happy to try and assist you further.",
+          "error": null,
+          "withheld": null,
+          "seconds": 16.25,
+          "missing_keys": [
+            "one and a half hours",
+            "30 minutes"
+          ],
+          "context_relevance": 0.398,
+          "groundedness": 0.333,
+          "answer_relevance": 0.0
+        },
+        "offline": {
+          "answer": "Domestic check-in counters close 30 minutes before departure. Guests travelling on domestic services must complete airport check-in at least one and a half hours before departure, in every class of travel.\n\nSource: Checkin Policy - Section 3: Domestic Airport Check-in (version 1.0, as published 23 Sep 2026)",
+          "error": null,
+          "withheld": null,
+          "seconds": 0.0,
+          "missing_keys": [],
+          "context_relevance": 0.398,
+          "groundedness": 1.0,
+          "answer_relevance": 1.0
+        }
       }
     },
     {
       "id": "q10",
       "query": "My surname is spelled wrong by two letters on an international ticket. What do I pay to fix it?",
-      "composer": {
-        "model": "extractive-broad (offline, not an LLM)",
-        "answer": "Once payment has been confirmed, the electronic ticket is issued and sent to the guest by email. Correcting up to three characters of a name costs 15 US dollars on a domestic booking and 75 US dollars on an international booking.\n\nSource: Payment Methods Policy - Section 3: Ticket Issue After Payment (version 1.0, as published 23 Sep 2026); Refund Policy - Section 5: Name Corrections and Name Changes (version 1.0, as published 23 Sep 2026)",
-        "error": null,
-        "seconds": 0.0,
-        "context_relevance": 0.306,
-        "groundedness": 1.0,
-        "answer_relevance": 1.0,
-        "missing_keys": []
-      },
-      "live": {
-        "model": "llama3.2:3b",
-        "answer": "According to Section 5: Name Corrections and Name Changes, correcting up to three characters of a name costs 75 US dollars on an international booking. Since you mentioned your surname is spelled wrong by two letters, you would need to correct only one character, so the fee would be 75 US dollars.",
-        "error": null,
-        "seconds": 15.72,
-        "context_relevance": 0.306,
-        "groundedness": 0.5,
-        "answer_relevance": 1.0,
-        "missing_keys": [],
-        "withheld": "states figures not in the policy context (1)"
+      "models": {
+        "ollama": {
+          "answer": "According to Section 5: Name Corrections and Name Changes, correcting up to three characters of a name costs 75 US dollars on an international booking. Since you mentioned your surname is spelled wrong by two letters, you would need to correct only one character, so the fee would be 75 US dollars.",
+          "error": null,
+          "withheld": "states figures not in the policy context (1)",
+          "seconds": 16.32,
+          "missing_keys": [],
+          "context_relevance": 0.306,
+          "groundedness": 0.5,
+          "answer_relevance": 1.0
+        },
+        "offline": {
+          "answer": "Once payment has been confirmed, the electronic ticket is issued and sent to the guest by email. Correcting up to three characters of a name costs 15 US dollars on a domestic booking and 75 US dollars on an international booking.\n\nSource: Payment Methods Policy - Section 3: Ticket Issue After Payment (version 1.0, as published 23 Sep 2026); Refund Policy - Section 5: Name Corrections and Name Changes (version 1.0, as published 23 Sep 2026)",
+          "error": null,
+          "withheld": null,
+          "seconds": 0.0,
+          "missing_keys": [],
+          "context_relevance": 0.306,
+          "groundedness": 1.0,
+          "answer_relevance": 1.0
+        }
       }
     },
     {
       "id": "q11",
       "query": "Can I take my electric bicycle on the plane?",
-      "composer": {
-        "model": "extractive-broad (offline, not an LLM)",
-        "answer": "Electric bicycles are not accepted for carriage. A maximum of three bicycles may be carried on Embraer 170 and 190 aircraft.\n\nSource: Special Baggage Policy - Section 6: Bicycles and Aircraft Restrictions (version 1.0, as published 23 Sep 2026)",
-        "error": null,
-        "seconds": 0.0,
-        "context_relevance": 0.25,
-        "groundedness": 1.0,
-        "answer_relevance": 1.0,
-        "missing_keys": []
-      },
-      "live": {
-        "model": "llama3.2:3b",
-        "answer": "I'm afraid not. According to our Special Baggage Policy (Section 6: Bicycles and Aircraft Restrictions), electric bicycles are not accepted for carriage.",
-        "error": null,
-        "seconds": 10.19,
-        "context_relevance": 0.25,
-        "groundedness": 0.0,
-        "answer_relevance": 1.0,
-        "missing_keys": [],
-        "withheld": null
+      "models": {
+        "ollama": {
+          "answer": "I'm afraid not. According to our Special Baggage Policy (Section 6: Bicycles and Aircraft Restrictions), electric bicycles are not accepted for carriage.",
+          "error": null,
+          "withheld": null,
+          "seconds": 10.63,
+          "missing_keys": [],
+          "context_relevance": 0.25,
+          "groundedness": 0.0,
+          "answer_relevance": 1.0
+        },
+        "offline": {
+          "answer": "Electric bicycles are not accepted for carriage. A maximum of three bicycles may be carried on Embraer 170 and 190 aircraft.\n\nSource: Special Baggage Policy - Section 6: Bicycles and Aircraft Restrictions (version 1.0, as published 23 Sep 2026)",
+          "error": null,
+          "withheld": null,
+          "seconds": 0.0,
+          "missing_keys": [],
+          "context_relevance": 0.25,
+          "groundedness": 1.0,
+          "answer_relevance": 1.0
+        }
       }
     },
     {
       "id": "q12",
       "query": "I am a Gold member of Asante Rewards. Do I get any extra baggage?",
-      "composer": {
-        "model": "extractive-broad (offline, not an LLM)",
-        "answer": "Members of the Asante Rewards programme at Silver, Gold or Platinum tier receive one extra checked piece on every route.\n\nSource: Baggage Allowance Policy - Section 3: Additional Piece for Asante Members (version 1.0, as published 23 Sep 2026)",
-        "error": null,
-        "seconds": 0.0,
-        "context_relevance": 0.386,
-        "groundedness": 1.0,
-        "answer_relevance": 1.0,
-        "missing_keys": []
-      },
-      "live": {
-        "model": "llama3.2:3b",
-        "answer": "As a Gold member of Asante Rewards, you are eligible for one extra checked piece on every route. The additional piece is limited to 23kg for Economy travel and 32kg for Business travel, matching the weight of your standard allowance. (Section 3: Additional Piece for Asante Members)",
-        "error": null,
-        "seconds": 16.87,
-        "context_relevance": 0.386,
-        "groundedness": 1.0,
-        "answer_relevance": 1.0,
-        "missing_keys": [],
-        "withheld": null
+      "models": {
+        "ollama": {
+          "answer": "As a Gold member of Asante Rewards, you are eligible for one extra checked piece on every route. The additional piece is limited to 23kg for Economy travel and 32kg for Business travel, matching the weight of your standard allowance. (Section 3: Additional Piece for Asante Members)",
+          "error": null,
+          "withheld": null,
+          "seconds": 17.51,
+          "missing_keys": [],
+          "context_relevance": 0.386,
+          "groundedness": 1.0,
+          "answer_relevance": 1.0
+        },
+        "offline": {
+          "answer": "Members of the Asante Rewards programme at Silver, Gold or Platinum tier receive one extra checked piece on every route.\n\nSource: Baggage Allowance Policy - Section 3: Additional Piece for Asante Members (version 1.0, as published 23 Sep 2026)",
+          "error": null,
+          "withheld": null,
+          "seconds": 0.0,
+          "missing_keys": [],
+          "context_relevance": 0.386,
+          "groundedness": 1.0,
+          "answer_relevance": 1.0
+        }
       }
     },
     {
       "id": "q13",
       "query": "My flight was delayed by nine hours and I gave up on travelling. Can I get my money back?",
-      "composer": {
-        "model": "extractive-broad (offline, not an LLM)",
-        "answer": "A guest who cancelled because their flight was delayed by more than eight hours may claim a refund using the online refund form.\n\nSource: Refund Policy - Section 3: Refunds After a Long Delay (version 1.0, as published 23 Sep 2026)",
-        "error": null,
-        "seconds": 0.0,
-        "context_relevance": 0.413,
-        "groundedness": 1.0,
-        "answer_relevance": 1.0,
-        "missing_keys": []
-      },
-      "live": {
-        "model": "llama3.2:3b",
-        "answer": "I'm happy to help you with your question. According to our Refund Policy (Section 3: Refunds After a Long Delay), a guest who cancelled because their flight was delayed by more than eight hours may claim a refund using the online refund form.\n\nSince your flight was delayed by nine hours, which is more than eight hours, you are eligible for a refund. Please follow the online refund form process to initiate your refund claim.",
-        "error": null,
-        "seconds": 19.07,
-        "context_relevance": 0.413,
-        "groundedness": 0.667,
-        "answer_relevance": 1.0,
-        "missing_keys": [],
-        "withheld": null
+      "models": {
+        "ollama": {
+          "answer": "I'm happy to help you with your question. According to our Refund Policy (Section 3: Refunds After a Long Delay), a guest who cancelled because their flight was delayed by more than eight hours may claim a refund using the online refund form.\n\nSince your flight was delayed by nine hours, which is more than eight hours, you are eligible for a refund. Please follow the online refund form process to initiate your refund claim.",
+          "error": null,
+          "withheld": null,
+          "seconds": 19.92,
+          "missing_keys": [],
+          "context_relevance": 0.413,
+          "groundedness": 0.667,
+          "answer_relevance": 1.0
+        },
+        "offline": {
+          "answer": "A guest who cancelled because their flight was delayed by more than eight hours may claim a refund using the online refund form.\n\nSource: Refund Policy - Section 3: Refunds After a Long Delay (version 1.0, as published 23 Sep 2026)",
+          "error": null,
+          "withheld": null,
+          "seconds": 0.0,
+          "missing_keys": [],
+          "context_relevance": 0.413,
+          "groundedness": 1.0,
+          "answer_relevance": 1.0
+        }
       }
     },
     {
       "id": "q14",
       "query": "What compensation does the airline pay for an overnight delay?",
-      "composer": {
-        "model": "extractive-broad (offline, not an LLM)",
-        "answer": "Under this illustrative framework a delay of two to four hours attracts a meal voucher, a delay of four to eight hours attracts a meal voucher and lounge access, and a delay beyond eight hours attracts hotel accommodation with airport transfer where an overnight stay is required.\n\nSource: Synthetic Delay Care Framework - Section 2: Illustrative Delay Bands (version 1.0, prototype document, not airline policy)",
-        "error": null,
-        "seconds": 0.0,
-        "context_relevance": 0.449,
-        "groundedness": 1.0,
-        "answer_relevance": 0.667,
-        "missing_keys": [
-          "does not publish monetary compensation"
-        ]
-      },
-      "live": {
-        "model": "llama3.2:3b",
-        "answer": "I'm unable to provide a specific compensation amount for an overnight delay, as the Synthetic Delay Care Framework document does not publish monetary compensation amounts for delayed or cancelled flights. However, according to Section 4 of the Delayed Baggage Policy, a guest whose flight is delayed by more than eight hours may claim a refund.",
-        "error": null,
-        "seconds": 15.6,
-        "context_relevance": 0.449,
-        "groundedness": 1.0,
-        "answer_relevance": 0.667,
-        "missing_keys": [
-          "hotel accommodation"
-        ],
-        "withheld": null
+      "models": {
+        "ollama": {
+          "answer": "I'm unable to provide a specific compensation amount for an overnight delay, as the Synthetic Delay Care Framework document does not publish monetary compensation amounts for delayed or cancelled flights. However, according to Section 4 of the Delayed Baggage Policy, a guest whose flight is delayed by more than eight hours may claim a refund.",
+          "error": null,
+          "withheld": null,
+          "seconds": 17.29,
+          "missing_keys": [
+            "hotel accommodation"
+          ],
+          "context_relevance": 0.449,
+          "groundedness": 1.0,
+          "answer_relevance": 0.667
+        },
+        "offline": {
+          "answer": "Under this illustrative framework a delay of two to four hours attracts a meal voucher, a delay of four to eight hours attracts a meal voucher and lounge access, and a delay beyond eight hours attracts hotel accommodation with airport transfer where an overnight stay is required.\n\nSource: Synthetic Delay Care Framework - Section 2: Illustrative Delay Bands (version 1.0, prototype document, not airline policy)",
+          "error": null,
+          "withheld": null,
+          "seconds": 0.0,
+          "missing_keys": [
+            "does not publish monetary compensation"
+          ],
+          "context_relevance": 0.449,
+          "groundedness": 1.0,
+          "answer_relevance": 0.667
+        }
       }
     },
     {
       "id": "q15",
       "query": "How big can my cabin bag be?",
-      "composer": {
-        "model": "extractive-broad (offline, not an LLM)",
-        "answer": "Each cabin piece must not exceed 55cm in length, 25cm in width and 35cm in height. The permitted accessory, which may be a handbag, backpack, briefcase, camera bag or laptop bag, must not exceed 40cm by 15cm by 30cm.\n\nSource: Hand Baggage Policy - Section 2: Cabin Baggage Dimensions (version 1.0, as published 23 Sep 2026)",
-        "error": null,
-        "seconds": 0.0,
-        "context_relevance": 0.422,
-        "groundedness": 1.0,
-        "answer_relevance": 1.0,
-        "missing_keys": []
-      },
-      "live": {
-        "model": "llama3.2:3b",
-        "answer": "According to Section 2 of the Hand Baggage Policy, each cabin piece must not exceed 55cm in length, 25cm in width, and 35cm in height.",
-        "error": null,
-        "seconds": 12.82,
-        "context_relevance": 0.422,
-        "groundedness": 1.0,
-        "answer_relevance": 1.0,
-        "missing_keys": [],
-        "withheld": null
+      "models": {
+        "ollama": {
+          "answer": "According to Section 2 of the Hand Baggage Policy, each cabin piece must not exceed 55cm in length, 25cm in width, and 35cm in height.",
+          "error": null,
+          "withheld": null,
+          "seconds": 14.15,
+          "missing_keys": [],
+          "context_relevance": 0.422,
+          "groundedness": 1.0,
+          "answer_relevance": 1.0
+        },
+        "offline": {
+          "answer": "Each cabin piece must not exceed 55cm in length, 25cm in width and 35cm in height. The permitted accessory, which may be a handbag, backpack, briefcase, camera bag or laptop bag, must not exceed 40cm by 15cm by 30cm.\n\nSource: Hand Baggage Policy - Section 2: Cabin Baggage Dimensions (version 1.0, as published 23 Sep 2026)",
+          "error": null,
+          "withheld": null,
+          "seconds": 0.0,
+          "missing_keys": [],
+          "context_relevance": 0.422,
+          "groundedness": 1.0,
+          "answer_relevance": 1.0
+        }
       }
     },
     {
       "id": "q16",
       "query": "I bought my ticket from a travel agent. Can you refund me directly?",
-      "composer": {
-        "model": "extractive-broad (offline, not an LLM)",
-        "answer": "Kenya Airways cannot refund a ticket issued by a travel agency. The guest must approach the agency that issued the ticket.\n\nSource: Refund Policy - Section 7: Tickets Bought Through an Agency (version 1.0, as published 23 Sep 2026)",
-        "error": null,
-        "seconds": 0.0,
-        "context_relevance": 0.51,
-        "groundedness": 1.0,
-        "answer_relevance": 1.0,
-        "missing_keys": []
-      },
-      "live": {
-        "model": "llama3.2:3b",
-        "answer": "I'm sorry to inform you that, according to our Refund Policy (Section 7: Tickets Bought Through an Agency), Kenya Airways cannot refund a ticket issued by a travel agency. You will need to approach the agency that issued the ticket to request a refund.",
-        "error": null,
-        "seconds": 13.61,
-        "context_relevance": 0.51,
-        "groundedness": 1.0,
-        "answer_relevance": 1.0,
-        "missing_keys": [],
-        "withheld": null
+      "models": {
+        "ollama": {
+          "answer": "I'm sorry to inform you that, according to our Refund Policy (Section 7: Tickets Bought Through an Agency), Kenya Airways cannot refund a ticket issued by a travel agency. You will need to approach the agency that issued the ticket to request a refund.",
+          "error": null,
+          "withheld": null,
+          "seconds": 14.63,
+          "missing_keys": [],
+          "context_relevance": 0.51,
+          "groundedness": 1.0,
+          "answer_relevance": 1.0
+        },
+        "offline": {
+          "answer": "Kenya Airways cannot refund a ticket issued by a travel agency. The guest must approach the agency that issued the ticket.\n\nSource: Refund Policy - Section 7: Tickets Bought Through an Agency (version 1.0, as published 23 Sep 2026)",
+          "error": null,
+          "withheld": null,
+          "seconds": 0.0,
+          "missing_keys": [],
+          "context_relevance": 0.51,
+          "groundedness": 1.0,
+          "answer_relevance": 1.0
+        }
       }
     },
     {
       "id": "q17",
       "query": "Is there a weight limit on a wheelchair?",
-      "composer": {
-        "model": "extractive-broad (offline, not an LLM)",
-        "answer": "One wheelchair or personal mobility device is carried free of charge for a guest who requires it, and no weight limit is applied to that device.\n\nSource: Baggage Allowance Policy - Section 5: Infants, Strollers and Mobility Equipment (version 1.0, as published 23 Sep 2026)",
-        "error": null,
-        "seconds": 0.0,
-        "context_relevance": 0.331,
-        "groundedness": 1.0,
-        "answer_relevance": 0.0,
-        "missing_keys": [
-          "No weight limitation"
-        ]
-      },
-      "live": {
-        "model": "llama3.2:3b",
-        "answer": "No, there is no weight limitation applied to a wheelchair or personal mobility device, as stated in Section 7: Mobility Devices of the Special Baggage Policy.",
-        "error": null,
-        "seconds": 12.1,
-        "context_relevance": 0.331,
-        "groundedness": 1.0,
-        "answer_relevance": 1.0,
-        "missing_keys": [],
-        "withheld": null
+      "models": {
+        "ollama": {
+          "answer": "No, there is no weight limitation applied to a wheelchair or personal mobility device, as stated in Section 7: Mobility Devices of the Special Baggage Policy.",
+          "error": null,
+          "withheld": null,
+          "seconds": 13.6,
+          "missing_keys": [],
+          "context_relevance": 0.331,
+          "groundedness": 1.0,
+          "answer_relevance": 1.0
+        },
+        "offline": {
+          "answer": "One wheelchair or personal mobility device is carried free of charge for a guest who requires it, and no weight limit is applied to that device.\n\nSource: Baggage Allowance Policy - Section 5: Infants, Strollers and Mobility Equipment (version 1.0, as published 23 Sep 2026)",
+          "error": null,
+          "withheld": null,
+          "seconds": 0.0,
+          "missing_keys": [
+            "No weight limitation"
+          ],
+          "context_relevance": 0.331,
+          "groundedness": 1.0,
+          "answer_relevance": 0.0
+        }
       }
     },
     {
       "id": "q18",
       "query": "How do I trace a bag that did not arrive and who do I call?",
-      "composer": {
-        "model": "extractive-broad (offline, not an LLM)",
-        "answer": "A guest whose baggage does not arrive should report it before leaving the airport so that a file is created and a file reference number is issued. Tracing can be followed online through the WorldTracer service at worldtracer.aero/filedsp/kq.htm, and the baggage tracking line is +254-20-3274747.\n\nSource: Delayed Baggage Policy - Section 1: Reporting Baggage That Has Not Arrived (version 1.0, as published 23 Sep 2026)",
-        "error": null,
-        "seconds": 0.0,
-        "context_relevance": 0.333,
-        "groundedness": 1.0,
-        "answer_relevance": 1.0,
-        "missing_keys": []
-      },
-      "live": {
-        "model": "llama3.2:3b",
-        "answer": "To trace a bag that did not arrive, you can follow these steps:\n\n1. Report the missing baggage to Kenya Airways before leaving the airport to create a file and receive a file reference number.\n2. Use the WorldTracer service at worldtracer.aero/filedsp/kq.htm to track the status of your baggage online.\n3. Alternatively, you can call the baggage tracking line at +254-20-3274747 for assistance.\n\nPlease note that a file reference number is required for all tracing and any later claim.",
-        "error": null,
-        "seconds": 216.33,
-        "context_relevance": 0.333,
-        "groundedness": 1.0,
-        "answer_relevance": 1.0,
-        "missing_keys": [],
-        "withheld": null
+      "models": {
+        "ollama": {
+          "answer": "To trace a bag that did not arrive, you can follow these steps:\n\n1. Report the missing baggage to Kenya Airways before leaving the airport to create a file and receive a file reference number.\n2. Use the WorldTracer service at worldtracer.aero/filedsp/kq.htm to track the status of your baggage online.\n3. Alternatively, you can call the baggage tracking line at +254-20-3274747 for assistance.\n\nPlease note that a file reference number is required for all tracing and any later claim.",
+          "error": null,
+          "withheld": null,
+          "seconds": 23.29,
+          "missing_keys": [],
+          "context_relevance": 0.333,
+          "groundedness": 1.0,
+          "answer_relevance": 1.0
+        },
+        "offline": {
+          "answer": "A guest whose baggage does not arrive should report it before leaving the airport so that a file is created and a file reference number is issued. Tracing can be followed online through the WorldTracer service at worldtracer.aero/filedsp/kq.htm, and the baggage tracking line is +254-20-3274747.\n\nSource: Delayed Baggage Policy - Section 1: Reporting Baggage That Has Not Arrived (version 1.0, as published 23 Sep 2026)",
+          "error": null,
+          "withheld": null,
+          "seconds": 0.0,
+          "missing_keys": [],
+          "context_relevance": 0.333,
+          "groundedness": 1.0,
+          "answer_relevance": 1.0
+        }
       }
     },
     {
       "id": "q19",
       "query": "I have a single suitcase weighing 35kg. Will you accept it at the counter?",
-      "composer": {
-        "model": "extractive-broad (offline, not an LLM)",
-        "answer": "Kenya Airways does not accept liability for this item.\n\nSource: Baggage Allowance Policy - Section 7: Departures From Jeddah (version 1.0, as published 23 Sep 2026)",
-        "error": null,
-        "seconds": 0.0,
-        "context_relevance": 0.133,
-        "groundedness": 1.0,
-        "answer_relevance": 0.0,
-        "missing_keys": [
-          "more than 32kg",
-          "authorised in advance",
-          "XBAG"
-        ]
-      },
-      "live": {
-        "model": "llama3.2:3b",
-        "answer": "I can't provide information on items that are not explicitly mentioned in the policy. However, I can tell you that Kenya Airways accepts mobile money payment for bookings made in Kenya and in Tanzania.",
-        "error": null,
-        "seconds": 13.95,
-        "context_relevance": 0.133,
-        "groundedness": 0.5,
-        "answer_relevance": 0.0,
-        "missing_keys": [
-          "more than 32kg",
-          "authorised in advance",
-          "XBAG"
-        ],
-        "withheld": null
+      "models": {
+        "ollama": {
+          "answer": "I can't provide information on items that are not explicitly mentioned in the policy. However, I can tell you that Kenya Airways accepts mobile money payment for bookings made in Kenya and in Tanzania.",
+          "error": null,
+          "withheld": null,
+          "seconds": 12.14,
+          "missing_keys": [
+            "more than 32kg",
+            "authorised in advance",
+            "XBAG"
+          ],
+          "context_relevance": 0.133,
+          "groundedness": 0.5,
+          "answer_relevance": 0.0
+        },
+        "offline": {
+          "answer": "Kenya Airways does not accept liability for this item.\n\nSource: Baggage Allowance Policy - Section 7: Departures From Jeddah (version 1.0, as published 23 Sep 2026)",
+          "error": null,
+          "withheld": null,
+          "seconds": 0.0,
+          "missing_keys": [
+            "more than 32kg",
+            "authorised in advance",
+            "XBAG"
+          ],
+          "context_relevance": 0.133,
+          "groundedness": 1.0,
+          "answer_relevance": 0.0
+        }
       }
     },
     {
       "id": "q20",
       "query": "How long do I have to put a baggage compensation claim in writing?",
-      "composer": {
-        "model": "extractive-broad (offline, not an LLM)",
-        "answer": "A claim for compensation must be submitted in writing to the nearest Kenya Airways airport office within seven days of arrival.\n\nSource: Delayed Baggage Policy - Section 4: Deadline for Compensation Claims (version 1.0, as published 23 Sep 2026)",
-        "error": null,
-        "seconds": 0.0,
-        "context_relevance": 0.418,
-        "groundedness": 1.0,
-        "answer_relevance": 1.0,
-        "missing_keys": []
-      },
-      "live": {
-        "model": "llama3.2:3b",
-        "answer": "According to Section 4 of the Delayed Baggage Policy, a claim for compensation must be submitted in writing to the nearest Kenya Airways airport office within seven days of arrival.",
-        "error": null,
-        "seconds": 14.5,
-        "context_relevance": 0.418,
-        "groundedness": 1.0,
-        "answer_relevance": 1.0,
-        "missing_keys": [],
-        "withheld": null
+      "models": {
+        "ollama": {
+          "answer": "According to Section 4 of the Delayed Baggage Policy, a claim for compensation must be submitted in writing to the nearest Kenya Airways airport office within seven days of arrival.",
+          "error": null,
+          "withheld": null,
+          "seconds": 13.33,
+          "missing_keys": [],
+          "context_relevance": 0.418,
+          "groundedness": 1.0,
+          "answer_relevance": 1.0
+        },
+        "offline": {
+          "answer": "A claim for compensation must be submitted in writing to the nearest Kenya Airways airport office within seven days of arrival.\n\nSource: Delayed Baggage Policy - Section 4: Deadline for Compensation Claims (version 1.0, as published 23 Sep 2026)",
+          "error": null,
+          "withheld": null,
+          "seconds": 0.0,
+          "missing_keys": [],
+          "context_relevance": 0.418,
+          "groundedness": 1.0,
+          "answer_relevance": 1.0
+        }
       }
     },
     {
       "id": "q21",
       "query": "What is my checked allowance on the domestic flight to Kisumu and what does an extra bag cost there?",
-      "composer": {
-        "model": "extractive-broad (offline, not an LLM)",
-        "answer": "The domestic allowance table covers services to Kisumu, Mombasa and Malindi. Three routings carry a reduced allowance of a single checked piece. Members of the Asante Rewards programme at Silver, Gold or Platinum tier receive one extra checked piece on every route.\n\nSource: Baggage Allowance Policy - Section 2: Routes With a One-Piece Allowance (version 1.0, as published 23 Sep 2026); Baggage Allowance Policy - Section 3: Additional Piece for Asante Members (version 1.0, as published 23 Sep 2026)",
-        "error": null,
-        "seconds": 0.0,
-        "context_relevance": 0.549,
-        "groundedness": 1.0,
-        "answer_relevance": 0.667,
-        "missing_keys": [
-          "25 on domestic services"
-        ]
-      },
-      "live": {
-        "model": "llama3.2:3b",
-        "answer": "According to the Baggage Allowance Policy (Section 2: Routes With a One-Piece Allowance), on domestic Kenyan flights, including the flight to Kisumu, Economy guests may check one piece of up to 23kg and Business guests one piece of up to 32kg.\n\nAs for excess baggage fees, the Excess Baggage Fees Policy (Section 3: Firearms and Ammunition) does not provide information on excess baggage fees for domestic flights. However, the policy does mention that excess baggage fees are not specified in the table, implying that the standard allowance applies.\n\nTherefore, I cannot provide information on the cost of an extra bag on the domestic flight to Kisumu.",
-        "error": null,
-        "seconds": 28.27,
-        "context_relevance": 0.549,
-        "groundedness": 0.25,
-        "answer_relevance": 0.667,
-        "missing_keys": [
-          "25 on domestic services"
-        ],
-        "withheld": null
+      "models": {
+        "ollama": {
+          "answer": "According to the Baggage Allowance Policy (Section 2: Routes With a One-Piece Allowance), on domestic Kenyan flights, including the flight to Kisumu, Economy guests may check one piece of up to 23kg and Business guests one piece of up to 32kg.\n\nAs for excess baggage fees, the Excess Baggage Fees Policy (Section 3: Firearms and Ammunition) does not provide information on excess baggage fees for domestic flights. However, the policy does mention that excess baggage fees are not specified in the table, implying that the standard allowance applies.\n\nTherefore, I cannot provide information on the cost of an extra bag on the domestic flight to Kisumu.",
+          "error": null,
+          "withheld": null,
+          "seconds": 28.76,
+          "missing_keys": [
+            "25 on domestic services"
+          ],
+          "context_relevance": 0.549,
+          "groundedness": 0.25,
+          "answer_relevance": 0.667
+        },
+        "offline": {
+          "answer": "The domestic allowance table covers services to Kisumu, Mombasa and Malindi. Three routings carry a reduced allowance of a single checked piece. Members of the Asante Rewards programme at Silver, Gold or Platinum tier receive one extra checked piece on every route.\n\nSource: Baggage Allowance Policy - Section 2: Routes With a One-Piece Allowance (version 1.0, as published 23 Sep 2026); Baggage Allowance Policy - Section 3: Additional Piece for Asante Members (version 1.0, as published 23 Sep 2026)",
+          "error": null,
+          "withheld": null,
+          "seconds": 0.01,
+          "missing_keys": [
+            "25 on domestic services"
+          ],
+          "context_relevance": 0.549,
+          "groundedness": 1.0,
+          "answer_relevance": 0.667
+        }
       }
     },
     {
       "id": "q22",
       "query": "I am flying Business to London with two checked bags and two cabin bags. Is all of that within my allowance?",
-      "composer": {
-        "model": "extractive-broad (offline, not an LLM)",
-        "answer": "The same two-piece allowance applies between Africa and the Middle East or Asia, and on flights within Africa. Kenya Airways applies the piece concept to checked baggage. On journeys between Africa and Europe or the Americas, Economy guests may check two pieces of up to 23kg (50lb) each, and Business guests may check two pieces of up to 32kg (70lb) each.\n\nSource: Baggage Allowance Policy - Section 1: Free Checked Allowance by Cabin and Route (version 1.0, as published 23 Sep 2026)",
-        "error": null,
-        "seconds": 0.0,
-        "context_relevance": 0.426,
-        "groundedness": 1.0,
-        "answer_relevance": 0.667,
-        "missing_keys": [
-          "18kg"
-        ]
-      },
-      "live": {
-        "model": "llama3.2:3b",
-        "answer": "According to the policy, Business guests are allowed two cabin pieces plus one accessory, up to a combined 18kg (39lb), on every route. \n\nYou have two checked bags, which is within your allowance. However, you have two cabin bags, which exceeds the standard cabin allowance of one. \n\nYou are allowed to bring one cabin piece plus one accessory, up to 18kg (39lb).",
-        "error": null,
-        "seconds": 20.04,
-        "context_relevance": 0.426,
-        "groundedness": 1.0,
-        "answer_relevance": 0.667,
-        "missing_keys": [
-          "two pieces of up to 32kg"
-        ],
-        "withheld": null
+      "models": {
+        "ollama": {
+          "answer": "According to the policy, Business guests are allowed two cabin pieces plus one accessory, up to a combined 18kg (39lb), on every route. \n\nYou have two checked bags, which is within your allowance. However, you have two cabin bags, which exceeds the standard cabin allowance of one. \n\nYou are allowed to bring one cabin piece plus one accessory, up to 18kg (39lb).",
+          "error": null,
+          "withheld": null,
+          "seconds": 19.11,
+          "missing_keys": [
+            "two pieces of up to 32kg"
+          ],
+          "context_relevance": 0.426,
+          "groundedness": 1.0,
+          "answer_relevance": 0.667
+        },
+        "offline": {
+          "answer": "The same two-piece allowance applies between Africa and the Middle East or Asia, and on flights within Africa. Kenya Airways applies the piece concept to checked baggage. On journeys between Africa and Europe or the Americas, Economy guests may check two pieces of up to 23kg (50lb) each, and Business guests may check two pieces of up to 32kg (70lb) each.\n\nSource: Baggage Allowance Policy - Section 1: Free Checked Allowance by Cabin and Route (version 1.0, as published 23 Sep 2026)",
+          "error": null,
+          "withheld": null,
+          "seconds": 0.0,
+          "missing_keys": [
+            "18kg"
+          ],
+          "context_relevance": 0.426,
+          "groundedness": 1.0,
+          "answer_relevance": 0.667
+        }
       }
     },
     {
       "id": "q23",
       "query": "My bag is delayed and I paid by M-Pesa. What allowance do I get and how would any refund reach me?",
-      "composer": {
-        "model": "extractive-broad (offline, not an LLM)",
-        "answer": "Any First Needs Allowance paid is deducted from the final compensation if the baggage is ultimately declared lost. The accepted services are M-Pesa, Airtel Money and Equitel in Kenya, and Vodacom M-Pesa, MTN Mobile Money and Tigo Pesa in Tanzania. A guest who cancelled because their flight was delayed by more than eight hours may claim a refund using the online refund form.\n\nSource: Delayed Baggage Policy - Section 3: Conditions Attached to the Allowance (version 1.0, as published 23 Sep 2026); Payment Methods Policy - Section 1: Mobile Money Acceptance (version 1.0, as published 23 Sep 2026); Refund Policy - Section 3: Refunds After a Long Delay (version 1.0, as published 23 Sep 2026)",
-        "error": null,
-        "seconds": 0.0,
-        "context_relevance": 0.451,
-        "groundedness": 1.0,
-        "answer_relevance": 0.0,
-        "missing_keys": [
-          "100 US dollars",
-          "original card",
-          "21 to 30 business days"
-        ]
-      },
-      "live": {
-        "model": "llama3.2:3b",
-        "answer": "I'm here to help you with your delayed baggage issue.\n\nAccording to our policy, since you paid by M-Pesa, you are eligible for the First Needs Allowance. The allowance is limited to 150 US dollars for First Class and Premier World guests and 100 US dollars for Economy guests.\n\nHowever, I need to inform you that the allowance is only applicable if your baggage has not been received within 24 hours of the file being created. Since you didn't mention the exact time of filing, I'll assume it's within the 24-hour timeframe.\n\nRegarding your refund, since you paid by M-Pesa, the refund will be processed back to your M-Pesa account. Please note that this route applies to tickets purchased on our official website, kenya-airways.com.\n\nIf you'd like to claim a refund, you can use the online refund form. Please ensure you have your ticket number and M-Pesa account details ready.\n\nPlease let me know if you have any further questions or concerns.",
-        "error": null,
-        "seconds": 38.93,
-        "context_relevance": 0.451,
-        "groundedness": 0.889,
-        "answer_relevance": 0.333,
-        "missing_keys": [
-          "original card",
-          "21 to 30 business days"
-        ],
-        "withheld": null
+      "models": {
+        "ollama": {
+          "answer": "I'm here to help you with your delayed baggage issue.\n\nAccording to our policy, since you paid by M-Pesa, you are eligible for the First Needs Allowance. The allowance is limited to 150 US dollars for First Class and Premier World guests and 100 US dollars for Economy guests.\n\nHowever, I need to inform you that the allowance is only applicable if your baggage has not been received within 24 hours of the file being created. Since you didn't mention the exact time of filing, I'll assume it's within the 24-hour timeframe.\n\nRegarding your refund, since you paid by M-Pesa, the refund will be processed back to your M-Pesa account. Please note that this route applies to tickets purchased on our official website, kenya-airways.com.\n\nIf you'd like to claim a refund, you can use the online refund form. Please ensure you have your ticket number and M-Pesa account details ready.\n\nPlease let me know if you have any further questions or concerns.",
+          "error": null,
+          "withheld": null,
+          "seconds": 33.59,
+          "missing_keys": [
+            "original card",
+            "21 to 30 business days"
+          ],
+          "context_relevance": 0.451,
+          "groundedness": 0.889,
+          "answer_relevance": 0.333
+        },
+        "offline": {
+          "answer": "Any First Needs Allowance paid is deducted from the final compensation if the baggage is ultimately declared lost. The accepted services are M-Pesa, Airtel Money and Equitel in Kenya, and Vodacom M-Pesa, MTN Mobile Money and Tigo Pesa in Tanzania. A guest who cancelled because their flight was delayed by more than eight hours may claim a refund using the online refund form.\n\nSource: Delayed Baggage Policy - Section 3: Conditions Attached to the Allowance (version 1.0, as published 23 Sep 2026); Payment Methods Policy - Section 1: Mobile Money Acceptance (version 1.0, as published 23 Sep 2026); Refund Policy - Section 3: Refunds After a Long Delay (version 1.0, as published 23 Sep 2026)",
+          "error": null,
+          "withheld": null,
+          "seconds": 0.01,
+          "missing_keys": [
+            "100 US dollars",
+            "original card",
+            "21 to 30 business days"
+          ],
+          "context_relevance": 0.451,
+          "groundedness": 1.0,
+          "answer_relevance": 0.0
+        }
       }
     },
     {
       "id": "q24",
       "query": "I need to change my international booking and correct three letters of my name at the same time. What is the total I will pay?",
-      "composer": {
-        "model": "extractive-broad (offline, not an LLM)",
-        "answer": "Correcting up to three characters of a name costs 15 US dollars on a domestic booking and 75 US dollars on an international booking. A full name change costs 50 US dollars on a domestic booking and 150 US dollars on an international booking.\n\nSource: Refund Policy - Section 5: Name Corrections and Name Changes (version 1.0, as published 23 Sep 2026)",
-        "error": null,
-        "seconds": 0.0,
-        "context_relevance": 0.431,
-        "groundedness": 1.0,
-        "answer_relevance": 0.5,
-        "missing_keys": [
-          "100 and 300 US dollars"
-        ]
-      },
-      "live": {
-        "model": "llama3.2:3b",
-        "answer": "To determine the total cost, we need to calculate the cost of the name correction and the change fee.\n\nAccording to Section 5: Name Corrections and Name Changes, correcting up to three characters of a name costs 75 US dollars on an international booking. Since you're making a full name change, the cost is 150 US dollars.\n\nAccording to Section 4: Change and Cancellation Fees, changing a booking costs between 100 and 300 US dollars. Since you're making a change to an international booking, the cost will be at the higher end of this range.\n\nTherefore, the total cost is 150 US dollars (name correction) + 300 US dollars (change fee) = 450 US dollars.",
-        "error": null,
-        "seconds": 28.1,
-        "context_relevance": 0.431,
-        "groundedness": 0.5,
-        "answer_relevance": 1.0,
-        "missing_keys": [],
-        "withheld": "states figures not in the policy context (450)"
+      "models": {
+        "ollama": {
+          "answer": "To determine the total cost, we need to calculate the cost of the name correction and the change fee.\n\nAccording to Section 5: Name Corrections and Name Changes, correcting up to three characters of a name costs 75 US dollars on an international booking. Since you're making a full name change, the cost is 150 US dollars.\n\nAccording to Section 4: Change and Cancellation Fees, changing a booking costs between 100 and 300 US dollars. Since you're making a change to an international booking, the cost will be at the higher end of this range.\n\nTherefore, the total cost is 150 US dollars (name correction) + 300 US dollars (change fee) = 450 US dollars.",
+          "error": null,
+          "withheld": "states figures not in the policy context (450)",
+          "seconds": 27.21,
+          "missing_keys": [],
+          "context_relevance": 0.431,
+          "groundedness": 0.5,
+          "answer_relevance": 1.0
+        },
+        "offline": {
+          "answer": "Correcting up to three characters of a name costs 15 US dollars on a domestic booking and 75 US dollars on an international booking. A full name change costs 50 US dollars on a domestic booking and 150 US dollars on an international booking.\n\nSource: Refund Policy - Section 5: Name Corrections and Name Changes (version 1.0, as published 23 Sep 2026)",
+          "error": null,
+          "withheld": null,
+          "seconds": 0.0,
+          "missing_keys": [
+            "100 and 300 US dollars"
+          ],
+          "context_relevance": 0.431,
+          "groundedness": 1.0,
+          "answer_relevance": 0.5
+        }
       }
     },
     {
       "id": "q25",
       "query": "I am checking in for an international flight with a surfboard. When must I be at the airport and what will the board cost?",
-      "composer": {
-        "model": "extractive-broad (offline, not an LLM)",
-        "answer": "Guests travelling internationally must complete airport check-in at least two and a half hours before departure, in every class of travel. International check-in counters close one hour before departure. Booking a ticket by telephone costs from 50 US dollars, rising to 100 US dollars for Business class. Changing or cancelling a booking, whether online through Manage My Booking or through an agent, costs between 100 and 300 US dollars depending on the fare.\n\nSource: Checkin Policy - Section 2: International Airport Check-in (version 1.0, as published 23 Sep 2026); Excess Baggage Fees Policy - Section 5: Booking and Change Service Fees (version 1.0, as published 23 Sep 2026)",
-        "error": null,
-        "seconds": 0.0,
-        "context_relevance": 0.316,
-        "groundedness": 1.0,
-        "answer_relevance": 0.333,
-        "missing_keys": [
-          "surfboards",
-          "110"
-        ]
-      },
-      "live": {
-        "model": "llama3.2:3b",
-        "answer": "According to the Special Baggage Policy (Section 2: Rates for Common Sporting Equipment), a surfboard is charged 50 between Africa and 40 on domestic services. Since you're checking in for an international flight, the applicable rate is 50. \n\nYou must be at the airport at least two and a half hours before departure, in every class of travel, as stated in the Checkin Policy (Section 2: International Airport Check-in).",
-        "error": null,
-        "seconds": 21.31,
-        "context_relevance": 0.316,
-        "groundedness": 1.0,
-        "answer_relevance": 0.333,
-        "missing_keys": [
-          "surfboards",
-          "110"
-        ],
-        "withheld": null
+      "models": {
+        "ollama": {
+          "answer": "According to the Special Baggage Policy (Section 2: Rates for Common Sporting Equipment), a surfboard is charged 50 between Africa and 40 on domestic services. Since you're checking in for an international flight, the applicable rate is 50. \n\nYou must be at the airport at least two and a half hours before departure, in every class of travel, as stated in the Checkin Policy (Section 2: International Airport Check-in).",
+          "error": null,
+          "withheld": null,
+          "seconds": 20.59,
+          "missing_keys": [
+            "surfboards",
+            "110"
+          ],
+          "context_relevance": 0.316,
+          "groundedness": 1.0,
+          "answer_relevance": 0.333
+        },
+        "offline": {
+          "answer": "Guests travelling internationally must complete airport check-in at least two and a half hours before departure, in every class of travel. International check-in counters close one hour before departure. Booking a ticket by telephone costs from 50 US dollars, rising to 100 US dollars for Business class. Changing or cancelling a booking, whether online through Manage My Booking or through an agent, costs between 100 and 300 US dollars depending on the fare.\n\nSource: Checkin Policy - Section 2: International Airport Check-in (version 1.0, as published 23 Sep 2026); Excess Baggage Fees Policy - Section 5: Booking and Change Service Fees (version 1.0, as published 23 Sep 2026)",
+          "error": null,
+          "withheld": null,
+          "seconds": 0.0,
+          "missing_keys": [
+            "surfboards",
+            "110"
+          ],
+          "context_relevance": 0.316,
+          "groundedness": 1.0,
+          "answer_relevance": 0.333
+        }
       }
     },
     {
       "id": "q26",
       "query": "My flight is delayed four hours and my bag is one piece over the allowance to Europe. What am I owed and what do I owe?",
-      "composer": {
-        "model": "extractive-broad (offline, not an LLM)",
-        "answer": "Where baggage has not been received within 24 hours of the file being created, a First Needs Allowance may be claimed towards essential items.\n\nSource: Delayed Baggage Policy - Section 2: First Needs Allowance (version 1.0, as published 23 Sep 2026)",
-        "error": null,
-        "seconds": 0.01,
-        "context_relevance": 0.43,
-        "groundedness": 1.0,
-        "answer_relevance": 0.0,
-        "missing_keys": [
-          "synthetic",
-          "meal voucher",
-          "75 for Europe"
-        ]
-      },
-      "live": {
-        "model": "llama3.2:3b",
-        "answer": "Based on the provided context, I can assist you with your question.\n\nSince your flight is delayed for 4 hours, you are entitled to a meal voucher and lounge access (as per Section 2 of the Synthetic Delay Care Framework).\n\nRegarding your baggage, since you are traveling from Africa to Europe, Economy guests are allowed to check two pieces of up to 23kg (50lb) each. However, your bag is one piece over the allowance. Unfortunately, this means you are not entitled to the First Needs Allowance (as per Section 2 of the Delayed Baggage Policy).\n\nAs for what you owe, I couldn't find any information on baggage fees or penalties in the provided context. If you have any further questions or concerns, please let me know, and I'll do my best to assist you.",
-        "error": null,
-        "seconds": 34.48,
-        "context_relevance": 0.43,
-        "groundedness": 0.8,
-        "answer_relevance": 0.667,
-        "missing_keys": [
-          "75 for Europe"
-        ],
-        "withheld": null
+      "models": {
+        "ollama": {
+          "answer": "Based on the provided context, I can assist you with your question.\n\nSince your flight is delayed for 4 hours, you are entitled to a meal voucher and lounge access (as per Section 2 of the Synthetic Delay Care Framework).\n\nRegarding your baggage, since you are traveling from Africa to Europe, Economy guests are allowed to check two pieces of up to 23kg (50lb) each. However, your bag is one piece over the allowance. Unfortunately, this means you are not entitled to the First Needs Allowance (as per Section 2 of the Delayed Baggage Policy).\n\nAs for what you owe, I couldn't find any information on baggage fees or penalties in the provided context. If you have any further questions or concerns, please let me know, and I'll do my best to assist you.",
+          "error": null,
+          "withheld": null,
+          "seconds": 31.73,
+          "missing_keys": [
+            "75 for Europe"
+          ],
+          "context_relevance": 0.43,
+          "groundedness": 0.8,
+          "answer_relevance": 0.667
+        },
+        "offline": {
+          "answer": "Where baggage has not been received within 24 hours of the file being created, a First Needs Allowance may be claimed towards essential items.\n\nSource: Delayed Baggage Policy - Section 2: First Needs Allowance (version 1.0, as published 23 Sep 2026)",
+          "error": null,
+          "withheld": null,
+          "seconds": 0.01,
+          "missing_keys": [
+            "synthetic",
+            "meal voucher",
+            "75 for Europe"
+          ],
+          "context_relevance": 0.43,
+          "groundedness": 1.0,
+          "answer_relevance": 0.0
+        }
       }
     },
     {
       "id": "q27",
       "query": "I am travelling with an infant and a stroller in Economy. What can I take into the cabin and what goes in the hold?",
-      "composer": {
-        "model": "extractive-broad (offline, not an LLM)",
-        "answer": "An infant under two years of age who does not occupy a seat is allowed one cabin piece of up to 12kg within the standard 55cm by 25cm by 35cm dimensions. Where an infant or small child occupies a seat, one car seat is carried in addition to the normal cabin allowance. The prototype holds only the booking reference, the amount, the chosen payment route and the outcome status of the attempt.\n\nSource: Hand Baggage Policy - Section 4: Infants and Children in the Cabin (version 1.0, as published 23 Sep 2026); Synthetic Inchat Payment Flow - Section 5: Data Handling in the Prototype (version 1.0, prototype document, not airline policy)",
-        "error": null,
-        "seconds": 0.0,
-        "context_relevance": 0.349,
-        "groundedness": 1.0,
-        "answer_relevance": 1.0,
-        "missing_keys": []
-      },
-      "live": {
-        "model": "llama3.2:3b",
-        "answer": "I'd be happy to help you with your question.\n\nAccording to our Baggage Allowance Policy, as an Economy guest, you are allowed one cabin piece plus one accessory, with a combined weight limit of 12kg (26lb) on flights to and from the European Union, the United States, and the United Kingdom, and 10kg (22lb) on all other routes.\n\nSince you're traveling with an infant, you're also allowed one cabin piece of up to 12kg within the standard 55cm by 25cm by 35cm dimensions, in addition to the free cabin allowance.\n\nIn this case, you can take the infant's cabin piece (up to 12kg) and one accessory into the cabin. The stroller will need to go in the hold.\n\nPlease note that the infant's car seat is carried free of charge, so you won't need to check that in the hold either.\n\nIf you have any further questions or concerns, feel free to ask!",
-        "error": null,
-        "seconds": 38.57,
-        "context_relevance": 0.349,
-        "groundedness": 0.667,
-        "answer_relevance": 1.0,
-        "missing_keys": [],
-        "withheld": null
+      "models": {
+        "ollama": {
+          "answer": "I'd be happy to help you with your question.\n\nAccording to our Baggage Allowance Policy, as an Economy guest, you are allowed one cabin piece plus one accessory, with a combined weight limit of 12kg (26lb) on flights to and from the European Union, the United States, and the United Kingdom, and 10kg (22lb) on all other routes.\n\nSince you're traveling with an infant, you're also allowed one cabin piece of up to 12kg within the standard 55cm by 25cm by 35cm dimensions, in addition to the free cabin allowance.\n\nIn this case, you can take the infant's cabin piece (up to 12kg) and one accessory into the cabin. The stroller will need to go in the hold.\n\nPlease note that the infant's car seat is carried free of charge, so you won't need to check that in the hold either.\n\nIf you have any further questions or concerns, feel free to ask!",
+          "error": null,
+          "withheld": null,
+          "seconds": 33.18,
+          "missing_keys": [],
+          "context_relevance": 0.349,
+          "groundedness": 0.667,
+          "answer_relevance": 1.0
+        },
+        "offline": {
+          "answer": "An infant under two years of age who does not occupy a seat is allowed one cabin piece of up to 12kg within the standard 55cm by 25cm by 35cm dimensions. Where an infant or small child occupies a seat, one car seat is carried in addition to the normal cabin allowance. The prototype holds only the booking reference, the amount, the chosen payment route and the outcome status of the attempt.\n\nSource: Hand Baggage Policy - Section 4: Infants and Children in the Cabin (version 1.0, as published 23 Sep 2026); Synthetic Inchat Payment Flow - Section 5: Data Handling in the Prototype (version 1.0, prototype document, not airline policy)",
+          "error": null,
+          "withheld": null,
+          "seconds": 0.0,
+          "missing_keys": [],
+          "context_relevance": 0.349,
+          "groundedness": 1.0,
+          "answer_relevance": 1.0
+        }
       }
     },
     {
       "id": "q28",
       "query": "Can I pay inside this chat, and what happens if the payment prompt times out?",
-      "composer": {
-        "model": "extractive-broad (offline, not an LLM)",
-        "answer": "Mobile money payment is completed inside the online booking flow, which hands off to the airline's payment gateway. Kenya Airways does not publish a paybill or till number for manual entry, so a guest cannot pay by initiating a transfer from their handset independently of the booking.\n\nSource: Payment Methods Policy - Section 2: How Mobile Money Payment Is Completed (version 1.0, as published 23 Sep 2026)",
-        "error": null,
-        "seconds": 0.0,
-        "context_relevance": 0.513,
-        "groundedness": 1.0,
-        "answer_relevance": 0.0,
-        "missing_keys": [
-          "synthetic prototype",
-          "ninety seconds",
-          "single retry"
-        ]
-      },
-      "live": {
-        "model": "llama3.2:3b",
-        "answer": "According to the Synthetic Inchat Payment Flow policy, specifically Section 4: Illustrative Confirmation and Timeout, you can pay inside this chat.\n\nIf the payment prompt times out, the prototype will mark the attempt as timed out and offer you a single retry before handing the booking back to the standard online payment page.",
-        "error": null,
-        "seconds": 16.97,
-        "context_relevance": 0.513,
-        "groundedness": 1.0,
-        "answer_relevance": 0.333,
-        "missing_keys": [
-          "synthetic prototype",
-          "ninety seconds"
-        ],
-        "withheld": null
+      "models": {
+        "ollama": {
+          "answer": "According to the Synthetic Inchat Payment Flow policy, specifically Section 4: Illustrative Confirmation and Timeout, you can pay inside this chat.\n\nIf the payment prompt times out, the prototype will mark the attempt as timed out and offer you a single retry before handing the booking back to the standard online payment page.",
+          "error": null,
+          "withheld": null,
+          "seconds": 15.54,
+          "missing_keys": [
+            "synthetic prototype",
+            "ninety seconds"
+          ],
+          "context_relevance": 0.513,
+          "groundedness": 1.0,
+          "answer_relevance": 0.333
+        },
+        "offline": {
+          "answer": "Mobile money payment is completed inside the online booking flow, which hands off to the airline's payment gateway. Kenya Airways does not publish a paybill or till number for manual entry, so a guest cannot pay by initiating a transfer from their handset independently of the booking.\n\nSource: Payment Methods Policy - Section 2: How Mobile Money Payment Is Completed (version 1.0, as published 23 Sep 2026)",
+          "error": null,
+          "withheld": null,
+          "seconds": 0.0,
+          "missing_keys": [
+            "synthetic prototype",
+            "ninety seconds",
+            "single retry"
+          ],
+          "context_relevance": 0.513,
+          "groundedness": 1.0,
+          "answer_relevance": 0.0
+        }
       }
     },
     {
       "id": "q29",
       "query": "I am connecting from a Dreamliner onto a smaller aircraft with three bicycles. Is that going to work?",
-      "composer": {
-        "model": "extractive-broad (offline, not an LLM)",
-        "answer": "A maximum of three bicycles may be carried on Embraer 170 and 190 aircraft. Electric bicycles are not accepted for carriage.\n\nSource: Special Baggage Policy - Section 6: Bicycles and Aircraft Restrictions (version 1.0, as published 23 Sep 2026)",
-        "error": null,
-        "seconds": 0.0,
-        "context_relevance": 0.245,
-        "groundedness": 1.0,
-        "answer_relevance": 0.333,
-        "missing_keys": [
-          "narrow-body",
-          "cannot be guaranteed"
-        ]
-      },
-      "live": {
-        "model": "llama3.2:3b",
-        "answer": "According to Section 6 of the Baggage Allowance Policy, journeys touching the United States or Canada are assessed on the piece concept. Since you're connecting from a wide-body Boeing 787 onto a smaller aircraft (Embraer 170 or 190), your bicycles will be assessed on the piece concept. However, the policy does not guarantee carriage of every excess piece on the onward narrow-body sector.\n\nTo determine the feasibility of carrying three bicycles, you would need to check with the Most Significant Carrier under IATA Resolution 302, as stated in Section 6 of the Baggage Allowance Policy.",
-        "error": null,
-        "seconds": 23.27,
-        "context_relevance": 0.245,
-        "groundedness": 1.0,
-        "answer_relevance": 0.667,
-        "missing_keys": [
-          "cannot be guaranteed"
-        ],
-        "withheld": null
+      "models": {
+        "ollama": {
+          "answer": "According to Section 6 of the Baggage Allowance Policy, journeys touching the United States or Canada are assessed on the piece concept. Since you're connecting from a wide-body Boeing 787 onto a smaller aircraft (Embraer 170 or 190), your bicycles will be assessed on the piece concept. However, the policy does not guarantee carriage of every excess piece on the onward narrow-body sector.\n\nTo determine the feasibility of carrying three bicycles, you would need to check with the Most Significant Carrier under IATA Resolution 302, as stated in Section 6 of the Baggage Allowance Policy.",
+          "error": null,
+          "withheld": null,
+          "seconds": 21.07,
+          "missing_keys": [
+            "cannot be guaranteed"
+          ],
+          "context_relevance": 0.245,
+          "groundedness": 1.0,
+          "answer_relevance": 0.667
+        },
+        "offline": {
+          "answer": "A maximum of three bicycles may be carried on Embraer 170 and 190 aircraft. Electric bicycles are not accepted for carriage.\n\nSource: Special Baggage Policy - Section 6: Bicycles and Aircraft Restrictions (version 1.0, as published 23 Sep 2026)",
+          "error": null,
+          "withheld": null,
+          "seconds": 0.0,
+          "missing_keys": [
+            "narrow-body",
+            "cannot be guaranteed"
+          ],
+          "context_relevance": 0.245,
+          "groundedness": 1.0,
+          "answer_relevance": 0.333
+        }
       }
     },
     {
       "id": "q30",
       "query": "I am departing Guangzhou with a bag that is over the allowance. When do counters close and what is the Asia fee from a non-hub point?",
-      "composer": {
-        "model": "extractive-broad (offline, not an LLM)",
-        "answer": "Check-in counters for departures from Guangzhou, China close 90 minutes before departure. Journeys beginning at the Nairobi hub are charged 75 for Europe, 75 for the Americas, 50 for Asia, 50 for the Middle East, 50 within Africa and 25 on domestic services. Journeys beginning at all other points are charged 100 for Europe, 100 for the Americas, 100 for Asia, 75 for the Middle East, 60 within Africa and 25 on domestic services.\n\nSource: Checkin Policy - Section 4: Departures From Guangzhou (version 1.0, as published 23 Sep 2026); Excess Baggage Fees Policy - Section 2: Heavy Bag Fees by Region (version 1.0, as published 23 Sep 2026)",
-        "error": null,
-        "seconds": 0.0,
-        "context_relevance": 0.37,
-        "groundedness": 1.0,
-        "answer_relevance": 1.0,
-        "missing_keys": []
-      },
-      "live": {
-        "model": "llama3.2:3b",
-        "answer": "Based on the provided context and tool observations, I can answer your questions:\n\n1. Check-in counters for departures from Guangzhou, China close 90 minutes before departure.\n2. The Asia fee for a non-hub point is 50.",
-        "error": null,
-        "seconds": 14.59,
-        "context_relevance": 0.37,
-        "groundedness": 1.0,
-        "answer_relevance": 0.5,
-        "missing_keys": [
-          "100 for Asia"
-        ],
-        "withheld": null
+      "models": {
+        "ollama": {
+          "answer": "Based on the provided context and tool observations, I can answer your questions:\n\n1. Check-in counters for departures from Guangzhou, China close 90 minutes before departure.\n2. The Asia fee for a non-hub point is 50.",
+          "error": null,
+          "withheld": null,
+          "seconds": 13.72,
+          "missing_keys": [
+            "100 for Asia"
+          ],
+          "context_relevance": 0.37,
+          "groundedness": 1.0,
+          "answer_relevance": 0.5
+        },
+        "offline": {
+          "answer": "Check-in counters for departures from Guangzhou, China close 90 minutes before departure. Journeys beginning at the Nairobi hub are charged 75 for Europe, 75 for the Americas, 50 for Asia, 50 for the Middle East, 50 within Africa and 25 on domestic services. Journeys beginning at all other points are charged 100 for Europe, 100 for the Americas, 100 for Asia, 75 for the Middle East, 60 within Africa and 25 on domestic services.\n\nSource: Checkin Policy - Section 4: Departures From Guangzhou (version 1.0, as published 23 Sep 2026); Excess Baggage Fees Policy - Section 2: Heavy Bag Fees by Region (version 1.0, as published 23 Sep 2026)",
+          "error": null,
+          "withheld": null,
+          "seconds": 0.0,
+          "missing_keys": [],
+          "context_relevance": 0.37,
+          "groundedness": 1.0,
+          "answer_relevance": 1.0
+        }
       }
     }
   ]
