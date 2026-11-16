@@ -53,6 +53,11 @@ SENTIMENT_MODEL_PATH = (RUNTIME_DIR / "frustration_model.joblib" if os.getenv("K
                         else DATA_DIR / "sentiment_dataset" / "frustration_model.joblib")
 VECTOR_STORE_PATH = RUNTIME_DIR / "vector_store.json"
 APP_DB_PATH = RUNTIME_DIR / "kq_propel.db"
+# A PostgreSQL connection string (postgresql://...) moves every table to that
+# database, so the hosted copy keeps its data across restarts. Empty: the
+# SQLite file above, as on a laptop and in the tests. It holds a password:
+# set it in the host's environment, never in a committed file.
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 
 # --- RAG chunking parameters (per proposal: 500 token chunks, 50 token overlap) ---
 CHUNK_SIZE_TOKENS = 500

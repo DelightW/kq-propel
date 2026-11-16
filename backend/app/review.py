@@ -89,7 +89,7 @@ def list_conversations(flag: Optional[str] = None, q: Optional[str] = None,
         args.append("%" + q.strip()[:100] + "%")
     sql = _CONVERSATIONS_SQL + " WHERE " + " AND ".join(where)
     with database._connect() as conn:
-        total = conn.execute(f"SELECT COUNT(*) FROM ({sql})", args).fetchone()[0]
+        total = conn.execute(f"SELECT COUNT(*) FROM ({sql}) AS matching", args).fetchone()[0]
         rows = [dict(r) for r in conn.execute(
             sql + " ORDER BY s.last_at DESC LIMIT ? OFFSET ?", args + [size, (page - 1) * size])]
     out = []
@@ -168,12 +168,12 @@ def trends(days: int = 14, today: Optional[datetime] = None) -> Dict:
                 "SELECT substr(created_at, 1, 10) AS d, COUNT(DISTINCT session_id) AS conv, "
                 "SUM(CASE WHEN role = 'user' THEN 1 ELSE 0 END) AS q, "
                 "SUM(CASE WHEN role = 'user' AND sentiment_label = 'frustrated' THEN 1 ELSE 0 END) AS f, "
-                "SUM(CASE WHEN role = 'assistant' AND (message LIKE ? OR message LIKE ?) THEN 1 ELSE 0 END) AS dec "
+                "SUM(CASE WHEN role = 'assistant' AND (message LIKE ? OR message LIKE ?) THEN 1 ELSE 0 END) AS decl "
                 "FROM conversations WHERE created_at >= ? GROUP BY d",
                 (DECLINED_PREFIXES[0] + "%", DECLINED_PREFIXES[1] + "%", since)):
             if r["d"] in series:
                 series[r["d"]].update(conversations=r["conv"], questions=r["q"] or 0,
-                                      frustrated=r["f"] or 0, declined=r["dec"] or 0)
+                                      frustrated=r["f"] or 0, declined=r["decl"] or 0)
         for r in conn.execute(
                 "SELECT substr(created_at, 1, 10) AS d, AVG(groundedness) AS g, AVG(answer_relevance) AS a "
                 "FROM rag_evaluations WHERE created_at >= ? AND metric_version = ? GROUP BY d",

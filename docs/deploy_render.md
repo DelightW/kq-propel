@@ -6,9 +6,24 @@ answered all 30 evaluation questions. The ONNX vectors match the PyTorch ones to
 the same scores.
 
 **Limits of the free plan.** The service sleeps after about 15 minutes without visitors; the next visit wakes it
-in about a minute. Files are not kept between restarts, so conversations and payment records are lost on every
-restart or redeploy (the search index and classifier are rebuilt automatically). Fine for demonstrations, not
-for real payment records.
+in about a minute. Files are not kept between restarts (the search index and classifier are rebuilt
+automatically), so the data is kept in a PostgreSQL database instead: set `DATABASE_URL` (Section 1a). Without
+it the app falls back to a SQLite file, and conversations, payments and staff accounts are lost on every restart
+or redeploy.
+
+## 1a. The database (Neon, free)
+
+1. Create a free account at https://neon.tech and a project in **AWS Europe (Frankfurt)**, next to the Render
+   service.
+2. In the project, choose **Connect** and copy the **pooled** connection string (its host contains `-pooler`).
+3. In Render: the service → **Environment** → add `DATABASE_URL` with that string → **Save**. Render redeploys;
+   the tables are created on the first start.
+4. Check: sign in to `/admin`, make a change (for example a staff account), then **Manual Deploy → Restart
+   service**. The change is still there.
+
+The string contains the database password. Keep it in Render's environment only, never in the repository. Do
+not set `DATABASE_URL` in the `.env` of a machine that runs the tests: the tests would then write to that
+database.
 
 ## 1. Create the service
 
@@ -57,5 +72,5 @@ Every push to the `priority-1-hardening` branch redeploys automatically.
   Measured on 11 November 2026 with a forged header: `203.0.113.77, 41.90.137.104, 172.71.141.37, 10.24.59.156`,
   that is, the forged entry, the real caller (added by Cloudflare), a Cloudflare address and Render's internal
   network. `render.yaml` therefore sets `TRUSTED_PROXY_HOPS=3`.
-- Staff accounts other than the first administrator live in the database, so on the free plan they are lost when
-  the service restarts; the administrator from `ADMIN_PASSWORD_HASH` is recreated at every start.
+- Staff accounts live in the database, so they survive restarts once `DATABASE_URL` is set; without it they are
+  lost when the service restarts. The administrator from `ADMIN_PASSWORD_HASH` is recreated at every start.

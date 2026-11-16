@@ -23,7 +23,6 @@ Rules this module enforces:
   * Only `paid` counts as settled money. Pending, failed and simulated attempts
     are reported separately.
 """
-import sqlite3
 import uuid
 from datetime import datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
@@ -117,7 +116,7 @@ def record_attempt(*, session_id: str, quote_id: Optional[str], method: str, cur
                  quote_id if status in (PENDING, PAID) else None,
                  result.get("error"), now, source))
             return _row(conn, "id = ?", (cur.lastrowid,)), True
-    except sqlite3.IntegrityError:
+    except database.IntegrityError:
         existing = open_attempt(quote_id)
         if existing is None:
             raise

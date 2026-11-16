@@ -4,7 +4,7 @@ KQ-Propel is a customer-support chat assistant for Kenya Airways, built as my fi
 
 **Try it:** [kq-propel.onrender.com](https://kq-propel.onrender.com). The staff dashboard is at [/admin](https://kq-propel.onrender.com/admin).
 
-It runs on Render's free plan, so the first visit after a quiet period can take about a minute while the server wakes up. Its data is wiped whenever it restarts.
+It runs on Render's free plan, so the first visit after a quiet period can take about a minute while the server wakes up. Its data is kept in a PostgreSQL database (Neon), so conversations, payments and staff accounts survive restarts.
 
 > This is a student research prototype. It is not affiliated with or run by Kenya Airways. Bookings and flights that don't come from a live source are marked as demo data, and M-Pesa payments go through Safaricom's sandbox.
 
@@ -74,7 +74,7 @@ Every follow-up, unanswerable and handover case in the conversation test set pas
 - Swahili questions are read through a small glossary of travel terms and answered in English. Anything outside the glossary is declined.
 - Vague questions ("How much is the fee?") get a clarifying question chosen by keywords, which is a simple rule rather than real understanding.
 - Only one live model has been tried. On the same 30 questions, Llama 3.2 3B (run locally through Ollama, no GPU) scored answer relevance 0.706 but groundedness 0.824, below the 0.95 the release gate requires, and took a median of 16.3 seconds per answer. Two runs gave identical answers. The figure check blocked its two answers with invented numbers. So the offline composer stays the default. GPT-4o-mini hasn't been run (no API key). Results: `docs/results/model_comparison_llama3.2-3b_2026-11-16.json`; re-run with `python tools/compare_models.py`.
-- Rate limits are kept in memory. On the free hosting plan, all data resets on restart.
+- Rate limits are kept in memory, so they reset when the server restarts. Everything else is in the database.
 
 ## Running it yourself
 
@@ -103,10 +103,10 @@ If you don't set one, a one-time password is printed when the server starts.
 ```bash
 python tools/quality_gate.py      # the release gate: grounding, relevance, conversation cases, fairness
 python tools/compare_models.py    # offline composer vs a local Ollama model, same questions and context
-python tools/test_<name>.py       # each of the 19 suites runs on its own
+python tools/test_<name>.py       # each of the 20 suites runs on its own
 ```
 
-`test_auth.py` and `test_payment_session.py` need the server running, and `test_auth.py` reads the admin password from the `KQ_TEST_ADMIN_PASSWORD` environment variable. The rest use a temporary database and stubbed providers.
+`test_auth.py` and `test_payment_session.py` need the server running, and `test_auth.py` reads the admin password from the `KQ_TEST_ADMIN_PASSWORD` environment variable. The rest use a temporary SQLite database and stubbed providers. To run them on PostgreSQL instead, set `DATABASE_URL` to a disposable database for that command only; `test_database.py` also runs a PostgreSQL round trip when `KQ_TEST_POSTGRES_URL` is set.
 
 ## Deployment
 

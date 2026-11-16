@@ -1,16 +1,37 @@
 """
 Persistence layer for chat transcripts, transactions and sentiment telemetry
-backing the Administrative Dashboard. Uses SQLite for zero-configuration
-local persistence (swappable for a managed relational store in production;
-document/vector data lives in vectorstore.py per the proposal's MongoDB
-design).
+backing the Administrative Dashboard.
+
+Two databases are supported behind one interface:
+
+* SQLite (the default): a single file, for a laptop and for the tests.
+* PostgreSQL, when DATABASE_URL is set: for the hosted copy, whose own disk
+  is wiped on every restart.
+
+Every module writes SQLite-style SQL ("?" placeholders) through _connect().
+On PostgreSQL the adapter below translates it, returns rows that behave like
+sqlite3.Row (by name and by position), and supplies lastrowid and rowcount,
+so no module needs to know which database it is talking to.
 """
+import re
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timedelta
+from decimal import Decimal
+from functools import lru_cache
 from typing import Dict, List, Optional
 
 from app import config
+
+try:  # PostgreSQL support is optional: the laptop and the tests use SQLite.
+    import psycopg
+    _PG_INTEGRITY = (psycopg.errors.IntegrityError,)
+except ImportError:  # pragma: no cover - only without the driver installed
+    psycopg = None
+    _PG_INTEGRITY = ()
+
+# Catch this, not sqlite3.IntegrityError, so the code works on both databases.
+IntegrityError = (sqlite3.IntegrityError,) + _PG_INTEGRITY
 
 # Incremented whenever the evaluation metrics change in a way that makes new
 # scores incomparable with stored ones. Version 2 replaced bag-of-words
@@ -196,8 +217,140 @@ CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires
 """
 
 
+# ---------------------------------------------------------------------------
+# PostgreSQL adapter
+# ---------------------------------------------------------------------------
+
+# Tables whose rows are numbered; an INSERT into one returns the new id.
+_ID_TABLES = frozenset({"conversations", "transactions", "rag_evaluations", "admin_audit",
+                        "service_requests", "booking_lookups", "handovers"})
+_INSERT_RE = re.compile(r"^\s*INSERT\s+INTO\s+(\w+)", re.IGNORECASE)
+_NOCASE_RE = re.compile(r"([\w.]+)\s*=\s*\?\s+COLLATE\s+NOCASE", re.IGNORECASE)
+
+
+def using_postgres() -> bool:
+    return bool(config.DATABASE_URL)
+
+
+def _pg_schema() -> str:
+    """The SQLite schema in PostgreSQL's dialect. REAL becomes DOUBLE
+    PRECISION, because PostgreSQL's REAL is single precision."""
+    schema = (_SCHEMA.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY")
+              .replace(" REAL", " DOUBLE PRECISION")
+              .replace(" COLLATE NOCASE", ""))
+    # Usernames are unique regardless of case, as COLLATE NOCASE makes them in SQLite.
+    return schema + ("\nCREATE UNIQUE INDEX IF NOT EXISTS idx_staff_users_username_lower "
+                     "ON staff_users (lower(username));\n")
+
+
+@lru_cache(maxsize=512)
+def _pg_sql(sql: str, has_params: bool):
+    """Translates one statement. Returns (sql, returns_id)."""
+    text = _NOCASE_RE.sub(r"lower(\1) = lower(?)", sql)
+    if has_params:
+        # psycopg uses %s; a literal % (as in LIKE 'x%') must be doubled.
+        text = text.replace("%", "%%").replace("?", "%s")
+    match = _INSERT_RE.match(text)
+    returns_id = bool(match and match.group(1).lower() in _ID_TABLES
+                      and "RETURNING" not in text.upper())
+    if returns_id:
+        text = text.rstrip().rstrip(";") + " RETURNING id"
+    return text, returns_id
+
+
+class Row(dict):
+    """A result row readable by column name or by position, like sqlite3.Row."""
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return list(self.values())[key]
+        return super().__getitem__(key)
+
+
+def _plain(value):
+    # AVG() over integers returns NUMERIC; JSON and round() expect a float.
+    return float(value) if isinstance(value, Decimal) else value
+
+
+def _row_factory(cursor):
+    names = [d.name for d in cursor.description] if cursor.description else []
+    return lambda values: Row(zip(names, (_plain(v) for v in values)))
+
+
+class _PgCursor:
+    def __init__(self, cursor, lastrowid=None):
+        self._cursor = cursor
+        self.lastrowid = lastrowid
+        self.rowcount = cursor.rowcount
+
+    def fetchone(self):
+        return self._cursor.fetchone() if self._cursor.description else None
+
+    def fetchall(self):
+        return self._cursor.fetchall() if self._cursor.description else []
+
+    def __iter__(self):
+        return iter(self.fetchall())
+
+
+class _PgConnection:
+    """The subset of sqlite3.Connection the modules use."""
+
+    def __init__(self, conn):
+        self._conn = conn
+
+    def execute(self, sql: str, params=None):
+        params = tuple(int(p) if isinstance(p, bool) else p for p in (params or ()))
+        text, returns_id = _pg_sql(sql, bool(params))
+        cursor = self._conn.cursor(row_factory=_row_factory)
+        cursor.execute(text, params or None)
+        lastrowid = cursor.fetchone()["id"] if returns_id else None
+        return _PgCursor(cursor, lastrowid)
+
+    def executescript(self, script: str):
+        self._conn.execute(script)
+
+
+_pool = None
+
+
+def _pg_pool():
+    global _pool
+    if _pool is None:
+        if psycopg is None:
+            raise RuntimeError("DATABASE_URL is set but psycopg is not installed "
+                               "(pip install 'psycopg[binary]' psycopg-pool).")
+        from psycopg_pool import ConnectionPool
+        # prepare_threshold=None: a pooled endpoint (PgBouncer, as Neon's
+        # pooled URL uses) cannot keep prepared statements between requests.
+        # check: a hosted database closes idle connections, so each one is
+        # tested before it is handed out.
+        _pool = ConnectionPool(config.DATABASE_URL, min_size=1, max_size=5, open=True,
+                               kwargs={"prepare_threshold": None},
+                               check=ConnectionPool.check_connection, max_idle=240)
+        import atexit
+        atexit.register(close_pool)   # close before shutdown, not in a finaliser
+    return _pool
+
+
+def close_pool() -> None:
+    global _pool
+    if _pool is not None:
+        _pool.close()
+        _pool = None
+
+
 @contextmanager
 def _connect():
+    if using_postgres():
+        with _pg_pool().connection() as conn:
+            try:
+                yield _PgConnection(conn)
+                conn.commit()
+            except BaseException:
+                conn.rollback()
+                raise
+        return
     config.APP_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(config.APP_DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -208,9 +361,17 @@ def _connect():
         conn.close()
 
 
+def _columns(conn, table: str) -> set:
+    if using_postgres():
+        return {r["column_name"] for r in conn.execute(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_schema = current_schema() AND table_name = ?", (table,))}
+    return {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+
+
 def init_db():
     with _connect() as conn:
-        conn.executescript(_SCHEMA)
+        conn.executescript(_pg_schema() if using_postgres() else _SCHEMA)
         _migrate(conn)
 
 
@@ -220,12 +381,12 @@ def _migrate(conn):
     CREATE TABLE IF NOT EXISTS silently leaves an existing table untouched, so
     a pre-existing kq_propel.db would otherwise keep the old schema.
     """
-    columns = {r["name"] for r in conn.execute("PRAGMA table_info(rag_evaluations)")}
+    columns = _columns(conn, "rag_evaluations")
     if "metric_version" not in columns:
         conn.execute("ALTER TABLE rag_evaluations ADD COLUMN "
                      "metric_version INTEGER NOT NULL DEFAULT 1")
 
-    tx_columns = {r["name"] for r in conn.execute("PRAGMA table_info(transactions)")}
+    tx_columns = _columns(conn, "transactions")
     if "method" not in tx_columns:
         # Every pre-existing row was an M-Pesa STK push in shillings, which is
         # what the defaults record.
@@ -235,7 +396,7 @@ def _migrate(conn):
         conn.execute("ALTER TABLE transactions ADD COLUMN "
                      "currency TEXT NOT NULL DEFAULT 'KES'")
 
-    state_columns = {r["name"] for r in conn.execute("PRAGMA table_info(payment_state)")}
+    state_columns = _columns(conn, "payment_state")
     if "currency" not in state_columns:
         conn.execute("ALTER TABLE payment_state ADD COLUMN "
                      "currency TEXT NOT NULL DEFAULT 'KES'")
@@ -271,12 +432,12 @@ def _migrate(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_checkout "
                  "ON transactions(checkout_request_id)")
 
-    state_columns = {r["name"] for r in conn.execute("PRAGMA table_info(payment_state)")}
+    state_columns = _columns(conn, "payment_state")
     for column in ("quote_id", "expires_at"):
         if column not in state_columns:
             conn.execute(f"ALTER TABLE payment_state ADD COLUMN {column} TEXT")
 
-    context_columns = {r["name"] for r in conn.execute("PRAGMA table_info(conversation_context)")}
+    context_columns = _columns(conn, "conversation_context")
     if "booking" not in context_columns:
         conn.execute("ALTER TABLE conversation_context ADD COLUMN booking TEXT")
 
@@ -285,11 +446,11 @@ def _migrate(conn):
     # so erasing the conversation erases it too. Each answer's scores are
     # linked to its conversation and message, so staff can find the answers
     # that scored worst instead of seeing averages only.
-    conv_columns = {r["name"] for r in conn.execute("PRAGMA table_info(conversations)")}
+    conv_columns = _columns(conn, "conversations")
     for column in ("feedback", "feedback_note", "feedback_at"):
         if column not in conv_columns:
             conn.execute(f"ALTER TABLE conversations ADD COLUMN {column} TEXT")
-    eval_columns = {r["name"] for r in conn.execute("PRAGMA table_info(rag_evaluations)")}
+    eval_columns = _columns(conn, "rag_evaluations")
     if "session_id" not in eval_columns:
         conn.execute("ALTER TABLE rag_evaluations ADD COLUMN session_id TEXT")
     if "message_id" not in eval_columns:
@@ -308,8 +469,11 @@ def create_admin_session(token_hash: str, username: str, ttl_minutes: int,
     expires = now + timedelta(minutes=ttl_minutes)
     with _connect() as conn:
         conn.execute(
-            "INSERT OR REPLACE INTO admin_sessions (token_hash, username, created_at, "
-            "expires_at, last_seen_at, ip, user_agent) VALUES (?,?,?,?,?,?,?)",
+            "INSERT INTO admin_sessions (token_hash, username, created_at, "
+            "expires_at, last_seen_at, ip, user_agent) VALUES (?,?,?,?,?,?,?) "
+            "ON CONFLICT(token_hash) DO UPDATE SET username=excluded.username, "
+            "created_at=excluded.created_at, expires_at=excluded.expires_at, "
+            "last_seen_at=excluded.last_seen_at, ip=excluded.ip, user_agent=excluded.user_agent",
             (token_hash, username, now.isoformat(), expires.isoformat(),
              now.isoformat(), ip, user_agent),
         )
@@ -382,8 +546,10 @@ def create_chat_session(session_id: str, ip: Optional[str] = None) -> None:
     now = datetime.utcnow().isoformat()
     with _connect() as conn:
         conn.execute(
-            "INSERT OR REPLACE INTO chat_sessions (session_id, created_at, "
-            "last_seen_at, ip) VALUES (?,?,?,?)", (session_id, now, now, ip),
+            "INSERT INTO chat_sessions (session_id, created_at, last_seen_at, ip) "
+            "VALUES (?,?,?,?) ON CONFLICT(session_id) DO UPDATE SET "
+            "created_at=excluded.created_at, last_seen_at=excluded.last_seen_at, ip=excluded.ip",
+            (session_id, now, now, ip),
         )
 
 

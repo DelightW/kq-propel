@@ -33,10 +33,11 @@ Passengers may also type data the system does not ask for, such as names, bookin
 | PayPal | Amount, currency, order description | Passenger chooses card (card details are entered on PayPal's page, never in KQ-Propel) | Outside Kenya |
 | AviationStack | Flight number only | Passenger asks about a flight (backup once the Kenya Airways feed is connected) | Outside Kenya |
 | Kenya Airways booking system | Booking reference and surname | Passenger gives both to look up a booking | Kenya Airways |
+| Hosting: Render (application) and Neon (PostgreSQL database), for the hosted prototype | Every table in Section 2: the application processes it, the database stores it | Continuously | Frankfurt, Germany (outside Kenya) |
 | Language model provider (OpenAI), if enabled | Question text and retrieved policy text | Every answered question | Outside Kenya |
 | Kenya Airways contact-centre system, if a webhook is configured | Case reference, reason, transcript with phone numbers masked | Passenger asks for a person | **[Kenya Airways to decide]** |
 
-Transfers outside Kenya must meet the conditions in Part VI of the Act (section 48 onwards). Enabling a cloud language model is the largest transfer, because every question leaves the country. A locally hosted model (Ollama) avoids it. **[Kenya Airways to decide]** which model may be used, and the transfer safeguards in place for each provider.
+On a laptop the tables are a SQLite file on that machine. The hosted prototype keeps them in a Neon PostgreSQL database so they survive restarts; they therefore stay until deleted, which makes the retention periods in Section 5 and automatic deletion (`PRIVACY_RETENTION_ENABLED`) matter for the hosted copy. Transfers outside Kenya must meet the conditions in Part VI of the Act (section 48 onwards). Enabling a cloud language model is the largest transfer, because every question leaves the country. A locally hosted model (Ollama) avoids it. **[Kenya Airways to decide]** which model may be used, and the transfer safeguards in place for each provider.
 
 ## 4. Lawful basis **[Kenya Airways to decide]**
 
