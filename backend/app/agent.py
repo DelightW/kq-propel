@@ -14,7 +14,8 @@ import uuid
 import json
 from typing import Dict, List, Optional, Tuple
 
-from app import (aviationstack, booking, composer, config, daraja, database, evaluation, ratelimit,
+from app import (aviationstack, booking, composer, config, daraja, database, evaluation, extra_bag,
+                  ratelimit,
                   handover, kq_flights, memory, payments, paypal, retrieval, sentiment,
                   service_requests, swahili)
 from app.llm import generate_answer
@@ -938,6 +939,41 @@ def _ask_for_booking() -> str:
     return text
 
 
+def _extra_bag_offer(session_id: str, trace: List[Dict]) -> str:
+    """Quotes one extra piece for the booked trip and offers to take payment.
+    Returns the reply text; a quote is stored only when a fee was found."""
+    trip = booking.remembered_booking(session_id)
+    segment = (trip.get("segments") or [None])[0]
+    if not segment:
+        return extra_bag.ask_for_booking()
+    chunks = get_vector_store().similarity_search(extra_bag.SEARCH, k=4)
+    trace.append({"step": "action", "tool": "retrieve_policy_documents", "input": extra_bag.SEARCH,
+                  "observation": [{"source": c.get("source"), "section": c.get("section")} for c in chunks]})
+    table = extra_bag.fees(chunks)
+    q = extra_bag.quote(table, segment) if table else None
+    if not q:
+        trace.append({"step": "thought",
+                      "content": "No heavy bag fee could be read for this route; not offering a payment."})
+        return ("I couldn't find the extra bag fee for this route in the policy documents, so I can't "
+                "take a payment for it here. You can pay for extra baggage at the airport or through "
+                "Manage My Booking on kenya-airways.com.")
+    amount, currency = q["amount"], q["currency"]
+    reference = trip.get("reference")
+    kes_amount, conversion_note = _to_kes(amount, currency)
+    payments.new_quote(session_id, amount, currency,
+                       f"Extra checked bag on booking {reference} ({segment.get('origin_code')}-"
+                       f"{segment.get('destination_code')})", stage="offered")
+    trace.append({"step": "thought",
+                  "content": (f"Extra bag on booking {reference}: the heavy bag fee for {q['region']} "
+                              f"({'from' if q['from_hub'] else 'not from'} the Nairobi hub) is {amount:,.0f} "
+                              f"in {q['source']}. The table has no currency label; charged as USD, as "
+                              f"the page's other fees are, and the passenger is told so.")})
+    answer = extra_bag.reply(reference, segment, q) + _offer_payment_message(amount, currency, kes_amount)
+    if conversion_note:
+        answer += "\n\n" + conversion_note
+    return answer
+
+
 def _booking_turn(session_id: str, message: str, trace: List[Dict],
                   sentiment_result: Dict) -> Optional[Dict]:
     """Looks up a booking when the message gives a booking reference. None
@@ -977,6 +1013,10 @@ def _booking_turn(session_id: str, message: str, trace: List[Dict],
             follow_up = _start_name_request(session_id, trace)
             if follow_up:
                 reply = reply.rsplit("\n\nYou can now ask", 1)[0] + "\n\n" + follow_up
+        elif extra_bag.wants_extra_bag(memory.recall(session_id).get("last_query") or ""):
+            # The passenger asked to pay for an extra bag before giving the booking.
+            reply = (reply.rsplit("\n\nYou can now ask", 1)[0] + "\n\n"
+                     + _extra_bag_offer(session_id, trace))
     return _finalize_direct(session_id, message, _apply_empathy(reply, sentiment_result),
                             trace, sentiment_result)
 
@@ -1235,6 +1275,17 @@ def _run_agent_turn(session_id: str, message: str) -> Dict:
     requested = _service_request_turn(session_id, message, trace, sentiment_result)
     if requested:
         return requested
+
+    # --- Paying for an extra bag: priced from the booked route ---
+    if extra_bag.wants_extra_bag(message):
+        trace.append({"step": "thought",
+                      "content": "Passenger wants to pay for an extra bag; the fee depends on the booked route."})
+        if not booking.remembered(session_id):
+            # Remembered so the offer follows once the booking is found.
+            memory.remember(session_id, query=message)
+        return _finalize_direct(session_id, message,
+                                _apply_empathy(_extra_bag_offer(session_id, trace), sentiment_result),
+                                trace, sentiment_result)
 
     # --- Thought 2b: continue an in-progress payment conversation ---
     pending = database.get_pending_payment(session_id)

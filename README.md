@@ -13,6 +13,7 @@ It runs on Render's free plan, so the first visit after a quiet period can take 
 - "How many bags can I check in Economy to London?" and then "What about Business class?" (the follow-up keeps the context)
 - "Check my booking KQDEMO, surname Wanjiru" (a demo booking)
 - "I need to correct the spelling of my name", then "booking KQDLW1, surname Wangui", then the corrected name "Delight Wambui". The assistant counts the characters changed and quotes the fee.
+- "I want to pay for an extra bag", then a booking such as "booking KQDLW1, surname Wangui". The fee comes from Kenya Airways' heavy-bag table for that route (75 to Europe from Nairobi). The table has no currency, so the prototype charges it in US dollars and says so.
 - More demo bookings with a name to correct: `KQNC01` / Kanja and `KQNC04` / Wangui (domestic, lower fees), `KQNC02` / Wanjiro (try "Delight Wanjiru") and `KQNC03` / Wambui (Business).
 
 Each reply has a **reasoning trace** you can open to see what the assistant checked, what it retrieved and why it answered the way it did.
@@ -104,7 +105,7 @@ If you don't set one, a one-time password is printed when the server starts.
 ```bash
 python tools/quality_gate.py      # the release gate: grounding, relevance, conversation cases, fairness
 python tools/compare_models.py    # offline composer vs a local Ollama model, same questions and context
-python tools/test_<name>.py       # each of the 20 suites runs on its own
+python tools/test_<name>.py       # each of the 21 suites runs on its own
 ```
 
 `test_auth.py` and `test_payment_session.py` need the server running, and `test_auth.py` reads the admin password from the `KQ_TEST_ADMIN_PASSWORD` environment variable. The rest use a temporary SQLite database and stubbed providers. To run them on PostgreSQL instead, set `DATABASE_URL` to a disposable database for that command only; `test_database.py` also runs a PostgreSQL round trip when `KQ_TEST_POSTGRES_URL` is set.
