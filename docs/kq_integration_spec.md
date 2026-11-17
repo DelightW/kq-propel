@@ -2,7 +2,7 @@
 
 **Status:** proposal. KQ-Propel already contains adapters for the two services below, tested against stubbed responses in exactly these shapes (`backend/tools/test_kq_integration.py`). If Kenya Airways' services differ, only the mapping function in each adapter changes; the assistant itself does not.
 
-Until the services are provided, the assistant uses clearly labelled demonstration data: three sample bookings (`KQDEMO` / Wanjiru, `KQBIZ1` / Wambui and `KQDLW1` / Wangui) and three sample flights.
+Until the services are provided, the assistant uses clearly labelled demonstration data: seven sample bookings (`KQDEMO` / Wanjiru, `KQBIZ1` / Wambui, `KQDLW1` / Wangui, and `KQNC01` / Kanja, `KQNC02` / Wanjiro, `KQNC03` / Wambui and `KQNC04` / Wangui for name corrections) and three sample flights.
 
 ## 1. Booking lookup (`backend/app/booking.py`)
 

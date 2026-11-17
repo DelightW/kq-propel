@@ -13,6 +13,7 @@ It runs on Render's free plan, so the first visit after a quiet period can take 
 - "How many bags can I check in Economy to London?" and then "What about Business class?" (the follow-up keeps the context)
 - "Check my booking KQDEMO, surname Wanjiru" (a demo booking)
 - "I need to correct the spelling of my name", then "booking KQDLW1, surname Wangui", then the corrected name "Delight Wambui". The assistant counts the characters changed and quotes the fee.
+- More demo bookings with a name to correct: `KQNC01` / Kanja and `KQNC04` / Wangui (domestic, lower fees), `KQNC02` / Wanjiro (try "Delight Wanjiru") and `KQNC03` / Wambui (Business).
 
 Each reply has a **reasoning trace** you can open to see what the assistant checked, what it retrieved and why it answered the way it did.
 

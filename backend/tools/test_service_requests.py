@@ -184,6 +184,21 @@ def test_short_replies_are_not_read_as_frustration():
     assert sentiment.classify_frustration("This is ridiculous, where is my bag")["label"] == "frustrated"
 
 
+def test_extra_demo_bookings_are_priced_by_route():
+    for lookup, current, new, fee in (
+            ("booking KQNC01, surname Kanja", "Delight Kanja", "Delight Kanja Wambui", "USD 50.00"),
+            ("booking KQNC02, surname Wanjiro", "Delight Wanjiro", "Delight Wanjiru", "USD 75.00"),
+            ("booking KQNC03, surname Wambui", "Delight Wambui", "Delight Wanjiru Wambui", "USD 150.00"),
+            ("booking KQNC04, surname Wangui", "Delight Wangui", "Delight Wambui", "USD 15.00")):
+        s = session()
+        say(s, "I want to correct my name")
+        found = say(s, lookup)
+        assert current in found and "sample data" in found, found
+        summary = say(s, new)
+        assert new in summary and fee in summary, (lookup, summary)
+        say(s, "no")
+
+
 def main() -> int:
     tests = [(n, f) for n, f in globals().items() if n.startswith("test_") and callable(f)]
     failures = 0

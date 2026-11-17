@@ -12,8 +12,10 @@ Two modes, like the flight tool:
 
   * Live (KQ_BOOKING_API_URL set). The reference and surname are POSTed to
     Kenya Airways' booking service; nothing is invented on failure.
-  * Demo (no URL). Three fixed demonstration bookings, labelled as such:
-    KQDEMO / Wanjiru, KQBIZ1 / Wambui and KQDLW1 / Wangui.
+  * Demo (no URL). Fixed demonstration bookings, labelled as such:
+    KQDEMO / Wanjiru, KQBIZ1 / Wambui and KQDLW1 / Wangui, plus KQNC01 / Kanja,
+    KQNC02 / Wanjiro, KQNC03 / Wambui and KQNC04 / Wangui for trying name
+    corrections (KQNC01 and KQNC04 are domestic).
 
 Safeguards, because a booking holds personal data:
 
@@ -66,11 +68,37 @@ _DEMO = {
         "destination": "London", "destination_code": "LHR", "departure_utc": "2026-12-18T22:40Z",
         "cabin": "Economy", "fare_brand": "Economy Classic",
         "checked_baggage": {"pieces": 2, "weight_kg": 23}}],
+    # More bookings for trying name corrections: two domestic (the lower
+    # domestic fees apply) and two international, one of them in Business.
+    ("KQNC01", "KANJA"): [{
+        "flight_number": "KQ612", "origin": "Nairobi", "origin_code": "NBO",
+        "destination": "Mombasa", "destination_code": "MBA", "departure_utc": "2026-12-22T06:00Z",
+        "cabin": "Economy", "fare_brand": "Economy Classic",
+        "checked_baggage": {"pieces": 1, "weight_kg": 23}}],
+    ("KQNC02", "WANJIRO"): [{
+        "flight_number": "KQ310", "origin": "Nairobi", "origin_code": "NBO",
+        "destination": "Dubai", "destination_code": "DXB", "departure_utc": "2026-12-27T13:30Z",
+        "cabin": "Economy", "fare_brand": "Economy Classic",
+        "checked_baggage": {"pieces": 2, "weight_kg": 23}}],
+    ("KQNC03", "WAMBUI"): [{
+        "flight_number": "KQ760", "origin": "Nairobi", "origin_code": "NBO",
+        "destination": "Johannesburg", "destination_code": "JNB", "departure_utc": "2027-01-05T09:40Z",
+        "cabin": "Business", "fare_brand": "Business Flex",
+        "checked_baggage": {"pieces": 2, "weight_kg": 32}}],
+    ("KQNC04", "WANGUI"): [{
+        "flight_number": "KQ656", "origin": "Nairobi", "origin_code": "NBO",
+        "destination": "Kisumu", "destination_code": "KIS", "departure_utc": "2027-01-09T17:10Z",
+        "cabin": "Economy", "fare_brand": "Economy Classic",
+        "checked_baggage": {"pieces": 1, "weight_kg": 23}}],
 }
 _DEMO_PASSENGERS = {
     ("KQDEMO", "WANJIRU"): ["Delight Wanjiru"],
     ("KQBIZ1", "WAMBUI"): ["Delight Wambui"],
     ("KQDLW1", "WANGUI"): ["Delight Wangui"],
+    ("KQNC01", "KANJA"): ["Delight Kanja"],
+    ("KQNC02", "WANJIRO"): ["Delight Wanjiro"],
+    ("KQNC03", "WAMBUI"): ["Delight Wambui"],
+    ("KQNC04", "WANGUI"): ["Delight Wangui"],
 }
 
 # "booking reference ABC12D", "my PNR is abc12d", "ref: KQDEMO". The words
