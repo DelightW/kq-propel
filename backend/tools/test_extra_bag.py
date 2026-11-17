@@ -49,7 +49,10 @@ def test_fees_are_read_from_the_policy_table():
 
 def test_the_intent_is_recognised():
     for yes in ("I want to pay for an extra bag", "can I buy an additional bag?",
-                "I need to pay for excess baggage", "add another suitcase please"):
+                "I need to pay for excess baggage", "add another suitcase please",
+                "can i pay for an added baggage", "I want to pay for extra kg",
+                "can I pay for a heavier bag", "I need to pay for a bag that is overweight",
+                "pay for an additional checked bag"):
         assert extra_bag.wants_extra_bag(yes), yes
     for no in ("how many bags can I check?", "my bag is delayed", "what is the hand luggage limit?",
                "I am a Gold member of Asante Rewards. Do I get any extra baggage?",

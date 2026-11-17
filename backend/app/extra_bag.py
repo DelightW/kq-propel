@@ -25,8 +25,11 @@ SEARCH = "heavy bag fees by region journeys beginning at the Nairobi hub"
 
 WANT_RE = re.compile(
     r"\b(pay|paying|buy|buying|purchase|add|adding|book|prepay|want|need)\b.{0,30}?"
-    r"\b(extra|additional|excess|another|second|third|more|heavy|overweight)\s+"
-    r"(bags?|baggage|luggage|suitcases?|pieces?)\b",
+    r"\b(extra|additional|added|add-on|excess|another|second|third|more|heavy|heavier|overweight|"
+    r"oversized?)\s+(checked\s+)?(bags?|baggage|luggage|suitcases?|pieces?|kg|kilos?|weight)\b"
+    r"|\b(pay|paying|buy|buying|purchase|add|adding|book|prepay|want|need)\b.{0,30}?"
+    r"\b(bags?|baggage|luggage|suitcases?)\s+(that\s+is\s+|which\s+is\s+)?"
+    r"(over\s*weight|over\s+the\s+limit|too\s+heavy|extra)\b",
     re.IGNORECASE)
 # A question about an allowance ("do I get an extra bag as a Gold member?") is
 # about something free, not something to pay for.
