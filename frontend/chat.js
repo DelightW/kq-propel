@@ -12,10 +12,11 @@
   var input = document.getElementById("chat-input");
   var sendBtn = document.getElementById("send-btn");
   var chips = document.getElementById("chips");
-  var tracePanel = document.getElementById("trace-panel");
-  var traceBody = document.getElementById("trace-body");
-  var traceToggle = document.getElementById("trace-toggle");
-  var traceClose = document.getElementById("trace-close");
+  var sidebar = document.getElementById("sidebar");
+  var sidebarToggle = document.getElementById("sidebar-toggle");
+  var sidebarClose = document.getElementById("sidebar-close");
+  var threadList = document.getElementById("thread-list");
+  var newChatBtn = document.getElementById("new-chat");
   var scrim = document.getElementById("scrim");
   var statusDot = document.getElementById("status-dot");
   var statusText = document.getElementById("status-text");
@@ -598,13 +599,16 @@
   function pollHandover() {
     if (handoverPolling) { return; }
     handoverPolling = true;
+    var gen = viewGen;
     function tick() {
+      if (gen !== viewGen) { return; }   // another chat is shown now
       fetch("/api/chat/handover?after=" + lastAgentMessageId, {
         credentials: "same-origin"
       }).then(function (r) {
         if (!r.ok) { throw new Error("HTTP " + r.status); }
         return r.json();
       }).then(function (d) {
+        if (gen !== viewGen) { return; }
         (d.messages || []).forEach(function (m) {
           lastAgentMessageId = Math.max(lastAgentMessageId, m.id);
           addBubble("agent", m.message);
@@ -745,198 +749,199 @@
     return bubble;
   }
 
-  function step(label, text, detail, kind) {
-    var el = document.createElement("div");
-    el.className = "step" + (kind ? " step-" + kind : "");
-    var l = document.createElement("span");
-    l.className = "label";
-    l.textContent = label;
-    el.appendChild(l);
-    // The trace is plain text: drop the answer's **bold** markers.
-    if (text) { el.appendChild(document.createTextNode(String(text).replace(/\*\*/g, ""))); }
-    if (detail && detail.nodeType) {
-      el.appendChild(detail);
-    } else if (detail) {
-      var c = document.createElement("code");
-      c.textContent = detail;
-      el.appendChild(c);
-    }
-    return el;
+  /* ------------------------------ chats sidebar ------------------------------ */
+
+  /* The browser's own chats, kept on the server against a private cookie:
+     open an earlier chat, start a new one, pin or delete one. On a laptop the
+     list sits beside the conversation and can be hidden; on a phone it slides
+     over it. */
+
+  var PIN_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M9 4h6l-1 6 3 3v2H7v-2l3-3zM12 15v5"/></svg>';
+  var TRASH_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>';
+
+  var activeThread = null;
+  // Bumped whenever another chat is shown, so a reply check still running for
+  // the previous chat cannot add its messages to this one.
+  var viewGen = 0;
+
+  function sidebarShown() {
+    return isDesktop() ? !document.body.classList.contains("sidebar-hidden")
+                       : sidebar.classList.contains("open");
   }
 
-  var FACT_NAMES = {
-    source: "Source", is_live: "Live", available: "Available", flight_number: "Flight", route: "Route",
-    status: "Status", delay_minutes: "Delay (min)", gate: "Gate", estimated_departure_utc: "Est. departure (UTC)",
-    scheduled_departure_utc: "Departure (UTC)", retrieved_at_utc: "Retrieved (UTC)", reason: "Note",
-    segments: "Segments"
-  };
-
-  function factValue(v) {
-    if (v === true) { return "Yes"; }
-    if (v === false) { return "No"; }
-    if (Array.isArray(v)) { return v.length + (v.length === 1 ? " item" : " items"); }
-    if (v && typeof v === "object") { return Object.keys(v).length + " fields"; }
-    return String(v).replace("T", " ").replace(/:00\+00:00$|Z$/, "");
-  }
-
-  /* An observation as a short list: retrieved sections with their scores, or
-     a tool's result as name and value. Empty values are left out. */
-  function observationList(obs) {
-    var ul = document.createElement("ul");
-    ul.className = "obs";
-    function row(k, v, cls) {
-      var li = document.createElement("li");
-      var a = document.createElement("span");
-      a.className = cls === "score" ? "v text" : "k";
-      a.textContent = k;
-      var b = document.createElement("span");
-      b.className = cls === "score" ? "score" : "v";
-      b.textContent = v;
-      li.appendChild(a);
-      li.appendChild(b);
-      ul.appendChild(li);
-    }
-    if (Array.isArray(obs)) {
-      obs.forEach(function (o) {
-        var name = (o.section || o.source || "result").replace(/^Section \d+:\s*/, "");
-        row(name, o.score !== undefined ? Number(o.score).toFixed(2) : "", "score");
-      });
-    } else if (obs && typeof obs === "object") {
-      Object.keys(obs).forEach(function (k) {
-        var v = obs[k];
-        if (v === null || v === undefined || v === "") { return; }
-        row(FACT_NAMES[k] || k.replace(/_/g, " "), factValue(v));
-      });
-    }
-    return ul.childNodes.length ? ul : null;
-  }
-
-  function renderTrace(data) {
-    traceBody.innerHTML = "";
-
-    var trace = data.trace || [];
-    for (var i = 0; i < trace.length; i++) {
-      var t = trace[i];
-      if (t.step === "action") {
-        var detail = (t.observation && typeof t.observation === "object")
-          ? observationList(t.observation)
-          : (t.observation !== undefined ? String(t.observation) : "");
-        var toolInput = t.input;
-        if (toolInput && typeof toolInput === "object") { toolInput = JSON.stringify(toolInput); }
-        var toolName = String(t.tool || "tool").replace(/_/g, " ");
-        traceBody.appendChild(step("Action · " + toolName, toolInput ? String(toolInput) : "",
-                                   detail, "action"));
-      } else if (t.step === "final_answer") {
-        traceBody.appendChild(step("Answer · " + (t.model || "model"), t.content || "", "", "final"));
-      } else {
-        traceBody.appendChild(step(t.step || "step", t.content || "", "", "thought"));
-      }
-    }
-
-    if (data.sentiment) {
-      traceBody.appendChild(step(
-        "Sentiment model",
-        data.sentiment.label + " (confidence " + data.sentiment.confidence +
-        ", frustration " + data.sentiment.frustration_score + ")", "", "metrics"
-      ));
-    }
-
-    var m = data.rag_metrics || {};
-    if (m.context_relevance !== undefined) {
-      var wrap = document.createElement("div");
-      wrap.className = "step step-metrics";
-      var lab = document.createElement("span");
-      lab.className = "label";
-      lab.textContent = "RAG-Triad evaluation";
-      wrap.appendChild(lab);
-
-      var meter = document.createElement("div");
-      meter.className = "meter";
-      meter.appendChild(meterRow("Context rel.", m.context_relevance));
-      meter.appendChild(meterRow("Groundedness", m.groundedness));
-      meter.appendChild(meterRow("Answer rel.", m.answer_relevance));
-      wrap.appendChild(meter);
-      traceBody.appendChild(wrap);
-    }
-
-    if (!traceBody.childNodes.length) {
-      traceBody.innerHTML = '<p class="trace-empty">No reasoning steps for this message.</p>';
-    }
-    traceBody.scrollTop = 0;
-  }
-
-  function meterRow(label, value) {
-    var v = Math.max(0, Math.min(1, Number(value) || 0));
-    var row = document.createElement("div");
-    row.className = "meter-row";
-
-    var l = document.createElement("span");
-    l.className = "m-label";
-    l.textContent = label;
-
-    var track = document.createElement("span");
-    track.className = "meter-track";
-    var fill = document.createElement("span");
-    fill.className = "meter-fill";
-    fill.style.width = (v * 100).toFixed(0) + "%";
-    track.appendChild(fill);
-
-    var val = document.createElement("span");
-    val.className = "m-val";
-    val.textContent = v.toFixed(2);
-
-    row.appendChild(l);
-    row.appendChild(track);
-    row.appendChild(val);
-    return row;
-  }
-
-  /* --------------------------- trace panel UI --------------------------- */
-
-  function openTrace() {
-    tracePanel.classList.add("open");
-    tracePanel.classList.remove("collapsed");
-    traceToggle.setAttribute("aria-expanded", "true");
-    if (!isDesktop()) { scrim.hidden = false; traceClose.focus(); }
-  }
-
-  function closeTrace() {
-    var wasOverlay = !isDesktop() && tracePanel.classList.contains("open");
-    tracePanel.classList.remove("open");
-    if (isDesktop()) { tracePanel.classList.add("collapsed"); }
-    traceToggle.setAttribute("aria-expanded", "false");
-    scrim.hidden = true;
-    if (wasOverlay) { traceToggle.focus(); }
-  }
-
-  function toggleTrace() {
-    var shown = isDesktop()
-      ? !tracePanel.classList.contains("collapsed")
-      : tracePanel.classList.contains("open");
-    if (shown) { closeTrace(); } else { openTrace(); }
-  }
-
-  traceToggle.addEventListener("click", toggleTrace);
-  traceClose.addEventListener("click", closeTrace);
-  scrim.addEventListener("click", closeTrace);
-
-  document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape" && !isDesktop()) { closeTrace(); }
-  });
-
-  // The panel starts closed on every screen and opens on demand; on laptops it
-  // slides in beside the conversation, on phones over it.
-  tracePanel.classList.add("collapsed");
-  traceToggle.setAttribute("aria-expanded", "false");
-
-  window.addEventListener("resize", function () {
+  function openSidebar() {
     if (isDesktop()) {
-      scrim.hidden = true;
-      tracePanel.classList.remove("open");
-    } else if (!tracePanel.classList.contains("open")) {
+      document.body.classList.remove("sidebar-hidden");
+    } else {
+      sidebar.classList.add("open");
+      scrim.hidden = false;
+      newChatBtn.focus();
+    }
+    sidebarToggle.setAttribute("aria-expanded", "true");
+  }
+
+  function closeSidebar(returnFocus) {
+    if (isDesktop()) {
+      document.body.classList.add("sidebar-hidden");
+    } else {
+      sidebar.classList.remove("open");
       scrim.hidden = true;
     }
+    sidebarToggle.setAttribute("aria-expanded", "false");
+    if (returnFocus) { sidebarToggle.focus(); }
+  }
+
+  sidebarToggle.addEventListener("click", function () {
+    if (sidebarShown()) { closeSidebar(false); } else { openSidebar(); }
   });
+  sidebarClose.addEventListener("click", function () { closeSidebar(true); });
+  scrim.addEventListener("click", function () { closeSidebar(true); });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && !isDesktop() && sidebar.classList.contains("open")) { closeSidebar(true); }
+  });
+  window.addEventListener("resize", function () {
+    if (isDesktop()) { scrim.hidden = true; sidebar.classList.remove("open"); }
+    sidebarToggle.setAttribute("aria-expanded", sidebarShown() ? "true" : "false");
+  });
+  sidebarToggle.setAttribute("aria-expanded", sidebarShown() ? "true" : "false");
+
+  function threadsApi(path, body) {
+    return fetch(API + "/threads" + path, {
+      method: body === undefined ? "GET" : "POST",
+      credentials: "same-origin",
+      headers: body === undefined ? {} : { "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body)
+    }).then(function (r) {
+      if (!r.ok) { throw new Error(r.status === 429 ? "Too many requests. Please wait a moment." : "HTTP " + r.status); }
+      return r.json();
+    });
+  }
+
+  function threadItem(t) {
+    var li = document.createElement("li");
+    li.className = "thread" + (t.id === activeThread ? " active" : "");
+
+    var open = document.createElement("button");
+    open.type = "button";
+    open.className = "thread-open";
+    open.textContent = t.title;
+    open.title = t.title;
+    if (t.id === activeThread) { open.setAttribute("aria-current", "page"); }
+    open.addEventListener("click", function () { openThread(t.id); });
+
+    var pin = document.createElement("button");
+    pin.type = "button";
+    pin.className = "thread-act pin";
+    pin.setAttribute("aria-pressed", t.pinned ? "true" : "false");
+    pin.setAttribute("aria-label", (t.pinned ? "Unpin chat: " : "Pin chat: ") + t.title);
+    pin.title = t.pinned ? "Unpin" : "Pin";
+    pin.innerHTML = PIN_ICON;
+    pin.addEventListener("click", function () {
+      threadsApi("/" + encodeURIComponent(t.id) + "/pin", { pinned: !t.pinned })
+        .then(loadThreads, function () { /* the list is unchanged */ });
+    });
+
+    var del = document.createElement("button");
+    del.type = "button";
+    del.className = "thread-act del";
+    del.setAttribute("aria-label", "Delete chat: " + t.title);
+    del.title = "Delete";
+    del.innerHTML = TRASH_ICON;
+    del.addEventListener("click", function () { deleteThread(t); });
+
+    li.appendChild(open);
+    li.appendChild(pin);
+    li.appendChild(del);
+    return li;
+  }
+
+  function renderThreads(d) {
+    activeThread = d.active;
+    threadList.innerHTML = "";
+    var pinned = d.threads.filter(function (t) { return t.pinned; });
+    var recent = d.threads.filter(function (t) { return !t.pinned; });
+    [["Pinned", pinned], ["Recent", recent]].forEach(function (group) {
+      if (!group[1].length) { return; }
+      var id = "threads-" + group[0].toLowerCase();
+      var head = document.createElement("h3");
+      head.className = "thread-group";
+      head.id = id;
+      head.textContent = group[0];
+      var ul = document.createElement("ul");
+      ul.className = "threads";
+      ul.setAttribute("aria-labelledby", id);
+      group[1].forEach(function (t) { ul.appendChild(threadItem(t)); });
+      threadList.appendChild(head);
+      threadList.appendChild(ul);
+    });
+    if (!d.threads.length) {
+      var empty = document.createElement("p");
+      empty.className = "thread-empty";
+      empty.textContent = "Your chats will appear here.";
+      threadList.appendChild(empty);
+    }
+  }
+
+  function loadThreads() {
+    return threadsApi("").then(renderThreads, function () { /* the chat works without the list */ });
+  }
+
+  // Clears the conversation area for another chat.
+  function resetView() {
+    viewGen += 1;
+    handoverPolling = false;
+    lastAgentMessageId = 0;
+    chatWindow.innerHTML = "";
+    showWelcome(true);
+  }
+
+  function openThread(id) {
+    if (busy || id === activeThread) {
+      if (!isDesktop()) { closeSidebar(false); }
+      return;
+    }
+    setBusy(true);
+    threadsApi("/" + encodeURIComponent(id) + "/open", {})
+      .then(function (d) {
+        sessionId = d.session_id;
+        resetView();
+        if (!isDesktop()) { closeSidebar(false); }
+        return restoreHistory().then(function () { pollHandover(); });
+      })
+      .catch(function (err) { addBubble("bot", "I couldn't open that chat just now (" + err.message + ")."); })
+      .then(function () { setBusy(false); loadThreads(); });
+  }
+
+  function newChat() {
+    if (busy) { return; }
+    setBusy(true);
+    threadsApi("/new", {})
+      .then(function (d) {
+        sessionId = d.session_id;
+        resetView();
+        if (!isDesktop()) { closeSidebar(false); }
+      })
+      .catch(function (err) { addBubble("bot", "I couldn't start a new chat just now (" + err.message + ")."); })
+      .then(function () { setBusy(false); loadThreads(); });
+  }
+  newChatBtn.addEventListener("click", newChat);
+
+  function deleteThread(t) {
+    if (busy) { return; }
+    if (!window.confirm("Delete the chat “" + t.title + "” and everything linked to it? " +
+                        "This cannot be undone.")) { return; }
+    var wasOpen = t.id === activeThread;
+    setBusy(true);
+    threadsApi("/" + encodeURIComponent(t.id) + "/delete", { confirm: true })
+      .then(function (d) {
+        if (wasOpen || d.session_id !== sessionId) {
+          sessionId = d.session_id;
+          resetView();
+        }
+      })
+      .catch(function (err) { addBubble("bot", "I couldn't delete that chat just now (" + err.message + ")."); })
+      .then(function () { setBusy(false); loadThreads(); });
+  }
 
   /* ------------------------------ sending ------------------------------ */
 
@@ -999,10 +1004,9 @@
           pollHandover();
         }
 
-        renderTrace(data);
-        // The model that answered is shown in the reasoning panel; the header
-        // only says whether the service is reachable.
+        // The agent's reasoning is kept for staff review, not shown here.
         setStatus(true, "Policy assistant");
+        loadThreads();
         setBusy(false);
       })
       .catch(function (err) {
@@ -1060,15 +1064,13 @@
       })
       .then(function (d) {
         sessionId = d.session_id;
-        lastAgentMessageId = 0;
-        chatWindow.innerHTML = "";
-        traceBody.innerHTML = '<p class="trace-empty">Ask a question to see each step.</p>';
-        showWelcome(true);
+        resetView();
         addBubble("bot",
           "Your conversation has been deleted. Any payment record keeps its amount and " +
           "reference, as the airline must, but no longer holds your phone number.\n\n" +
           "You can start a new question whenever you like.");
         setBusy(false);
+        loadThreads();
       })
       .catch(function (err) {
         addBubble("bot", "I couldn't delete the conversation just now (" + err.message +
@@ -1176,7 +1178,8 @@
 
   /* A reloaded page resumes the same session on the server; this shows its
      messages again instead of an empty welcome screen. Cards and the
-     reasoning trace are not stored, so earlier answers are shown as text. */
+     reasoning steps are not shown to passengers, so earlier answers are
+     shown as text. */
   function restoreHistory() {
     return fetch(API + "/history", { credentials: "same-origin" })
       .then(function (r) { return r.ok ? r.json() : { messages: [] }; })
@@ -1219,6 +1222,7 @@
         setBusy(false);
         input.focus();
         if (d && d.resumed) { pollHandover(); }
+        loadThreads();
       });
     })
     .catch(function (err) {

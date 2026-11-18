@@ -1385,6 +1385,51 @@
       .catch(function () {});
   }
 
+  /* The agent's reasoning for one answer: each thought, tool call and its
+     result, as recorded when the answer was given. Passengers do not see this;
+     it is here so staff can check how an answer was reached. */
+  function traceValue(v) {
+    if (v === null || v === undefined || v === "") { return ""; }
+    if (typeof v !== "object") { return String(v); }
+    if (Array.isArray(v)) {
+      return v.map(function (x) {
+        if (x && typeof x === "object" && (x.source || x.section)) {
+          return [x.source, x.section].filter(Boolean).join(" · ");
+        }
+        return traceValue(x);
+      }).join("\n");
+    }
+    return Object.keys(v).filter(function (k) {
+      var x = v[k];
+      return x !== null && x !== undefined && x !== "" && !(Array.isArray(x) && !x.length);
+    }).map(function (k) {
+      var x = v[k];
+      return k.replace(/_/g, " ") + ": " + (typeof x === "object" ? JSON.stringify(x) : x);
+    }).join("\n");
+  }
+
+  function traceDetails(trace) {
+    var box = el("details", "t-trace");
+    box.appendChild(el("summary", null, "Reasoning steps (" + trace.length + ")"));
+    var list = el("ol", "t-steps");
+    trace.forEach(function (t) {
+      var kind = t.step || "step";
+      var label = kind === "action" ? "Action · " + (t.tool || "tool")
+        : kind === "final_answer" ? "Answer · " + (t.model || "model")
+        : kind === "thought" ? "Thought" : kind.replace(/_/g, " ");
+      var li = el("li", "t-step " + kind);
+      li.appendChild(el("strong", null, label));
+      var text = kind === "action"
+        ? [t.input ? "Input: " + traceValue(t.input) : "", traceValue(t.observation)].filter(Boolean).join("\n")
+        : traceValue(t.content);
+      if (text.length > 1200) { text = text.slice(0, 1200) + "…"; }
+      if (text) { li.appendChild(el("span", "t-step-text", text)); }
+      list.appendChild(li);
+    });
+    box.appendChild(list);
+    return box;
+  }
+
   function openConversation(sessionId, userAction) {
     openConv = sessionId;
     convStatus.textContent = "";
@@ -1433,6 +1478,7 @@
             if (m.feedback === "down") { foot.appendChild(el("span", "pill fail", "Rated unhelpful")); }
             b.appendChild(foot);
             if (m.feedback_note) { b.appendChild(el("span", "t-note", "Passenger: “" + m.feedback_note + "”")); }
+            if (m.trace && m.trace.length) { b.appendChild(traceDetails(m.trace)); }
           }
           convTranscript.appendChild(b);
         });

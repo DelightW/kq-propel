@@ -949,6 +949,12 @@ td.muted, .muted { color: var(--muted); }
 .t-scores .score { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .t-scores .score.low { color: var(--danger); font-weight: 600; }
 .t-note { display: block; margin-top: 4px; font-size: 12.5px; color: var(--ink-2); font-style: italic; }
+.t-trace { margin-top: 8px; font-size: 12.5px; }
+.t-trace summary { cursor: pointer; color: var(--ink-2); font-weight: 600; padding: 2px 0; }
+.t-trace summary:focus-visible { outline: 2px solid var(--accent, #c8102e); outline-offset: 2px; border-radius: 4px; }
+.t-steps { margin: 6px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.t-step strong { display: block; font-size: 12px; color: var(--ink); }
+.t-step-text { display: block; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); line-height: 1.5; }
 .status-line.pad { padding: 0 16px 12px; margin: 0; }
 .status-line.pad:empty { display: none; }
 .att-icon.slate { background: #eef0f3; color: #475467; }

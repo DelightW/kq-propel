@@ -27,6 +27,7 @@ import base64
 import hashlib
 import hmac
 import os
+import re
 import secrets
 import time
 from typing import Dict, Optional, Tuple
@@ -278,15 +279,35 @@ def optional_staff(kq_staff: Optional[str] = Cookie(default=None)) -> Optional[D
 # Passenger chat sessions
 # --------------------------------------------------------------------------
 
-def issue_chat_session(ip: str) -> str:
+def issue_chat_session(ip: str, owner: Optional[str] = None) -> str:
     """Server-issued, unguessable passenger session identifier.
 
     The client no longer chooses this value, so one passenger cannot address
     another's conversation or pending payment by supplying their identifier.
+    `owner` is the digest of the browser's owner cookie, which lists the
+    session among that browser's chats.
     """
     session_id = "cs_" + secrets.token_urlsafe(24)
-    database.create_chat_session(session_id, ip)
+    database.create_chat_session(session_id, ip, owner)
     return session_id
+
+
+# The browser's own chats. The owner cookie holds a random token; only its
+# digest is stored, like staff session tokens, so the database alone cannot be
+# used to list someone's chats from their browser.
+OWNER_COOKIE = "kq_owner"
+OWNER_MAX_AGE = 60 * 60 * 24 * 30
+_OWNER_RE = re.compile(r"^[A-Za-z0-9_-]{32,64}$")
+
+
+def owner_digest(token: Optional[str]) -> Optional[str]:
+    if not token or not _OWNER_RE.match(token):
+        return None
+    return hashlib.sha256(token.encode("ascii")).hexdigest()
+
+
+def new_owner_token() -> str:
+    return secrets.token_urlsafe(32)
 
 
 def chat_session_is_valid(session_id: Optional[str]) -> bool:

@@ -53,6 +53,8 @@ The developer's suggestion, for review:
 | Risk | Likelihood and impact before controls | Controls in the system | Remaining risk |
 |---|---|---|---|
 | Another person reads a passenger's conversation or payment (shared device, guessed identifier) | Medium, high | Server-issued random session identifiers in HttpOnly cookies; every passenger endpoint is scoped to the cookie; "Delete my conversation" and session reset | Low |
+| The chat list shows a browser's earlier chats to the next person on a shared device | Medium, medium | The list is tied to a random HttpOnly cookie (30 days, only its digest is stored) and never to a name; each chat can be deleted from the list, which erases it; another browser cannot list, open, pin or delete it | Low |
+| Staff see more than they need in an answer's saved reasoning steps | Low, medium | Reasoning steps hold the retrieved sections, tool calls and the agent's thoughts, never passenger names; phone numbers and checkout ids are masked when shown; they are erased with the conversation | Low |
 | Staff see more personal data than they need | High, medium | Phone numbers are masked on every staff screen and in forwarded transcripts; every read of passenger data is audit-logged | Low |
 | Unauthorised access to the dashboard | Medium, high | scrypt-hashed password, revocable server-side sessions, lockout after 5 failed attempts, audit log. Single shared staff account (see open actions) | Medium until individual staff accounts exist |
 | Data kept longer than necessary | High, medium | Retention by age (conversations, IP addresses, handover cases, question text; phone numbers on payment records). **Switched off until the periods below are approved** | High until switched on |

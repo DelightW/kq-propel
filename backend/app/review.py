@@ -11,6 +11,8 @@ session identifiers are shortened for display.
 """
 import csv
 import io
+import json
+import re
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 
@@ -122,6 +124,32 @@ def _row_has_flag(r: Dict, flag: str) -> bool:
     return False
 
 
+_CHECKOUT_IN_TEXT = re.compile(r"ws_CO_\d+")
+
+
+def _trace(raw: Optional[str]) -> List[Dict]:
+    """An answer's saved reasoning steps, with phone numbers masked like the
+    rest of the transcript. Steps that cannot be read are left out."""
+    if not raw:
+        return []
+    try:
+        steps = json.loads(raw)
+    except ValueError:
+        return []
+
+    def clean(value):
+        if isinstance(value, str):
+            # A checkout id ends with the payer's number (see privacy.py).
+            value = _CHECKOUT_IN_TEXT.sub(lambda m: privacy.mask_checkout_id(m.group(0)), value)
+            return privacy.mask_text(value)
+        if isinstance(value, list):
+            return [clean(v) for v in value]
+        if isinstance(value, dict):
+            return {k: clean(v) for k, v in value.items()}
+        return value
+    return [clean(s) for s in steps if isinstance(s, dict)]
+
+
 def conversation_detail(session_id: str) -> Optional[Dict]:
     with database._connect() as conn:
         rows = [dict(r) for r in conn.execute(
@@ -146,6 +174,7 @@ def conversation_detail(session_id: str) -> Optional[Dict]:
             item["feedback"] = r.get("feedback")
             item["feedback_note"] = privacy.mask_text(r.get("feedback_note"))
             item["declined"] = r["message"].startswith(DECLINED_PREFIXES)
+            item["trace"] = _trace(r.get("trace"))
         messages.append(item)
     from app import handover
     return {"session_id": session_id, "short_id": short_id(session_id), "messages": messages,

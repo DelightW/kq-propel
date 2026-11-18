@@ -29,14 +29,30 @@
       </div>
     </div>
     <div class="topbar-actions">
-      <button id="trace-toggle" class="ghost-btn" type="button" aria-label="Agent reasoning" aria-controls="trace-panel" aria-expanded="false">
-        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 6h16M4 12h10M4 18h13"/></svg>
-        <span class="btn-label">Reasoning</span>
+      <button id="sidebar-toggle" class="ghost-btn" type="button" aria-label="Your chats" aria-controls="sidebar" aria-expanded="false">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 5h16v11H9l-5 4z"/></svg>
+        <span class="btn-label">Chats</span>
       </button>
     </div>
   </header>
 
   <main class="chat-main">
+
+    <nav class="sidebar" id="sidebar" aria-label="Your chats">
+      <div class="sidebar-head">
+        <button id="new-chat" class="new-chat" type="button">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>
+          New chat
+        </button>
+        <button id="sidebar-close" class="icon-btn close" type="button" aria-label="Close the chat list">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <div class="thread-list" id="thread-list">
+        <p class="thread-empty">Your chats will appear here.</p>
+      </div>
+      <p class="sidebar-note">Chats are kept for this browser only.</p>
+    </nav>
 
     <section class="chat-column" aria-label="Chat">
       <div class="chat-scroll" id="chat-scroll">
@@ -96,21 +112,6 @@
         </p>
       </div>
     </section>
-
-    <aside class="trace-panel" id="trace-panel" aria-label="Agent reasoning" tabindex="-1">
-      <div class="trace-head">
-        <div>
-          <h2>Agent reasoning</h2>
-          <p class="trace-sub">How the latest answer was reached</p>
-        </div>
-        <button id="trace-close" class="icon-btn close" type="button" aria-label="Close reasoning panel">
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6 6l12 12M18 6L6 18"/></svg>
-        </button>
-      </div>
-      <div id="trace-body" class="trace-body" tabindex="0" role="region" aria-label="Reasoning steps">
-        <p class="trace-empty">Ask a question to see each step: the policy sections retrieved, the tools called, and how well the answer is grounded in the sources.</p>
-      </div>
-    </aside>
 
   </main>
 

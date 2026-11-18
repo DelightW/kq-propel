@@ -16,7 +16,9 @@ It runs on Render's free plan, so the first visit after a quiet period can take 
 - "I want to pay for an extra bag", then a booking such as "booking KQDLW1, surname Wangui". The fee comes from Kenya Airways' heavy-bag table for that route (75 to Europe from Nairobi). The table has no currency, so the prototype charges it in US dollars and says so.
 - More demo bookings with a name to correct: `KQNC01` / Kanja and `KQNC04` / Wangui (domestic, lower fees), `KQNC02` / Wanjiro (try "Delight Wanjiru") and `KQNC03` / Wambui (Business).
 
-Each reply has a **reasoning trace** you can open to see what the assistant checked, what it retrieved and why it answered the way it did.
+The chat keeps a list of your earlier chats in this browser: start a new chat, reopen an old one, pin it or delete it (deleting erases it).
+
+Every answer's **reasoning steps** (what the assistant checked, what it retrieved and why it answered the way it did) are saved with it. Staff can open them under **Conversations** in the dashboard at `/admin`.
 
 ## How it works
 

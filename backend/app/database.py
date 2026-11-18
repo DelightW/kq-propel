@@ -14,6 +14,7 @@ sqlite3.Row (by name and by position), and supplies lastrowid and rowcount,
 so no module needs to know which database it is talking to.
 """
 import re
+import secrets
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timedelta
@@ -458,6 +459,20 @@ def _migrate(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_rag_evaluations_session ON rag_evaluations(session_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_rag_evaluations_message ON rag_evaluations(message_id)")
 
+    # --- Chat threads and saved reasoning ---
+    # A browser keeps a list of its chats: each session records the digest of
+    # the browser's owner cookie, a public thread id (the session id itself is
+    # a secret and never leaves the cookie) and whether it is pinned. Each
+    # answer keeps the agent's reasoning steps for staff review.
+    session_columns = _columns(conn, "chat_sessions")
+    for column, ddl in (("owner", "TEXT"), ("thread_id", "TEXT"),
+                        ("pinned", "INTEGER NOT NULL DEFAULT 0")):
+        if column not in session_columns:
+            conn.execute(f"ALTER TABLE chat_sessions ADD COLUMN {column} {ddl}")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_sessions_owner ON chat_sessions(owner)")
+    if "trace" not in _columns(conn, "conversations"):
+        conn.execute("ALTER TABLE conversations ADD COLUMN trace TEXT")
+
 
 # ---------------------------------------------------------------------------
 # Staff sessions and audit
@@ -542,15 +557,62 @@ def fetch_admin_audit(limit: int = 50) -> List[Dict]:
 # Passenger sessions
 # ---------------------------------------------------------------------------
 
-def create_chat_session(session_id: str, ip: Optional[str] = None) -> None:
+def create_chat_session(session_id: str, ip: Optional[str] = None,
+                        owner: Optional[str] = None) -> None:
     now = datetime.utcnow().isoformat()
+    thread_id = "t_" + secrets.token_urlsafe(9)
     with _connect() as conn:
         conn.execute(
-            "INSERT INTO chat_sessions (session_id, created_at, last_seen_at, ip) "
-            "VALUES (?,?,?,?) ON CONFLICT(session_id) DO UPDATE SET "
+            "INSERT INTO chat_sessions (session_id, created_at, last_seen_at, ip, owner, thread_id) "
+            "VALUES (?,?,?,?,?,?) ON CONFLICT(session_id) DO UPDATE SET "
             "created_at=excluded.created_at, last_seen_at=excluded.last_seen_at, ip=excluded.ip",
-            (session_id, now, now, ip),
+            (session_id, now, now, ip, owner, thread_id),
         )
+
+
+def claim_chat_session(session_id: str, owner: str) -> None:
+    """Gives a session made before chat threads existed to this browser's
+    owner, and a thread id. A session that already has an owner keeps it."""
+    with _connect() as conn:
+        conn.execute("UPDATE chat_sessions SET owner = ? WHERE session_id = ? AND owner IS NULL",
+                     (owner, session_id))
+        conn.execute("UPDATE chat_sessions SET thread_id = ? WHERE session_id = ? AND thread_id IS NULL",
+                     ("t_" + secrets.token_urlsafe(9), session_id))
+
+
+def list_threads(owner: str, limit: int = 50) -> List[Dict]:
+    """The owner's chats that have messages, pinned first, then most recent.
+    Each carries its first question as the title."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT cs.thread_id, cs.pinned, cs.created_at, "
+            "(SELECT message FROM conversations c WHERE c.session_id = cs.session_id AND c.role = 'user' "
+            " ORDER BY c.id LIMIT 1) AS title, "
+            "(SELECT MAX(created_at) FROM conversations c WHERE c.session_id = cs.session_id) AS last_at "
+            "FROM chat_sessions cs WHERE cs.owner = ?", (owner,)).fetchall()
+    rows = [dict(r) for r in rows if r["last_at"]]
+    rows.sort(key=lambda r: r["last_at"], reverse=True)
+    rows.sort(key=lambda r: not r["pinned"])
+    return rows[:limit]
+
+
+def thread_session(owner: str, thread_id: str) -> Optional[str]:
+    """The session behind one of the owner's threads, or None."""
+    with _connect() as conn:
+        row = conn.execute("SELECT session_id FROM chat_sessions WHERE owner = ? AND thread_id = ?",
+                           (owner, thread_id)).fetchone()
+    return row["session_id"] if row else None
+
+
+def set_thread_pinned(session_id: str, pinned: bool) -> None:
+    with _connect() as conn:
+        conn.execute("UPDATE chat_sessions SET pinned = ? WHERE session_id = ?",
+                     (1 if pinned else 0, session_id))
+
+
+def save_trace(message_id: int, trace_json: str) -> None:
+    with _connect() as conn:
+        conn.execute("UPDATE conversations SET trace = ? WHERE id = ?", (trace_json, message_id))
 
 
 def get_chat_session(session_id: str) -> Optional[Dict]:

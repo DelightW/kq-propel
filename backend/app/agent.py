@@ -1185,6 +1185,11 @@ def run_agent_turn(session_id: str, message: str) -> Dict:
     a structured copy of parts of it that the chat can draw as cards."""
     result = _run_agent_turn(session_id, message)
     result["cards"] = _cards_for_turn(session_id, result)
+    # The reasoning steps are kept with the answer for staff review (the
+    # dashboard's Conversations view); passengers no longer see them. They
+    # are erased with the conversation.
+    if result.get("message_id") and result.get("trace"):
+        database.save_trace(result["message_id"], json.dumps(result["trace"], default=str)[:60000])
     return result
 
 

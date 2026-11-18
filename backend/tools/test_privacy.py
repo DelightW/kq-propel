@@ -38,7 +38,8 @@ def seed(session, when, *, phone="254700000001", status="paid", handover_status=
     """One passenger session with everything personal the system can hold."""
     question = question or f"What is my allowance? ({session})"
     with database._connect() as conn:
-        conn.execute("INSERT INTO chat_sessions VALUES (?,?,?,?)", (session, when, when, "10.0.0.1"))
+        conn.execute("INSERT INTO chat_sessions (session_id, created_at, last_seen_at, ip) VALUES (?,?,?,?)",
+                     (session, when, when, "10.0.0.1"))
         for role, text in (("user", question), ("user", f"My number is 0700 000 001 ({session})"),
                            ("assistant", "Two pieces of 23kg.")):
             conn.execute("INSERT INTO conversations (session_id, role, message, created_at) "
