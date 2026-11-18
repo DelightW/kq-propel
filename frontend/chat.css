@@ -1034,6 +1034,32 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible, summary:focus-v
 }
 #chat-input:focus-visible { outline: none; }
 
+/* ------------------------ copy and edit a sent prompt ------------------------ */
+.prompt-actions {
+  align-self: flex-end;
+  display: flex; gap: 2px;
+  /* Sits just under the message, without adding the chat's full row gap. */
+  margin: -20px 0 -8px;
+}
+.pa-btn {
+  width: 30px; height: 30px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 8px;
+  background: transparent; color: var(--muted, #5d6676);
+  cursor: pointer;
+  transition: background 0.2s var(--ease), color 0.2s var(--ease), opacity 0.2s var(--ease);
+}
+.pa-btn:hover { background: #f2f4f7; color: var(--ink, #101828); }
+.pa-btn:focus-visible { outline: 2px solid #c8102e; outline-offset: 1px; }
+/* On a device with a mouse the buttons appear when the message is pointed at
+   or a button has keyboard focus; on touch screens they are always shown. */
+@media (hover: hover) {
+  .prompt-actions .pa-btn { opacity: 0; }
+  .bubble.user:hover + .prompt-actions .pa-btn,
+  .prompt-actions:hover .pa-btn,
+  .prompt-actions:focus-within .pa-btn { opacity: 1; }
+}
+
 /* ------------------------------- feedback -------------------------------- */
 .feedback { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-top: 10px; }
 .fb-label { font-size: 12.5px; color: var(--muted, #5d6676); margin-right: 4px; }

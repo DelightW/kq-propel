@@ -450,8 +450,86 @@
     }
 
     chatWindow.appendChild(bubble);
+    if (role === "user") { chatWindow.appendChild(promptActions(text || "")); }
     scrollToBottom();
     return bubble;
+  }
+
+  /* ----------------------- copy and edit a sent prompt ----------------------- */
+
+  var COPY_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></g></svg>';
+  var CHECK_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+  var EDIT_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16zM13.5 6.5l4 4"/></svg>';
+
+  function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+    // Older browsers and plain-http pages have no clipboard API.
+    return new Promise(function (resolve, reject) {
+      var area = document.createElement("textarea");
+      area.value = text;
+      area.setAttribute("readonly", "");
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      var ok = false;
+      try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+      area.remove();
+      if (ok) { resolve(); } else { reject(new Error("copy failed")); }
+    });
+  }
+
+  // Copy and Edit under each of the passenger's own messages. Editing puts the
+  // text back in the message box to change and send again as a new message;
+  // the earlier message and its answer stay in the conversation.
+  function promptActions(text) {
+    var row = document.createElement("div");
+    row.className = "prompt-actions";
+    var status = document.createElement("span");
+    status.className = "sr-only";
+    status.setAttribute("role", "status");
+
+    var copy = document.createElement("button");
+    copy.type = "button";
+    copy.className = "pa-btn";
+    copy.setAttribute("aria-label", "Copy message");
+    copy.title = "Copy";
+    copy.innerHTML = COPY_ICON;
+    copy.addEventListener("click", function () {
+      copyText(text).then(function () {
+        copy.innerHTML = CHECK_ICON;
+        copy.title = "Copied";
+        status.textContent = "Message copied";
+        setTimeout(function () {
+          copy.innerHTML = COPY_ICON;
+          copy.title = "Copy";
+          status.textContent = "";
+        }, 1500);
+      }, function () {
+        status.textContent = "Couldn't copy the message";
+      });
+    });
+
+    var edit = document.createElement("button");
+    edit.type = "button";
+    edit.className = "pa-btn";
+    edit.setAttribute("aria-label", "Edit message and send again");
+    edit.title = "Edit";
+    edit.innerHTML = EDIT_ICON;
+    edit.addEventListener("click", function () {
+      input.value = text;
+      if (input.disabled) { return; }
+      input.focus();
+      var end = input.value.length;
+      try { input.setSelectionRange(end, end); } catch (e) { /* some input types */ }
+    });
+
+    row.appendChild(copy);
+    row.appendChild(edit);
+    row.appendChild(status);
+    return row;
   }
 
   var PAYMENT_STATUS_TEXT = {
