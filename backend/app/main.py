@@ -1,10 +1,13 @@
 import asyncio
+import hashlib
+import re
+from functools import lru_cache
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 
 from app import auth, config, database, payments, privacy, sentiment, staff
 from app.vectorstore import ingest_policy_directory
@@ -73,16 +76,39 @@ def health():
             "database": "postgresql" if database.using_postgres() else "sqlite"}
 
 
+_ASSET_RE = re.compile(r'(/static/[\w.-]+\.(?:css|js))(?=")')
+
+
+@lru_cache(maxsize=8)
+def _page(name: str) -> str:
+    """The page with each script and stylesheet link carrying a hash of that
+    file, so a browser fetches the new file after a deploy instead of keeping
+    the copy it cached. Cached per process; a deploy starts a new process."""
+    html = (FRONTEND_DIR / name).read_text(encoding="utf-8")
+
+    def versioned(m):
+        path = FRONTEND_DIR / m.group(1)[len("/static/"):]
+        if not path.exists():
+            return m.group(1)
+        return m.group(1) + "?v=" + hashlib.sha256(path.read_bytes()).hexdigest()[:10]
+    return _ASSET_RE.sub(versioned, html)
+
+
+def _html(name: str) -> HTMLResponse:
+    # The page itself is always revalidated, so it never points at old assets.
+    return HTMLResponse(_page(name), headers={"Cache-Control": "no-cache"})
+
+
 if FRONTEND_DIR.exists():
     app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
     @app.get("/")
     def index():
-        return FileResponse(FRONTEND_DIR / "index.html")
+        return _html("index.html")
 
     @app.get("/admin")
     def admin_page():
-        return FileResponse(FRONTEND_DIR / "admin.html")
+        return _html("admin.html")
 
     @app.get("/privacy")
     def privacy_page():

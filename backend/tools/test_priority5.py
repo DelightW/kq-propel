@@ -335,6 +335,20 @@ def test_limits_can_be_switched_off():
     ratelimit.reset()
 
 
+def test_pages_ask_for_the_current_scripts_after_a_deploy():
+    # A browser kept the old chat.js after a deploy, so new buttons did not
+    # appear. Each asset link now carries a hash of the file.
+    import hashlib
+    from app.main import FRONTEND_DIR
+    c = TestClient(app)
+    for page, assets in (("/", ("chat.css", "chat.js")), ("/admin", ("admin.css", "admin.js"))):
+        res = c.get(page)
+        assert res.status_code == 200 and res.headers["cache-control"] == "no-cache", page
+        for name in assets:
+            digest = hashlib.sha256((FRONTEND_DIR / name).read_bytes()).hexdigest()[:10]
+            assert f'/static/{name}?v={digest}"' in res.text, (page, name)
+
+
 def main() -> int:
     tests = [(n, f) for n, f in globals().items() if n.startswith("test_") and callable(f)]
     failures = 0
