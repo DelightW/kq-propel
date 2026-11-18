@@ -31,6 +31,17 @@ WANT_RE = re.compile(
     r"\b(bags?|baggage|luggage|suitcases?)\s+(that\s+is\s+|which\s+is\s+)?"
     r"(over\s*weight|over\s+the\s+limit|too\s+heavy|extra)\b",
     re.IGNORECASE)
+# "add 1 bag", "buy two more bags", "pay for another suitcase".
+_ADD_RE = re.compile(
+    r"\b(add|adding|buy|buying|purchase|pay\s+for)\s+(?:(?:a|an|one|two|three|\d+|another|my)\s+)?"
+    r"(?:more\s+|extra\s+)?(?:checked\s+)?(bags?|baggage|luggage|suitcases?|pieces?)\b",
+    re.IGNORECASE)
+# "how much is an extra bag?": a price question. Answered with an offer only
+# once a booking gives the route; without one it is a policy question.
+_PRICE_RE = re.compile(r"\b(how\s+much|cost|costs|price|fee|charge)\b", re.IGNORECASE)
+_MORE_BAGS_RE = re.compile(
+    r"\b(extra|additional|added|another|more|heavy|heavier|overweight|excess|second|third|\d+)\s+"
+    r"(?:checked\s+)?(bags?|baggage|luggage|suitcases?|pieces?|kg|kilos?|weight)\b", re.IGNORECASE)
 # A question about an allowance ("do I get an extra bag as a Gold member?") is
 # about something free, not something to pay for.
 _ENTITLEMENT_RE = re.compile(r"\b(free|entitled|allowance|allowed|do\s+i\s+get|asante|member)\b",
@@ -44,8 +55,16 @@ _KEYS = {"europe": places.EUROPE, "americas": places.AMERICAS, "asia": places.AS
          "middle east": places.MIDDLE_EAST, "africa": places.AFRICA, "domestic services": "domestic"}
 
 
-def wants_extra_bag(message: str) -> bool:
-    return bool(WANT_RE.search(message or "")) and not _ENTITLEMENT_RE.search(message or "")
+def wants_extra_bag(message: str, has_booking: bool = False) -> bool:
+    message = message or ""
+    if _ENTITLEMENT_RE.search(message):
+        return False
+    if WANT_RE.search(message) or _ADD_RE.search(message):
+        return True
+    # A price question naming a place may be about another route than the
+    # booked one, so it is left to the policy answer.
+    return (has_booking and bool(_PRICE_RE.search(message) and _MORE_BAGS_RE.search(message))
+            and not places.mentioned(message))
 
 
 def fees(chunks: List[Dict]) -> Optional[Dict]:

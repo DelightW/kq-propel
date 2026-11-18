@@ -1277,7 +1277,7 @@ def _run_agent_turn(session_id: str, message: str) -> Dict:
         return requested
 
     # --- Paying for an extra bag: priced from the booked route ---
-    if extra_bag.wants_extra_bag(message):
+    if extra_bag.wants_extra_bag(message, has_booking=bool(booking.remembered(session_id))):
         trace.append({"step": "thought",
                       "content": "Passenger wants to pay for an extra bag; the fee depends on the booked route."})
         if not booking.remembered(session_id):

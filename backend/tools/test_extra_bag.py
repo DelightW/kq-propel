@@ -52,8 +52,14 @@ def test_the_intent_is_recognised():
                 "I need to pay for excess baggage", "add another suitcase please",
                 "can i pay for an added baggage", "I want to pay for extra kg",
                 "can I pay for a heavier bag", "I need to pay for a bag that is overweight",
-                "pay for an additional checked bag"):
+                "pay for an additional checked bag", "How much to add 1 bag of 10kg",
+                "can I buy two more bags"):
         assert extra_bag.wants_extra_bag(yes), yes
+    # A price question becomes an offer only when a booking gives the route.
+    for price in ("how much is an extra bag?", "what does an additional suitcase cost"):
+        assert extra_bag.wants_extra_bag(price, has_booking=True), price
+        assert not extra_bag.wants_extra_bag(price), price
+    assert not extra_bag.wants_extra_bag("how much is an extra bag to Europe from Nairobi?", has_booking=True)
     for no in ("how many bags can I check?", "my bag is delayed", "what is the hand luggage limit?",
                "I am a Gold member of Asante Rewards. Do I get any extra baggage?",
                "Do I need to pay for an extra bag if I'm entitled to a free one?"):
@@ -80,6 +86,13 @@ def test_domestic_and_african_routes():
         say(s, lookup)
         offer = say(s, "I need to pay for an extra bag")
         assert fee in offer, (lookup, offer)
+
+
+def test_how_much_to_add_a_bag_on_a_booking_is_quoted():
+    s = session()
+    say(s, "booking KQNC01, surname Kanja")
+    offer = say(s, "How much to add 1 bag of 10kg")
+    assert "USD 25.00" in offer and "Card" in offer, offer
 
 
 def test_a_typed_amount_is_ignored():
